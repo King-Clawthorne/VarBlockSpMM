@@ -147,8 +147,8 @@ private:
   std::unique_ptr<Impl> impl_;
 };
 
-/** Launches the optimized row-owned kernel, using four-column ILP when
- * supported. */
+/** Launches the optimized row-owned kernel, using width-specific ILP and
+ * shared-memory input staging when beneficial. */
 void launch_row_owned(DeviceMatrix, const float*, float*, int rhs, cudaStream_t);
 /** Launches the scalar row-owned kernel for comparison and profiling. */
 void launch_row_owned_scalar(DeviceMatrix, const float*, float*, int rhs, cudaStream_t);

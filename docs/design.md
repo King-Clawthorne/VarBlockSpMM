@@ -6,7 +6,9 @@
 
 ## Direct kernel
 
-The row-owned family specializes only RHS width `{8,16,32,64}`. Runtime block dimensions remain loop bounds. RHS 8 assigns one output element per thread. RHS 16/32 assign eight RHS columns of one local row to each thread, while RHS 64 assigns sixteen. The wider mapping reuses each A load across more independent accumulators while retaining enough threads per row; still wider candidates lost performance. A two-dimensional grid assigns CTAs disjoint output elements, so the path needs neither atomics nor workspace.
+The row-owned family specializes only RHS width `{8,16,32,64}`. Runtime block dimensions remain loop bounds. RHS 8 assigns one output element per thread. RHS 16/32 assign eight RHS columns of one local row to each thread, while RHS 64 assigns sixteen. The wider mapping reuses each A load across more independent accumulators while retaining enough threads per row; still wider candidates lost performance.
+
+RHS 32 and 64 use one CTA per block row. For each nonzero block, 256 threads cooperatively load its `column_width * RHS` input slice into shared memory, synchronize, reuse the tile across every local output row, and synchronize before replacing it; the unnecessary replacement barrier after the final block is omitted. The shared leading dimension is padded from 64 to 65 floats to avoid bank conflicts when a warp spans RHS groups. RHS 16 keeps direct global loads because the synchronization cost outweighs the saved loads at that width. Every CTA owns disjoint output elements, so neither path needs atomics or external workspace.
 
 `Auto` currently resolves to the hybrid row-owned dispatch. `SplitRow` is rejected with a clear exception: the measured release grid did not justify partial-output workspace and reduction. `GroupedGemmPlan` remains a fair library baseline and an available explicit alternative.
 

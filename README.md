@@ -25,25 +25,26 @@ The implementation includes:
 - Deterministic generators for uniform, low-variance, high-variance, and bimodal block sizes with local or random column patterns.
 - A double-accumulating CPU reference for correctness checks.
 - RHS-specialized row-owned CUDA kernels. RHS 16 and 32 reuse each `A` load across eight independent output accumulators, RHS 64 uses sixteen, and RHS 8 retains the lower-overhead scalar mapping.
+- For RHS 32 and 64, each CTA cooperatively stages the active `B` block slice in padded shared memory. RHS 16 retains direct global loads because synchronization costs more than staging saves at that width.
 - A persistent scalar-CSR cuSPARSE plan.
 - A persistent slot-split plan using CUDA 13.4 `cublasSgemmGroupedBatched`, grouped by row and column block size.
 - A 64-case correctness matrix covering every supported RHS width, all distributions, degrees `{1,4,8,16}`, both locality modes, and non-default streams.
 - A reproducible 128-case regime sweep reporting GPU-event and synchronized host median/p95 timing.
 
-Nsight Compute identified memory latency as the scalar kernel's primary constraint. The direct kernel was then tuned by panel width to reuse each matrix value across eight or sixteen RHS accumulators, increasing instruction-level parallelism without introducing atomics or workspace.
+Nsight Compute identified memory latency as the scalar kernel's primary constraint. The direct kernel was tuned by panel width to reuse each matrix value across eight or sixteen RHS accumulators, then changed to load reusable `B` slices cooperatively for wide panels. Neither optimization introduces atomics or external workspace.
 
 ## Result
 
 The optimized hybrid direct kernel won all 128 workloads in the 1,024-row regime grid, including the former RHS-64/high-degree grouped-GEMM regime. The measured release therefore does not include split-row partial buffers.
 
-For the representative degree-16/RHS-64 workload, the wider-ILP follow-up:
+For the representative degree-16/RHS-64 workload, the staged hybrid:
 
-- Reduced median time from 8.430 ms for the previous four-accumulator hybrid to 4.887 ms.
-- Improved the complete 128-case release grid by a 1.24x geometric-mean speedup.
+- Reduced median time from 4.887 ms for the unstaged wide-ILP kernel to 2.895 ms (1.69x), and from 8.430 ms for the four-accumulator intermediate (2.91x).
+- Improved the complete 128-case release grid by a cumulative 1.46x geometric-mean speedup over the checked-in four-accumulator release.
 - Won every grid case against the persistent cuSPARSE and grouped-cuBLAS baselines.
-- Compiled with 52–64 registers per thread and no stack, shared-memory, or local-memory allocation in the wider kernels.
+- Compiled with 56 and 64 registers per thread plus 9,344 and 17,664 bytes of shared memory per CTA for RHS 32 and 64 respectively, with no local-memory spills.
 
-The earlier Nsight Compute counters in the optimization report describe the four-accumulator intermediate. The wider kernel is accepted from unprofiled benchmark timings and the complete correctness matrix; profiler-instrumented durations are not mixed into those speedups.
+Unprofiled benchmark timings provide the speedups. Nsight Compute independently confirms that staging cuts long-scoreboard stalls, but its replay-instrumented durations are not mixed into the benchmark results.
 
 ## Build and verify on Windows
 
