@@ -1,0 +1,4 @@
+/build/
+/data/*.sqlite
+/data/*.nsys-rep
+/data/*.ncu-rep

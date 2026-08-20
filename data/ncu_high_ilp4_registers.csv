@@ -1,0 +1,5 @@
+==PROF== Connected to process 33644 (C:\Users\cohen\Documents\ChatGPT\CUDA\VarBlockSpMM\build\Release\vbsr_benchmark.exe)
+==PROF== Disconnected from process 33644
+"ID","Process ID","Process Name","Host Name","Kernel Name","Context","Stream","Block Size","Grid Size","Device","CC","Section Name","Metric Name","Metric Unit","Metric Value"
+"0","33644","vbsr_benchmark.exe","127.0.0.1","void row_owned_ilp<64, 4>(DeviceMatrix, const float *, float *)","1","7","(256, 1, 1)","(4096, 4, 1)","0","12.0","Command line profiler metrics","launch__registers_per_thread","register/thread","40"
+"0","33644","vbsr_benchmark.exe","127.0.0.1","void row_owned_ilp<64, 4>(DeviceMatrix, const float *, float *)","1","7","(256, 1, 1)","(4096, 4, 1)","0","12.0","Command line profiler metrics","sm__warps_active.avg.pct_of_peak_sustained_active","%","96.47"
