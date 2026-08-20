@@ -24,24 +24,26 @@ The implementation includes:
 - A validated host format and owning GPU format with 64-bit scalar and value offsets.
 - Deterministic generators for uniform, low-variance, high-variance, and bimodal block sizes with local or random column patterns.
 - A double-accumulating CPU reference for correctness checks.
-- RHS-specialized row-owned CUDA kernels. RHS 16, 32, and 64 reuse each `A` load across four independent output accumulators; RHS 8 uses the lower-overhead scalar mapping.
+- RHS-specialized row-owned CUDA kernels. RHS 16 and 32 reuse each `A` load across eight independent output accumulators, RHS 64 uses sixteen, and RHS 8 retains the lower-overhead scalar mapping.
 - A persistent scalar-CSR cuSPARSE plan.
 - A persistent slot-split plan using CUDA 13.4 `cublasSgemmGroupedBatched`, grouped by row and column block size.
 - A 64-case correctness matrix covering every supported RHS width, all distributions, degrees `{1,4,8,16}`, both locality modes, and non-default streams.
 - A reproducible 128-case regime sweep reporting GPU-event and synchronized host median/p95 timing.
 
-Nsight Compute identified memory latency as the scalar kernel's primary constraint. The direct kernel was then changed to reuse each matrix value across four RHS accumulators, increasing instruction-level parallelism without introducing atomics or workspace.
+Nsight Compute identified memory latency as the scalar kernel's primary constraint. The direct kernel was then tuned by panel width to reuse each matrix value across eight or sixteen RHS accumulators, increasing instruction-level parallelism without introducing atomics or workspace.
 
 ## Result
 
 The optimized hybrid direct kernel won all 128 workloads in the 1,024-row regime grid, including the former RHS-64/high-degree grouped-GEMM regime. The measured release therefore does not include split-row partial buffers.
 
-For the representative degree-16/RHS-64 workload, the optimization:
+For the representative degree-16/RHS-64 workload, the wider-ILP follow-up:
 
-- Reduced median time from 16.130 ms to 7.940 ms.
-- Kept register use at 40 per thread with 96.45% achieved occupancy and no spills.
-- Raised SM utilization from 38.97% to 49.65%.
-- Improved L2 hit rate from 15.92% to 23.26%.
+- Reduced median time from 8.430 ms for the previous four-accumulator hybrid to 4.887 ms.
+- Improved the complete 128-case release grid by a 1.24x geometric-mean speedup.
+- Won every grid case against the persistent cuSPARSE and grouped-cuBLAS baselines.
+- Compiled with 52–64 registers per thread and no stack, shared-memory, or local-memory allocation in the wider kernels.
+
+The earlier Nsight Compute counters in the optimization report describe the four-accumulator intermediate. The wider kernel is accepted from unprofiled benchmark timings and the complete correctness matrix; profiler-instrumented durations are not mixed into those speedups.
 
 ## Build and verify on Windows
 

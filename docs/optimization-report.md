@@ -51,3 +51,15 @@ The scalar kernel was therefore **memory-latency-bound, not occupancy-, register
 The accepted RHS-64 ILP kernel reduced the final 20-repeat representative median from 16.130 ms to 7.940 ms (2.03x) and overtook grouped GEMM at 10.819 ms. Under identical detailed profiler sections, instrumented duration fell from 23.84 ms to 9.72 ms. Registers remained 40/thread, occupancy remained high at 96.45%, and there were still no spills. L1/TEX hit rate improved from 82.23% to 85.70% and L2 hit rate from 15.92% to 23.26%; DRAM utilization fell from 56.85% to 37.04% while SM utilization rose from 38.97% to 49.65%, consistent with reduced redundant A traffic and more useful work per load.
 
 Long-scoreboard stalls remain dominant (89.5% of the ILP issue interval), so cooperative staging remains a possible future experiment. It is not required for this release: the ILP hybrid wins the entire controlled grid, has zero sanitizer findings, and adds no workspace or extra launch.
+
+## Wider-ILP follow-up — 21 August 2026
+
+The four-accumulator kernel left redundant A traffic across RHS groups. A measured sweep of wider per-thread accumulation found the following stable choices on the same RTX 5060 Ti:
+
+- RHS 8 remains scalar; two- and four-accumulator variants lose too much parallelism.
+- RHS 16 and 32 use eight accumulators.
+- RHS 64 uses sixteen accumulators. Thirty-two regressed the representative RHS-32 and RHS-64 cases.
+
+`data/regime_map_wide_ilp.csv` repeats the 128-case, 1,024-row release sweep with 7 measured iterations after 3 warmups. Relative to `data/regime_map.csv`, the wider kernel's geometric-mean median-time speedups are 1.21x for RHS 16, 1.33x for RHS 32, and 1.43x for RHS 64. Across all RHS widths the geometric mean is 1.24x. The direct path still wins every case against persistent cuSPARSE and grouped cuBLAS.
+
+Longer 4,096-row checks confirm that the small negative deltas in a few roughly 0.05 ms RHS-16 grid entries are measurement noise: eight accumulators were 28–46% faster than four across the rechecked low-degree cases. In the representative bimodal, random, degree-16, RHS-64 case, the median fell from 8.430 ms for four accumulators to 4.887 ms for sixteen (1.72x). Static resource inspection reports 54, 52, and 64 registers per thread for the RHS-16, RHS-32, and RHS-64 kernels respectively, with zero stack, shared-memory, or local-memory allocation. The 64-case correctness matrix passes after the change.

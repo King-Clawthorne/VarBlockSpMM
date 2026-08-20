@@ -97,12 +97,12 @@ void launch_scalar(DeviceMatrix matrix, const float* input, float* output, cudaS
       <<<dim3(matrix.block_rows, blocks_per_row), threads, 0, stream>>>(matrix, input, output);
 }
 
-template <int RHS>
+template <int RHS, int VectorWidth>
 void launch_ilp(DeviceMatrix matrix, const float* input, float* output, cudaStream_t stream) {
+  static_assert(RHS % VectorWidth == 0);
   constexpr int threads = 256;
-  constexpr int vector_width = 4;
-  constexpr int blocks_per_row = (64 * (RHS / vector_width) + threads - 1) / threads;
-  row_owned_ilp<RHS, vector_width>
+  constexpr int blocks_per_row = (64 * (RHS / VectorWidth) + threads - 1) / threads;
+  row_owned_ilp<RHS, VectorWidth>
       <<<dim3(matrix.block_rows, blocks_per_row), threads, 0, stream>>>(matrix, input, output);
 }
 
@@ -138,20 +138,21 @@ void launch_row_owned_scalar(DeviceMatrix matrix, const float* input, float* out
 
 void launch_row_owned(DeviceMatrix matrix, const float* input, float* output, int rhs_width,
                       cudaStream_t stream) {
-  // RHS 8 is too narrow to recover the extra bookkeeping cost of vectorized
-  // accumulators.
+  // Wider panels amortize each A load across more independent output columns.
+  // The selected widths retain enough threads per row to cover latency; going
+  // wider than these measured points loses more parallelism than it saves.
   switch (rhs_width) {
   case 8:
     launch_scalar<8>(matrix, input, output, stream);
     break;
   case 16:
-    launch_ilp<16>(matrix, input, output, stream);
+    launch_ilp<16, 8>(matrix, input, output, stream);
     break;
   case 32:
-    launch_ilp<32>(matrix, input, output, stream);
+    launch_ilp<32, 8>(matrix, input, output, stream);
     break;
   case 64:
-    launch_ilp<64>(matrix, input, output, stream);
+    launch_ilp<64, 16>(matrix, input, output, stream);
     break;
   default:
     throw std::invalid_argument("unsupported rhs width");
