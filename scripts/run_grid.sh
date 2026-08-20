@@ -7,6 +7,7 @@ rows="${ROWS:-4096}"
 reps="${REPS:-20}"
 warmup="${WARMUP:-5}"
 first=1
+# Sweep the complete benchmark regime and retain the CSV header only once.
 for distribution in uniform low high bimodal; do
   for locality in local random; do
     for degree in 2 4 8 16; do

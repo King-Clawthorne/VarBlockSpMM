@@ -24,7 +24,7 @@ The accepted hybrid won all 128 workloads. Across the balanced grid, the arithme
 Representative 4,096-row measurements:
 
 | Workload | Hybrid | Previous scalar | Scalar CSR | Grouped GEMM |
-|---|---:|---:|---:|---:|
+| --- | ---: | ---: | ---: | ---: |
 | uniform, local, degree 2, RHS 8 | 0.211 ms | 0.253 ms | 0.484 ms | 0.909 ms |
 | high variance, random, degree 8, RHS 32 | 2.412 ms | 4.529 ms | 8.244 ms | 4.946 ms |
 | bimodal, random, degree 16, RHS 64 | 7.940 ms | 16.130 ms | 26.589 ms | 10.819 ms |
@@ -36,7 +36,7 @@ Nsight Systems captured `data/nsys_high.nsys-rep` for the final representative c
 Counter access was enabled and the commands in `docs/profiling.md` were rerun. Raw exports are `data/ncu_low.csv`, `data/ncu_high.csv`, `data/ncu_high_detailed.csv`, and `data/ncu_high_warp.csv`. Profiler-instrumented durations are intentionally not used as benchmark timings; only hardware ratios and stall classifications are interpreted here.
 
 | Counter | Low variance, degree 4, RHS 16, local | Bimodal, degree 16, RHS 64, random |
-|---|---:|---:|
+| --- | ---: | ---: |
 | DRAM throughput vs peak | 43.67% | 56.93% |
 | SM throughput vs peak | 39.63% | 40.63% |
 | Achieved occupancy | 98.84% | 99.54% |

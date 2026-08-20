@@ -1,12 +1,173 @@
-#include "varblockspmm/vbsr.hpp"
 #include <cuda_runtime.h>
+
 #include <cmath>
+#include <functional>
 #include <iostream>
 #include <random>
 #include <stdexcept>
 #include <string>
 
-static void compare(const std::vector<float>&ref,float*dc,const char*name){std::vector<float>got(ref.size());cudaMemcpy(got.data(),dc,got.size()*sizeof(float),cudaMemcpyDeviceToHost);double mx=0,l2=0,den=0;for(size_t i=0;i<got.size();i++){if(!std::isfinite(got[i]))throw std::runtime_error(std::string(name)+" produced NaN/Inf");double d=got[i]-ref[i];mx=std::max(mx,std::abs(d));l2+=d*d;den+=double(ref[i])*ref[i];}double rel=std::sqrt(l2/(den+1e-30));if(mx>5e-4||rel>5e-5)throw std::runtime_error(std::string(name)+" mismatch: max="+std::to_string(mx)+", rel="+std::to_string(rel));}
-static void run_case(vbsr::Distribution dist,int degree,int rhs,bool local,uint64_t seed){vbsr::GeneratorOptions o;o.block_rows=9;o.block_cols=17;o.degree=degree;o.distribution=dist;o.local_columns=local;o.seed=seed;auto h=vbsr::generate(o);std::vector<float>b(h.scalar_cols()*rhs);std::mt19937 g{unsigned(seed)};for(auto&x:b)x=std::uniform_real_distribution<float>(-1,1)(g);auto ref=vbsr::cpu_reference(h,b,rhs);vbsr::Matrix a(h);float *db,*dc;cudaMalloc(&db,b.size()*sizeof(float));cudaMalloc(&dc,ref.size()*sizeof(float));cudaMemcpy(db,b.data(),b.size()*sizeof(float),cudaMemcpyHostToDevice);cudaStream_t stream;cudaStreamCreate(&stream);vbsr::Plan direct(a,{rhs,vbsr::Kernel::RowOwned});vbsr::ScalarCsrPlan csr(h,rhs);vbsr::GroupedGemmPlan grouped(h,rhs);direct.execute(db,dc,stream);cudaStreamSynchronize(stream);compare(ref,dc,"row-owned ILP");vbsr::launch_row_owned_scalar(a.device_view(),db,dc,rhs,stream);cudaStreamSynchronize(stream);compare(ref,dc,"row-owned scalar");csr.execute(db,dc,stream);cudaStreamSynchronize(stream);compare(ref,dc,"cuSPARSE");grouped.execute(db,dc,stream);cudaStreamSynchronize(stream);compare(ref,dc,"grouped cuBLAS");cudaStreamDestroy(stream);cudaFree(db);cudaFree(dc);}
-static void negative_tests(){vbsr::GeneratorOptions o;o.block_rows=4;o.block_cols=4;o.degree=2;auto h=vbsr::generate(o);auto bad=h;bad.row_ptr.back()++;bool rejected=false;try{bad.validate();}catch(const std::invalid_argument&){rejected=true;}if(!rejected)throw std::runtime_error("malformed row_ptr accepted");vbsr::Matrix a(h);rejected=false;try{vbsr::Plan p(a,{7,vbsr::Kernel::RowOwned});}catch(const std::invalid_argument&){rejected=true;}if(!rejected)throw std::runtime_error("invalid RHS accepted");rejected=false;try{vbsr::Plan p(a,{8,vbsr::Kernel::SplitRow});}catch(const std::invalid_argument&){rejected=true;}if(!rejected)throw std::runtime_error("unjustified split-row accepted");}
-int main(){try{negative_tests();uint64_t seed=11;for(auto d:{vbsr::Distribution::Uniform,vbsr::Distribution::LowVariance,vbsr::Distribution::HighVariance,vbsr::Distribution::Bimodal})for(int degree:{1,4,8,16})for(int rhs:{8,16,32,64})run_case(d,degree,rhs,(seed&1)!=0,seed++);std::cout<<"PASS: 64 parameter cases x hybrid/scalar/cuSPARSE/grouped paths, non-default streams, validation failures, NaN/Inf checks\n";return 0;}catch(const std::exception&e){std::cerr<<"FAIL: "<<e.what()<<"\n";return 1;}}
+#include "varblockspmm/vbsr.hpp"
+
+namespace {
+
+void compare_device_result(const std::vector<float>& reference, const float* device_result,
+                           const char* implementation_name) {
+  std::vector<float> result(reference.size());
+  cudaMemcpy(result.data(), device_result, result.size() * sizeof(float), cudaMemcpyDeviceToHost);
+
+  double maximum_error = 0.0;
+  double squared_error = 0.0;
+  double reference_norm = 0.0;
+
+  for (size_t index = 0; index < result.size(); ++index) {
+    if (!std::isfinite(result[index])) {
+      throw std::runtime_error(std::string(implementation_name) + " produced NaN/Inf");
+    }
+
+    const double error = result[index] - reference[index];
+    maximum_error = std::max(maximum_error, std::abs(error));
+    squared_error += error * error;
+    reference_norm += double(reference[index]) * reference[index];
+  }
+
+  const double relative_error = std::sqrt(squared_error / (reference_norm + 1e-30));
+  if (maximum_error > 5e-4 || relative_error > 5e-5) {
+    throw std::runtime_error(std::string(implementation_name) +
+                             " mismatch: max=" + std::to_string(maximum_error) +
+                             ", rel=" + std::to_string(relative_error));
+  }
+}
+
+std::vector<float> make_random_input(int64_t element_count, uint64_t seed) {
+  std::vector<float> input(element_count);
+  std::mt19937 random_engine{unsigned(seed)};
+  std::uniform_real_distribution<float> random_value(-1.0f, 1.0f);
+
+  for (float& value : input) {
+    value = random_value(random_engine);
+  }
+  return input;
+}
+
+void execute_and_compare(const std::function<void()>& execute, cudaStream_t stream,
+                         const std::vector<float>& reference, float* device_output,
+                         const char* implementation_name) {
+  execute();
+  cudaStreamSynchronize(stream);
+  compare_device_result(reference, device_output, implementation_name);
+}
+
+void run_case(vbsr::Distribution distribution, int degree, int rhs_width, bool local_columns,
+              uint64_t seed) {
+  vbsr::GeneratorOptions options;
+  options.block_rows = 9;
+  options.block_cols = 17;
+  options.degree = degree;
+  options.distribution = distribution;
+  options.local_columns = local_columns;
+  options.seed = seed;
+
+  const vbsr::HostMatrix host_matrix = vbsr::generate(options);
+  const std::vector<float> input = make_random_input(host_matrix.scalar_cols() * rhs_width, seed);
+  const std::vector<float> reference = vbsr::cpu_reference(host_matrix, input, rhs_width);
+
+  vbsr::Matrix device_matrix(host_matrix);
+  float* device_input = nullptr;
+  float* device_output = nullptr;
+  cudaMalloc(&device_input, input.size() * sizeof(float));
+  cudaMalloc(&device_output, reference.size() * sizeof(float));
+  cudaMemcpy(device_input, input.data(), input.size() * sizeof(float), cudaMemcpyHostToDevice);
+
+  cudaStream_t stream;
+  cudaStreamCreate(&stream);
+
+  vbsr::Plan direct_plan(device_matrix, {rhs_width, vbsr::Kernel::RowOwned});
+  vbsr::ScalarCsrPlan scalar_csr_plan(host_matrix, rhs_width);
+  vbsr::GroupedGemmPlan grouped_gemm_plan(host_matrix, rhs_width);
+
+  execute_and_compare([&] { direct_plan.execute(device_input, device_output, stream); }, stream,
+                      reference, device_output, "row-owned ILP");
+  execute_and_compare(
+      [&] {
+        vbsr::launch_row_owned_scalar(device_matrix.device_view(), device_input, device_output,
+                                      rhs_width, stream);
+      },
+      stream, reference, device_output, "row-owned scalar");
+  execute_and_compare([&] { scalar_csr_plan.execute(device_input, device_output, stream); }, stream,
+                      reference, device_output, "cuSPARSE");
+  execute_and_compare([&] { grouped_gemm_plan.execute(device_input, device_output, stream); },
+                      stream, reference, device_output, "grouped cuBLAS");
+
+  cudaStreamDestroy(stream);
+  cudaFree(device_input);
+  cudaFree(device_output);
+}
+
+void expect_invalid_argument(const std::function<void()>& operation, const char* failure_message) {
+  try {
+    operation();
+  } catch (const std::invalid_argument&) {
+    return;
+  }
+  throw std::runtime_error(failure_message);
+}
+
+void run_negative_tests() {
+  vbsr::GeneratorOptions options;
+  options.block_rows = 4;
+  options.block_cols = 4;
+  options.degree = 2;
+
+  const vbsr::HostMatrix valid_matrix = vbsr::generate(options);
+  vbsr::HostMatrix malformed_matrix = valid_matrix;
+  malformed_matrix.row_ptr.back()++;
+
+  expect_invalid_argument([&] { malformed_matrix.validate(); }, "malformed row_ptr accepted");
+
+  vbsr::Matrix device_matrix(valid_matrix);
+  expect_invalid_argument(
+      [&] {
+        vbsr::Plan plan(device_matrix, {7, vbsr::Kernel::RowOwned});
+      },
+      "invalid RHS accepted");
+  expect_invalid_argument(
+      [&] {
+        vbsr::Plan plan(device_matrix, {8, vbsr::Kernel::SplitRow});
+      },
+      "unjustified split-row accepted");
+}
+
+void run_parameter_matrix() {
+  constexpr vbsr::Distribution distributions[] = {
+      vbsr::Distribution::Uniform, vbsr::Distribution::LowVariance,
+      vbsr::Distribution::HighVariance, vbsr::Distribution::Bimodal};
+  constexpr int degrees[] = {1, 4, 8, 16};
+  constexpr int rhs_widths[] = {8, 16, 32, 64};
+
+  uint64_t seed = 11;
+  for (vbsr::Distribution distribution : distributions) {
+    for (int degree : degrees) {
+      for (int rhs_width : rhs_widths) {
+        run_case(distribution, degree, rhs_width, (seed & 1) != 0, seed);
+        ++seed;
+      }
+    }
+  }
+}
+
+} // namespace
+
+int main() {
+  try {
+    run_negative_tests();
+    run_parameter_matrix();
+    std::cout << "PASS: 64 parameter cases x hybrid/scalar/cuSPARSE/grouped "
+                 "paths, non-default streams, validation failures, NaN/Inf "
+                 "checks\n";
+    return 0;
+  } catch (const std::exception& error) {
+    std::cerr << "FAIL: " << error.what() << '\n';
+    return 1;
+  }
+}

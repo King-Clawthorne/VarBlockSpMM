@@ -11,6 +11,7 @@ $cudaBin = "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.4\bin"
 if (Test-Path $cudaBin) { $env:PATH = "$cudaBin;$env:PATH" }
 $Exe = (Resolve-Path $Exe).Path
 $first = $true
+# Sweep the complete benchmark regime and retain the CSV header only once.
 foreach ($distribution in @("uniform", "low", "high", "bimodal")) {
   foreach ($locality in @("local", "random")) {
     foreach ($degree in @(2, 4, 8, 16)) {

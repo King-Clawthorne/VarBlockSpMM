@@ -1,44 +1,162 @@
-#include "varblockspmm/vbsr.hpp"
 #include <cuda_runtime.h>
+
 #include <stdexcept>
 
-namespace vbsr {
-template<int RHS>
-__global__ void row_owned_scalar(DeviceMatrix a,const float* __restrict__ b,float* __restrict__ c) {
-  const int i=blockIdx.x,r=a.row_size[i],stride=blockDim.x*gridDim.y;
-  for(int t=blockIdx.y*blockDim.x+threadIdx.x;t<r*RHS;t+=stride) {
-    const int x=t%r,y=t/r;float acc=0.0f;
-    #pragma unroll 1
-    for(int p=a.row_ptr[i];p<a.row_ptr[i+1];p++) {
-      const int j=a.block_col[p],q=a.col_size[j];const float* av=a.values+a.value_off[p]+x;const float* bv=b+a.col_scalar_off[j]+int64_t(y)*a.scalar_cols;
-      #pragma unroll 4
-      for(int z=0;z<q;z++)acc=fmaf(av[z*r],bv[z],acc);
-    }
-    c[a.row_scalar_off[i]+x+int64_t(y)*a.scalar_rows]=acc;
-  }
-}
+#include "varblockspmm/vbsr.hpp"
 
-template<int RHS,int VEC>
-__global__ void row_owned_ilp(DeviceMatrix a,const float* __restrict__ b,float* __restrict__ c) {
-  const int i=blockIdx.x,r=a.row_size[i],groups=RHS/VEC,stride=blockDim.x*gridDim.y;
-  for(int t=blockIdx.y*blockDim.x+threadIdx.x;t<r*groups;t+=stride) {
-    const int x=t%r,y0=(t/r)*VEC;float acc[VEC]={};
-    #pragma unroll 1
-    for(int p=a.row_ptr[i];p<a.row_ptr[i+1];p++) {
-      const int j=a.block_col[p],q=a.col_size[j];const float* av=a.values+a.value_off[p]+x;const float* bv=b+a.col_scalar_off[j]+int64_t(y0)*a.scalar_cols;
-      #pragma unroll 4
-      for(int z=0;z<q;z++){const float avalue=av[z*r];
-        #pragma unroll
-        for(int v=0;v<VEC;v++)acc[v]=fmaf(avalue,bv[z+int64_t(v)*a.scalar_cols],acc[v]);
+namespace vbsr {
+namespace {
+
+template <int RHS>
+__global__ void row_owned_scalar(DeviceMatrix matrix, const float* __restrict__ input,
+                                 float* __restrict__ output) {
+  // One x-grid block owns one block row. The y-grid and threads stride over
+  // every (local row, RHS column) output element, so no atomics are required.
+  const int block_row = blockIdx.x;
+  const int row_height = matrix.row_size[block_row];
+  const int grid_stride = blockDim.x * gridDim.y;
+
+  for (int work_index = blockIdx.y * blockDim.x + threadIdx.x; work_index < row_height * RHS;
+       work_index += grid_stride) {
+    const int local_row = work_index % row_height;
+    const int rhs_column = work_index / row_height;
+    float accumulator = 0.0f;
+
+#pragma unroll 1
+    for (int block_index = matrix.row_ptr[block_row]; block_index < matrix.row_ptr[block_row + 1];
+         ++block_index) {
+      const int block_column = matrix.block_col[block_index];
+      const int column_width = matrix.col_size[block_column];
+      const float* block_values = matrix.values + matrix.value_off[block_index] + local_row;
+      const float* input_column =
+          input + matrix.col_scalar_off[block_column] + int64_t(rhs_column) * matrix.scalar_cols;
+
+#pragma unroll 4
+      for (int local_column = 0; local_column < column_width; ++local_column) {
+        accumulator =
+            fmaf(block_values[local_column * row_height], input_column[local_column], accumulator);
       }
     }
-    #pragma unroll
-    for(int v=0;v<VEC;v++)c[a.row_scalar_off[i]+x+int64_t(y0+v)*a.scalar_rows]=acc[v];
+
+    output[matrix.row_scalar_off[block_row] + local_row +
+           int64_t(rhs_column) * matrix.scalar_rows] = accumulator;
   }
 }
 
-template<int RHS>static void launch_scalar(DeviceMatrix a,const float*b,float*c,cudaStream_t s){constexpr int threads=256;constexpr int y=(64*RHS+threads-1)/threads;row_owned_scalar<RHS><<<dim3(a.block_rows,y),threads,0,s>>>(a,b,c);}
-template<int RHS>static void launch_ilp(DeviceMatrix a,const float*b,float*c,cudaStream_t s){constexpr int threads=256;constexpr int vec=4;constexpr int y=(64*(RHS/vec)+threads-1)/threads;row_owned_ilp<RHS,vec><<<dim3(a.block_rows,y),threads,0,s>>>(a,b,c);}
-void launch_row_owned_scalar(DeviceMatrix a,const float*b,float*c,int n,cudaStream_t s){switch(n){case 8:launch_scalar<8>(a,b,c,s);break;case 16:launch_scalar<16>(a,b,c,s);break;case 32:launch_scalar<32>(a,b,c,s);break;case 64:launch_scalar<64>(a,b,c,s);break;default:throw std::invalid_argument("unsupported rhs width");}auto e=cudaGetLastError();if(e!=cudaSuccess)throw std::runtime_error(cudaGetErrorString(e));}
-void launch_row_owned(DeviceMatrix a,const float*b,float*c,int n,cudaStream_t s){switch(n){case 8:launch_scalar<8>(a,b,c,s);break;case 16:launch_ilp<16>(a,b,c,s);break;case 32:launch_ilp<32>(a,b,c,s);break;case 64:launch_ilp<64>(a,b,c,s);break;default:throw std::invalid_argument("unsupported rhs width");}auto e=cudaGetLastError();if(e!=cudaSuccess)throw std::runtime_error(cudaGetErrorString(e));}
+template <int RHS, int VectorWidth>
+__global__ void row_owned_ilp(DeviceMatrix matrix, const float* __restrict__ input,
+                              float* __restrict__ output) {
+  // Each thread reuses one A value across VectorWidth independent RHS columns.
+  // This increases instruction-level parallelism and reduces repeated A loads.
+  const int block_row = blockIdx.x;
+  const int row_height = matrix.row_size[block_row];
+  const int rhs_groups = RHS / VectorWidth;
+  const int grid_stride = blockDim.x * gridDim.y;
+
+  for (int work_index = blockIdx.y * blockDim.x + threadIdx.x; work_index < row_height * rhs_groups;
+       work_index += grid_stride) {
+    const int local_row = work_index % row_height;
+    const int first_rhs_column = (work_index / row_height) * VectorWidth;
+    float accumulators[VectorWidth] = {};
+
+#pragma unroll 1
+    for (int block_index = matrix.row_ptr[block_row]; block_index < matrix.row_ptr[block_row + 1];
+         ++block_index) {
+      const int block_column = matrix.block_col[block_index];
+      const int column_width = matrix.col_size[block_column];
+      const float* block_values = matrix.values + matrix.value_off[block_index] + local_row;
+      const float* first_input_column = input + matrix.col_scalar_off[block_column] +
+                                        int64_t(first_rhs_column) * matrix.scalar_cols;
+
+#pragma unroll 4
+      for (int local_column = 0; local_column < column_width; ++local_column) {
+        const float matrix_value = block_values[local_column * row_height];
+#pragma unroll
+        for (int vector_index = 0; vector_index < VectorWidth; ++vector_index) {
+          const auto input_index = local_column + int64_t(vector_index) * matrix.scalar_cols;
+          accumulators[vector_index] =
+              fmaf(matrix_value, first_input_column[input_index], accumulators[vector_index]);
+        }
+      }
+    }
+
+#pragma unroll
+    for (int vector_index = 0; vector_index < VectorWidth; ++vector_index) {
+      output[matrix.row_scalar_off[block_row] + local_row +
+             int64_t(first_rhs_column + vector_index) * matrix.scalar_rows] =
+          accumulators[vector_index];
+    }
+  }
 }
+
+template <int RHS>
+void launch_scalar(DeviceMatrix matrix, const float* input, float* output, cudaStream_t stream) {
+  constexpr int threads = 256;
+  constexpr int blocks_per_row = (64 * RHS + threads - 1) / threads;
+  row_owned_scalar<RHS>
+      <<<dim3(matrix.block_rows, blocks_per_row), threads, 0, stream>>>(matrix, input, output);
+}
+
+template <int RHS>
+void launch_ilp(DeviceMatrix matrix, const float* input, float* output, cudaStream_t stream) {
+  constexpr int threads = 256;
+  constexpr int vector_width = 4;
+  constexpr int blocks_per_row = (64 * (RHS / vector_width) + threads - 1) / threads;
+  row_owned_ilp<RHS, vector_width>
+      <<<dim3(matrix.block_rows, blocks_per_row), threads, 0, stream>>>(matrix, input, output);
+}
+
+void check_kernel_launch() {
+  const cudaError_t status = cudaGetLastError();
+  if (status != cudaSuccess) {
+    throw std::runtime_error(cudaGetErrorString(status));
+  }
+}
+
+} // namespace
+
+void launch_row_owned_scalar(DeviceMatrix matrix, const float* input, float* output, int rhs_width,
+                             cudaStream_t stream) {
+  switch (rhs_width) {
+  case 8:
+    launch_scalar<8>(matrix, input, output, stream);
+    break;
+  case 16:
+    launch_scalar<16>(matrix, input, output, stream);
+    break;
+  case 32:
+    launch_scalar<32>(matrix, input, output, stream);
+    break;
+  case 64:
+    launch_scalar<64>(matrix, input, output, stream);
+    break;
+  default:
+    throw std::invalid_argument("unsupported rhs width");
+  }
+  check_kernel_launch();
+}
+
+void launch_row_owned(DeviceMatrix matrix, const float* input, float* output, int rhs_width,
+                      cudaStream_t stream) {
+  // RHS 8 is too narrow to recover the extra bookkeeping cost of vectorized
+  // accumulators.
+  switch (rhs_width) {
+  case 8:
+    launch_scalar<8>(matrix, input, output, stream);
+    break;
+  case 16:
+    launch_ilp<16>(matrix, input, output, stream);
+    break;
+  case 32:
+    launch_ilp<32>(matrix, input, output, stream);
+    break;
+  case 64:
+    launch_ilp<64>(matrix, input, output, stream);
+    break;
+  default:
+    throw std::invalid_argument("unsupported rhs width");
+  }
+  check_kernel_launch();
+}
+
+} // namespace vbsr
