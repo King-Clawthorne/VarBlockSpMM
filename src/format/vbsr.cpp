@@ -2,6 +2,8 @@
 
 #include <cuda_runtime.h>
 
+#include <algorithm>
+#include <numeric>
 #include <stdexcept>
 #include <string>
 
@@ -47,13 +49,15 @@ void HostMatrix::validate() const {
   }
 
   for (int block_row = 0; block_row < block_rows; ++block_row) {
-    if (row_ptr[block_row] > row_ptr[block_row + 1] || row_size[block_row] <= 0 ||
+    if (row_ptr[block_row] > row_ptr[block_row + 1] || row_size[block_row] < 8 ||
+        row_size[block_row] > 64 || row_size[block_row] % 8 != 0 ||
         row_scalar_off[block_row + 1] - row_scalar_off[block_row] != row_size[block_row]) {
       throw std::invalid_argument("bad block row");
     }
   }
   for (int block_column = 0; block_column < block_cols; ++block_column) {
-    if (col_size[block_column] <= 0 ||
+    if (col_size[block_column] < 8 || col_size[block_column] > 64 ||
+        col_size[block_column] % 8 != 0 ||
         col_scalar_off[block_column + 1] - col_scalar_off[block_column] != col_size[block_column]) {
       throw std::invalid_argument("bad block column");
     }
@@ -84,6 +88,19 @@ Matrix::Matrix(const HostMatrix& host) {
   nnzb_ = int(host.block_col.size());
   rows_ = host.scalar_rows();
   cols_ = host.scalar_cols();
+
+  // RHS-32 kernels use a lighter synchronous CTA for rows up to 16 scalars
+  // high and double-buffered 256-thread CTAs for rows with more reuse.
+  // Keeping each shape class contiguous permits two homogeneous launches
+  // without changing VBSR order.
+  std::vector<int32_t> row_shape_order(host.block_rows);
+  std::iota(row_shape_order.begin(), row_shape_order.end(), int32_t{0});
+  const auto large_begin = std::stable_partition(
+      row_shape_order.begin(), row_shape_order.end(),
+      [&](int32_t block_row) { return host.row_size[block_row] <= 16; });
+  small_row_count_ = int(large_begin - row_shape_order.begin());
+  large_row_count_ = host.block_rows - small_row_count_;
+
   row_ptr_ = copy_to_device(host.row_ptr);
   block_col_ = copy_to_device(host.block_col);
   row_size_ = copy_to_device(host.row_size);
@@ -92,6 +109,7 @@ Matrix::Matrix(const HostMatrix& host) {
   col_off_ = copy_to_device(host.col_scalar_off);
   value_off_ = copy_to_device(host.value_off);
   values_ = copy_to_device(host.values);
+  row_shape_order_ = copy_to_device(row_shape_order);
 }
 void Matrix::release() {
   cudaFree(row_ptr_);
@@ -102,7 +120,9 @@ void Matrix::release() {
   cudaFree(col_off_);
   cudaFree(value_off_);
   cudaFree(values_);
+  cudaFree(row_shape_order_);
   row_ptr_ = nullptr;
+  row_shape_order_ = nullptr;
 }
 Matrix::~Matrix() { release(); }
 Matrix::Matrix(Matrix&& other) noexcept { *this = std::move(other); }
@@ -112,6 +132,8 @@ Matrix& Matrix::operator=(Matrix&& other) noexcept {
     block_rows_ = other.block_rows_;
     block_cols_ = other.block_cols_;
     nnzb_ = other.nnzb_;
+    small_row_count_ = other.small_row_count_;
+    large_row_count_ = other.large_row_count_;
     rows_ = other.rows_;
     cols_ = other.cols_;
     row_ptr_ = other.row_ptr_;
@@ -122,6 +144,7 @@ Matrix& Matrix::operator=(Matrix&& other) noexcept {
     col_off_ = other.col_off_;
     value_off_ = other.value_off_;
     values_ = other.values_;
+    row_shape_order_ = other.row_shape_order_;
 
     other.row_ptr_ = nullptr;
     other.block_col_ = nullptr;
@@ -131,6 +154,9 @@ Matrix& Matrix::operator=(Matrix&& other) noexcept {
     other.col_off_ = nullptr;
     other.value_off_ = nullptr;
     other.values_ = nullptr;
+    other.row_shape_order_ = nullptr;
+    other.small_row_count_ = 0;
+    other.large_row_count_ = 0;
   }
   return *this;
 }

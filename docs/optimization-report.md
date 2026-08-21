@@ -1,6 +1,8 @@
-# Optimization report — 20 August 2026
+# Optimization report
 
-## Environment
+## 20 August 2026
+
+### Environment
 
 - GPU: NVIDIA GeForce RTX 5060 Ti, 16 GB
 - CUDA compiler/libraries: 13.4.46
@@ -10,7 +12,7 @@
 
 Raw measurements are in `data/regime_map.csv` (128 workloads, the accepted hybrid kernel, the previous scalar kernel, and two library baselines). Treat the short release sweep as a regime map, not publication-grade statistics; rerun the supplied script with the README's 20/5 settings for longer measurements.
 
-## Decisions backed by measurement
+### Decisions backed by measurement
 
 1. **Remove per-execute host synchronization.** The prototype copied terminal offsets from device to host and synchronized before every launch. Scalar dimensions now live in `DeviceMatrix`, making `Plan::execute` asynchronous and stream-correct.
 2. **Specialize only RHS width and split output tiles across CTAs.** Four compiled RHS variants retain runtime block sizes. At high variance, degree 8, RHS 32, local columns, the release kernel measured 0.981 ms versus the prototype's recorded 1.303 ms on the same 1,024-row scale (about 25% lower). The output-CTA split is race-free because CTAs own disjoint `(row,RHS)` elements.
@@ -31,7 +33,7 @@ Representative 4,096-row measurements:
 
 Nsight Systems captured `data/nsys_high.nsys-rep` for the final representative case. Its kernel summary confirms one direct launch per call, one cuSPARSE main kernel plus helpers, and 16 grouped-GEMM kernels per call. CPU sampling/context-switch tracing was unavailable without elevation but CUDA tracing succeeded.
 
-## Nsight Compute counter results
+### Nsight Compute counter results
 
 Counter access was enabled and the commands in `docs/profiling.md` were rerun. Raw exports are `data/ncu_low.csv`, `data/ncu_high.csv`, `data/ncu_high_detailed.csv`, and `data/ncu_high_warp.csv`. Profiler-instrumented durations are intentionally not used as benchmark timings; only hardware ratios and stall classifications are interpreted here.
 
@@ -46,13 +48,15 @@ The detailed high-irregularity pass measured 82.23% L1/TEX hit rate but only 15.
 
 The scalar kernel was therefore **memory-latency-bound, not occupancy-, register-, shared-memory-, or peak-bandwidth-bound** in the difficult RHS-64/high-degree case. This supported the four-accumulator ILP experiment.
 
-## Accepted ILP result
+### Accepted ILP result
 
 The accepted RHS-64 ILP kernel reduced the final 20-repeat representative median from 16.130 ms to 7.940 ms (2.03x) and overtook grouped GEMM at 10.819 ms. Under identical detailed profiler sections, instrumented duration fell from 23.84 ms to 9.72 ms. Registers remained 40/thread, occupancy remained high at 96.45%, and there were still no spills. L1/TEX hit rate improved from 82.23% to 85.70% and L2 hit rate from 15.92% to 23.26%; DRAM utilization fell from 56.85% to 37.04% while SM utilization rose from 38.97% to 49.65%, consistent with reduced redundant A traffic and more useful work per load.
 
 Long-scoreboard stalls remain dominant (89.5% of the ILP issue interval), so cooperative staging remains a possible future experiment. It is not required for this release: the ILP hybrid wins the entire controlled grid, has zero sanitizer findings, and adds no workspace or extra launch.
 
-## Wider-ILP follow-up — 21 August 2026
+## 21 August 2026
+
+### Wider-ILP
 
 The four-accumulator kernel left redundant A traffic across RHS groups. A measured sweep of wider per-thread accumulation found the following stable choices on the same RTX 5060 Ti:
 
@@ -64,10 +68,20 @@ The four-accumulator kernel left redundant A traffic across RHS groups. A measur
 
 Longer 4,096-row checks confirm that the small negative deltas in a few roughly 0.05 ms RHS-16 grid entries are measurement noise: eight accumulators were 28–46% faster than four across the rechecked low-degree cases. In the representative bimodal, random, degree-16, RHS-64 case, the median fell from 8.430 ms for four accumulators to 4.887 ms for sixteen (1.72x). Static resource inspection reports 54, 52, and 64 registers per thread for the RHS-16, RHS-32, and RHS-64 kernels respectively, with zero stack, shared-memory, or local-memory allocation. The 64-case correctness matrix passes after the change.
 
-## Cooperative B staging follow-up — 21 August 2026
+### Cooperative B staging
 
 The wide-ILP kernel still issued the same `B` loads for every local output row and relied on cache broadcast. The staged kernel instead uses one CTA per block row and cooperatively loads each active `column_width * RHS` slice of `B` once. A 65-float shared leading dimension prevents bank conflicts between RHS groups. The largest logical tile is 64 by 64 floats (16 KiB). Compiled resource use is 9,344 bytes of shared memory per CTA and 56 registers per thread for RHS 32, and 17,664 bytes per CTA and 64 registers per thread for RHS 64, with no local-memory spills.
 
 `data/regime_map_staged.csv` repeats the complete 128-case release sweep. Against `data/regime_map_wide_ilp.csv`, staging improves every RHS-32 case by at least 11.2% and every RHS-64 case by at least 34.2%; geometric-mean speedups are 1.26x and 1.53x respectively. Across all widths the staging follow-up adds 1.18x, and the cumulative geometric-mean gain over the original four-accumulator release is 1.46x. The direct path continues to beat persistent cuSPARSE and grouped cuBLAS in all 128 cases.
 
 In the 4,096-row bimodal/random/degree-16/RHS-64 case, the median of three unprofiled 100-repeat medians is 2.895 ms versus 4.887 ms unstaged (1.69x). Comparable Nsight Compute passes reduce the long-scoreboard share from 78.0% to 37.1%, increase eligible warps per scheduler from 0.41 to 0.75, and raise achieved occupancy from 49.6% to 64.7%. The dominant new cost is CTA-barrier waiting at 36.4% of the issue interval, suggesting shape bucketing or asynchronous double-buffered staging as the next focused experiment. Raw staged counters are in `data/ncu_high_staged.csv`.
+
+### Double-buffered RHS-32 and row-shape dispatch
+
+The follow-up implements the profiler-driven experiment without applying it indiscriminately. RHS-32 rows taller than 16 scalars use two padded shared tiles and CUDA asynchronous pipeline copies: tile `n+1` is issued before the FMAs for tile `n`, then waited on at the next block boundary. Rows of height 8 or 16 use a 128-thread single-buffer kernel. Mixed-height matrices split into those two launches only when mean block degree is at least 8; below that point the extra launch outweighed shape specialization in the measured sweep.
+
+`data/regime_map_double_buffered.csv` repeats the 128-case, 1,024-row sweep. Across the 32 RHS-32 cases, geometric-mean median-time speedup over `data/regime_map_staged.csv` is 1.11x. All 16 degree-8/16 cases improve. The bimodal/random/degree-16 case falls from 0.549 ms to 0.468 ms (1.17x). The direct path continues to beat cuSPARSE and grouped cuBLAS in all 128 cases.
+
+Static resource inspection reports 48 registers per thread and 17,664 bytes of shared memory for the 256-thread RHS-32 double-buffer kernel, and 54 registers plus 9,344 bytes for its 128-thread single-buffer companion, with zero stack or local memory. A full RHS-64 double buffer was rejected after measurement: the representative 4,096-row bimodal/random/degree-16 case regressed from 2.891 ms to 4.419 ms because the roughly 34 KiB shared allocation reduced residency. The accepted dispatch therefore preserves the 64-register, 17,664-byte RHS-64 single-buffer kernel and its 2.891 ms representative median.
+
+Nsight Compute confirms that the accepted RHS-32 binary contains native asynchronous global-to-shared loads. On the 4,096-row bimodal/random/degree-16 tall-row launch, `data/ncu_rhs32_double_buffered.csv` reports 80.4% achieved occupancy, 1.42 eligible warps per scheduler, 47.3% cycles with no eligible warp, 81.1% SM throughput, and 68.1% DRAM throughput. These replay-instrumented figures characterize the kernel; they are not used as benchmark timing.

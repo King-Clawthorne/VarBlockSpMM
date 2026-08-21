@@ -251,7 +251,7 @@ int run_benchmark(const Arguments& arguments) {
   print_csv_header();
   benchmark_method(
       "row_owned_hybrid", arguments, useful_flops,
-      [&] { direct_plan.execute(device_input, device_output); }, 1, 0);
+      [&] { direct_plan.execute(device_input, device_output); }, direct_plan.launch_count(), 0);
   benchmark_method(
       "row_owned_scalar", arguments, useful_flops,
       [&] {

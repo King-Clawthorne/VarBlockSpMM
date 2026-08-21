@@ -53,9 +53,11 @@ public:
   int64_t scalar_cols() const { return cols_; }
 
 private:
+  friend class Plan;
   int block_rows_{}, block_cols_{}, nnzb_{};
+  int small_row_count_{}, large_row_count_{};
   int64_t rows_{}, cols_{};
-  int32_t *row_ptr_{}, *block_col_{}, *row_size_{}, *col_size_{};
+  int32_t *row_ptr_{}, *block_col_{}, *row_size_{}, *col_size_{}, *row_shape_order_{};
   int64_t *row_off_{}, *col_off_{}, *value_off_{};
   float* values_{};
   void release();
@@ -106,9 +108,13 @@ public:
   /** Enqueues `C = A * B`; both dense matrices are column-major device buffers.
    */
   void execute(const float* B, float* C, cudaStream_t stream = 0) const;
+  /** Returns the number of kernel launches used by one execution. */
+  int launch_count() const;
 
 private:
   DeviceMatrix a_{};
+  const int32_t* row_shape_order_{};
+  int small_row_count_{}, large_row_count_{};
   PlanOptions options_{};
 };
 
@@ -149,7 +155,8 @@ private:
 
 /** Launches the optimized row-owned kernel, using width-specific ILP and
  * shared-memory input staging when beneficial. */
-void launch_row_owned(DeviceMatrix, const float*, float*, int rhs, cudaStream_t);
+void launch_row_owned(DeviceMatrix, const int32_t* row_shape_order, int small_row_count,
+                      int large_row_count, const float*, float*, int rhs, cudaStream_t);
 /** Launches the scalar row-owned kernel for comparison and profiling. */
 void launch_row_owned_scalar(DeviceMatrix, const float*, float*, int rhs, cudaStream_t);
 

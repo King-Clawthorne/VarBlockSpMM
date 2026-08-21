@@ -25,7 +25,8 @@ The implementation includes:
 - Deterministic generators for uniform, low-variance, high-variance, and bimodal block sizes with local or random column patterns.
 - A double-accumulating CPU reference for correctness checks.
 - RHS-specialized row-owned CUDA kernels. RHS 16 and 32 reuse each `A` load across eight independent output accumulators, RHS 64 uses sixteen, and RHS 8 retains the lower-overhead scalar mapping.
-- For RHS 32 and 64, each CTA cooperatively stages the active `B` block slice in padded shared memory. RHS 16 retains direct global loads because synchronization costs more than staging saves at that width.
+- RHS 32 uses a measured row-shape dispatch. Rows up to 16 scalars high use a 128-thread single-buffer CTA; taller rows use 256 threads and asynchronous double buffering so the next `B` slice loads while the current block computes. Mixed-height matrices use the split only from mean degree 8 upward, where two launches amortize.
+- RHS 64 retains one 256-thread, single-buffer CTA per row. Two full RHS-64 buffers reduce occupancy enough to lose performance on the release GPU; RHS 16 likewise retains direct global loads.
 - A persistent scalar-CSR cuSPARSE plan.
 - A persistent slot-split plan using CUDA 13.4 `cublasSgemmGroupedBatched`, grouped by row and column block size.
 - A 64-case correctness matrix covering every supported RHS width, all distributions, degrees `{1,4,8,16}`, both locality modes, and non-default streams.
@@ -36,6 +37,8 @@ Nsight Compute identified memory latency as the scalar kernel's primary constrai
 ## Result
 
 The optimized hybrid direct kernel won all 128 workloads in the 1,024-row regime grid, including the former RHS-64/high-degree grouped-GEMM regime. The measured release therefore does not include split-row partial buffers.
+
+The asynchronous RHS-32 follow-up improves geometric-mean median time by 1.11x over the single-buffer staged release across its 32-case slice. It wins all degree-8 and degree-16 RHS-32 cases, reaching 1.17x on the 1,024-row bimodal/random/degree-16 case (0.468 ms versus 0.549 ms). Low-degree mixed shapes retain the original single-buffer launch, while RHS 64 is deliberately unchanged. The updated direct path still beats both persistent library baselines in all 128 cases.
 
 For the representative degree-16/RHS-64 workload, the staged hybrid:
 

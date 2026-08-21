@@ -125,6 +125,10 @@ void run_negative_tests() {
 
   expect_invalid_argument([&] { malformed_matrix.validate(); }, "malformed row_ptr accepted");
 
+  malformed_matrix = valid_matrix;
+  malformed_matrix.row_size[0] = 7;
+  expect_invalid_argument([&] { malformed_matrix.validate(); }, "unsupported block size accepted");
+
   vbsr::Matrix device_matrix(valid_matrix);
   expect_invalid_argument(
       [&] {
