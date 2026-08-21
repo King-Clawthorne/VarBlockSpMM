@@ -1,4 +1,4 @@
-# VarBlockSpMM 1.0
+# VarBlockSpMM
 
 CUDA FP32 non-transpose `C = A B` for a column-major variable-block sparse matrix `A` and dense column-major panels `B/C`. Block heights and widths independently vary over `{8,16,...,64}`; blocks are packed without global-size padding.
 
