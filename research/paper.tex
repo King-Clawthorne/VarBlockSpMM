@@ -6,6 +6,12 @@
 \documentclass[
 ]{article}
 \usepackage{amsmath,amssymb}
+\usepackage{mathtools}
+\usepackage{caption}
+\usepackage{siunitx}
+\usepackage{fancyhdr}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
 \usepackage{lmodern}
 \usepackage{iftex}
 \ifPDFTeX
@@ -44,7 +50,7 @@
   urlcolor={blue},
   pdfcreator={LaTeX via pandoc}}
 \urlstyle{same} % disable monospaced font for URLs
-\usepackage[margin=1in]{geometry}
+\usepackage[margin=0.82in]{geometry}
 \usepackage{color}
 \usepackage{fancyvrb}
 \newcommand{\VerbBar}{|}
@@ -93,6 +99,7 @@
 % Allow footnotes in longtable head/foot
 \IfFileExists{footnotehyper.sty}{\usepackage{footnotehyper}}{\usepackage{footnote}}
 \makesavenoteenv{longtable}
+\AtBeginEnvironment{longtable}{\small}
 \setlength{\emergencystretch}{3em} % prevent overfull lines
 \providecommand{\tightlist}{%
   \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
@@ -101,26 +108,21 @@
   \usepackage{selnolig}  % disable illegal ligatures
 \fi
 
-\author{}
-\date{}
+\title{VarBlockSpMM: A Shape-Aware CUDA Kernel for\\Packed Variable-Block Sparse--Dense Matrix Multiplication}
+\author{Cohen Brunner Thomas\\\small Independent Research Project}
+\date{21 August 2026}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{VarBlockSpMM}
+\fancyhead[R]{Cohen Brunner Thomas}
+\fancyfoot[C]{\thepage}
+\setlength{\headheight}{14pt}
 
 \begin{document}
 
-{
-\hypersetup{linkcolor=}
-\setcounter{tocdepth}{3}
-\tableofcontents
-}
-\hypertarget{varblockspmm-a-shape-aware-cuda-kernel-for-packed-variable-block-sparsedense-matrix-multiplication}{%
-\section{VarBlockSpMM: A Shape-Aware CUDA Kernel for Packed
-Variable-Block Sparse--Dense Matrix
-Multiplication}\label{varblockspmm-a-shape-aware-cuda-kernel-for-packed-variable-block-sparsedense-matrix-multiplication}}
+\maketitle
 
-\textbf{Cohen}\\
-\emph{Project research manuscript, 21 August 2026}
-
-\hypertarget{abstract}{%
-\subsection{Abstract}\label{abstract}}
+\begin{abstract}\label{abstract}
 
 Sparse--dense matrix multiplication (SpMM) is commonly implemented using
 scalar sparse formats or fixed-size block formats. Both choices are
@@ -142,8 +144,13 @@ double buffering while short rows retain a lower-overhead single-buffer
 kernel. The direct path requires no atomics or execute-time temporary
 workspace. It is evaluated against a persistent scalar-CSR cuSPARSE
 baseline and a persistent slot-grouped cuBLAS baseline over 128
-synthetic regimes on one NVIDIA GeForce RTX 5060 Ti. In the checked-in
-short sweep, the final direct method is fastest in all 128 cases.
+synthetic regimes and five deterministic generator seeds on one
+NVIDIA GeForce RTX 5060 Ti. Each of the 640 workload--seed pairs contains
+20 measured iterations after five warmups. The final direct method beats
+both persistent library baselines in all 640 paired workload--seed instances.
+Cluster bootstrapping over workload configurations gives geometric-mean
+speedups of 4.988× (95\% interval 4.472--5.537) over cuSPARSE and 4.222×
+(4.064--4.392) over grouped cuBLAS.
 Relative to the earlier four-accumulator direct kernel, successive
 wider-ILP and staging changes provide a 1.46× geometric-mean speedup
 over the complete grid; the final RHS-32 double-buffer refinement adds
@@ -153,9 +160,10 @@ establish a strong single-device proof of concept, but not a general
 performance claim: multi-architecture testing, real application
 matrices, repeated-seed experiments, and stronger statistical reporting
 remain necessary.
+\end{abstract}
 
 \hypertarget{introduction}{%
-\subsection{1. Introduction}\label{introduction}}
+\section{Introduction}\label{introduction}}
 
 Many hierarchical, finite-element, graph, and scientific operators
 contain small dense submatrices embedded in a sparse global structure.
@@ -211,8 +219,7 @@ was scoped rather than exhaustive and is not a patentability or
 universal novelty claim.
 
 \hypertarget{background-and-related-work}{%
-\subsection{2. Background and Related
-Work}\label{background-and-related-work}}
+\section{Background and Related Work}\label{background-and-related-work}}
 
 GPU SpMM research has long emphasized that workload structure and row
 irregularity determine the useful mapping of sparse work to warps and
@@ -244,6 +251,25 @@ implementation {[}5{]}. VarBlockSpMM targets the underlying packed
 variable-block operation rather than the full hierarchical construction
 algorithm.
 
+Variable blocking predates GPU SpMM. Vuduc and Moon studied variable and
+unaligned block structure for sparse matrix--vector multiplication, observing
+that VBR exposes irregular rectangular dense regions but prevents the fixed
+inner-loop unrolling available to BCSR {[}7{]}. OSKI likewise defines VBR as
+independent logical row and column partitions with nonzero blocks stored in
+block-row order {[}8{]}. VarBlockSpMM adopts this classical structural model
+but addresses a dense multi-column right operand on CUDA.
+
+Among GPU scalar-CSR systems, GE-SpMM caches sparse rows and merges warps to
+reduce redundant loads while avoiding conversion overhead {[}9{]}. Yang et
+al. instead emphasize merge-based load balancing and instruction-level
+parallelism {[}1{]}. Tensor-core SpMM methods, including the unstructured
+kernel of Li et al., trade preprocessing or structured packing for dense MMA
+throughput {[}2{]}. These methods solve complementary regimes: the present
+work assumes dense, semantically meaningful variable blocks and does not
+claim superiority for scalar sparsity. A direct experimental comparison is
+therefore deferred until real matrices and compatible format-conversion
+policies are included.
+
 Asynchronous global-to-shared copies are a natural mechanism for hiding
 the latency of reusable dense-panel tiles. NVIDIA documents that these
 operations decouple transfer initiation from completion and can overlap
@@ -254,8 +280,7 @@ after profiling showed that a synchronous staged design had shifted its
 principal cost from long-scoreboard stalls toward block barriers.
 
 \hypertarget{data-representation-and-semantics}{%
-\subsection{3. Data Representation and
-Semantics}\label{data-representation-and-semantics}}
+\section{Data Representation and Semantics}\label{data-representation-and-semantics}}
 
 Let block-row boundaries be \(r_0=0<r_1<\cdots<r_R=M\) and block-column
 boundaries be \(c_0=0<c_1<\cdots<c_S=K\). Block row \(i\) has height
@@ -283,10 +308,10 @@ format uses 64-bit scalar and value offsets to avoid limiting aggregate
 matrix or packed-value size through 32-bit addressing metadata.
 
 \hypertarget{kernel-design}{%
-\subsection{4. Kernel Design}\label{kernel-design}}
+\section{Kernel Design}\label{kernel-design}}
 
 \hypertarget{row-ownership}{%
-\subsubsection{4.1 Row ownership}\label{row-ownership}}
+\subsection{Row ownership}\label{row-ownership}}
 
 One cooperative thread array (CTA) owns one block row, and its threads
 cover disjoint elements of that row's output panel. Because no two CTAs
@@ -305,7 +330,7 @@ registers and reduced thread-level parallelism. Measurements rejected
 wider mappings where that tradeoff became unfavorable.
 
 \hypertarget{cooperative-staging}{%
-\subsubsection{4.2 Cooperative staging}\label{cooperative-staging}}
+\subsection{Cooperative staging}\label{cooperative-staging}}
 
 For RHS 32 and 64, all local output rows in a CTA consume the same
 \(w_j\times N\) slice of \(B\). Direct global loading redundantly
@@ -323,8 +348,7 @@ remains on direct global loads because its smaller reuse opportunity did
 not repay synchronization overhead.
 
 \hypertarget{shape-aware-asynchronous-pipeline}{%
-\subsubsection{4.3 Shape-aware asynchronous
-pipeline}\label{shape-aware-asynchronous-pipeline}}
+\subsection{Shape-aware asynchronous pipeline}\label{shape-aware-asynchronous-pipeline}}
 
 RHS-32 rows are classified once during matrix construction. Rows of at
 most 16 scalars use a 128-thread single-buffer CTA. Taller rows use 256
@@ -348,15 +372,18 @@ case, that allocation reduced residency and regressed median time from
 single-buffer RHS-64 kernel.
 
 \hypertarget{baselines-and-experimental-method}{%
-\subsection{5. Baselines and Experimental
-Method}\label{baselines-and-experimental-method}}
+\section{Baselines and Experimental Method}\label{baselines-and-experimental-method}}
 
 Two persistent baselines separate the proposed representation from
 readily available library strategies.
 
 \textbf{Scalar CSR cuSPARSE.} Dense blocks are expanded once into scalar
 CSR. The plan owns its CSR arrays, descriptors, library handle, and
-workspace, all of which are reused across executions.
+workspace, all of which are reused across executions. It uses 32-bit zero-based
+row/column indices, FP32 values and compute, column-major dense matrices,
+non-transpose operands, \(\alpha=1\), \(\beta=0\), and
+\texttt{CUSPARSE\_SPMM\_ALG\_DEFAULT}. Descriptor creation and CSR expansion
+are outside the timed region; the library workspace is persistent.
 
 \textbf{Slot-grouped cuBLAS.} Packed blocks are grouped by identical
 \((h_i,w_j)\) shape within each nonzero slot. One
@@ -366,14 +393,34 @@ accumulate. Device pointer arrays for changing \(B\) and \(C\) addresses
 are refreshed on the execution stream and this required marshaling is
 included in timing.
 
-The checked-in grid contains 128 workloads: 1,024 block rows and
+The grouped-cuBLAS baseline uses FP32 \texttt{cublasSgemmGroupedBatched}
+with non-transpose column-major operands, \(\alpha=1\), and \(\beta=0\) for
+the first slot and \(\beta=1\) thereafter. Packed values, the cuBLAS handle,
+shape groups, and \(A\)-pointer arrays are persistent. Execute-dependent
+\(B\)- and \(C\)-pointer arrays are rebuilt and copied asynchronously on the
+tested stream inside the timed region. It allocates no reported external
+workspace, but executes one grouped call per block-row slot.
+
+The publication grid contains 128 workloads: 4,096 block rows and
 columns; mean degrees \(\{2,4,8,16\}\); RHS widths \(\{8,16,32,64\}\);
 four block-size distributions (uniform, low variance, high variance, and
-bimodal); and local or random column selection. All runs use seed 1.
-Each short-sweep point records seven measured iterations after three
-warmups. GPU-event median and p95 times are reported separately from
+bimodal); and local or random column selection. The complete grid is repeated
+for seeds \(\{1,2,3,4,5\}\), producing 640 workload--seed pairs and 2,560
+method rows. Each point records 20 measured iterations after five warmups.
+GPU-event median and p95 times are reported separately from
 synchronized host median and p95 times. Construction and host-to-device
 input transfer are excluded.
+
+The generator draws row and column block dimensions independently. ``Uniform''
+means a constant size of 32; ``low variance'' samples uniformly from
+\(\{24,32,40\}\); ``high variance'' samples from
+\(\{8,16,24,32,40,48,56,64\}\); and ``bimodal'' samples from
+\(\{8,16,48,64\}\). Every block row contains exactly the requested degree,
+with columns sampled without replacement and then sorted. Random locality
+samples over all block columns. Local locality samples cyclic offsets within
+\(\pm d\) block columns of the row index, where \(d\) is degree. Stored block
+values are independent uniform draws on \([-1,1]\). The timed dense input is
+constant 0.01, isolating structure-driven performance from input values.
 
 The environment was an NVIDIA GeForce RTX 5060 Ti 16 GB, CUDA 13.4.46,
 driver 610.57.01 with CUDA UMD 13.3, MSVC 19.44, Release configuration,
@@ -385,40 +432,155 @@ a 64-case matrix spanning all RHS widths, distributions, degrees
 \(\{1,4,8,16\}\), both locality patterns, and non-default streams. The
 checked-in Release test passed on 21 August 2026. The project also
 records successful memcheck and racecheck runs with zero findings.
+The CPU reference accumulates in double precision. A result fails if it
+contains NaN/Inf, if maximum absolute error exceeds \(5\times10^{-4}\), or if
+relative \(\ell_2\) error exceeds \(5\times10^{-5}\). Correctness inputs are
+independent uniform draws on \([-1,1]\), rather than the constant timing input.
+
+\subsection{Statistical methodology}\label{statistical-methodology}
+
+All comparisons are paired by block-row count, degree, block-size
+distribution, locality, RHS width, and matrix seed. For comparator (b) and
+the direct method (d), the primary effect is the log speedup
+
+\[
+  y_{c,s}=\log\!\left(t_{b,c,s}/t_{d,c,s}\right),
+\]
+
+where (c) indexes the 128 workload configurations and (s) indexes five
+matrix seeds. Geometric-mean speedup is \(\exp(\overline{y})\). Log ratios are
+used because performance effects are multiplicative and because exchanging
+baseline and candidate then changes only the sign. Win counts and the minimum
+paired ratio accompany every aggregate so a geometric mean cannot conceal a
+systematic losing regime.
+
+Uncertainty over the designed workload population is estimated with a
+deterministic 10,000-replicate cluster bootstrap (seed 20260821). Each
+workload configuration is one resampling cluster; all five matrix seeds remain
+together and their log ratios are averaged within the cluster. Resampling the
+128 clusters therefore avoids treating 640 correlated workload--seed pairs as
+independent. Percentile 2.5 and 97.5 quantiles form the reported 95\% interval.
+This interval measures sensitivity to the tested configuration population. It
+does \emph{not} measure iteration-level timing noise, cross-process variation,
+real-matrix sampling, or GPU-to-GPU variation. No null-hypothesis significance
+tests are used: effect sizes, intervals, minima, and paired win counts answer
+the engineering question more directly. The complete calculation is
+implemented by \path{scripts/analyze_publication.ps1}.
 
 \hypertarget{results}{%
-\subsection{6. Results}\label{results}}
+\section{Results}\label{results}}
 
 \hypertarget{end-to-end-regime-sweep}{%
-\subsubsection{6.1 End-to-end regime
-sweep}\label{end-to-end-regime-sweep}}
+\subsection{End-to-end regime sweep}\label{end-to-end-regime-sweep}}
 
-The final hybrid direct path is fastest among the four tested methods in
-all 128 checked-in workloads. This win count is descriptive of this grid
-and device, not evidence that the method dominates arbitrary matrices or
-GPUs.
+Across five deterministic generator-seed sweeps, the final hybrid direct path
+beats both persistent library baselines in all 640 paired instances. A seed
+changes block dimensions, column selections, and stored values; it is a matrix
+instance, not an independent timing repetition. Per-seed geometric-mean
+speedup ranges from 4.922--5.047× over scalar-CSR cuSPARSE and
+4.187--4.261× over slot-grouped cuBLAS. Against the earlier scalar direct
+kernel it wins 572 of 640 comparisons; the exceptions concentrate in small
+RHS-8 cases where the accepted mapping is intentionally unchanged.
 
-The optimization sequence is summarized below. Geometric means treat
-every grid point equally and are not weighted to represent a production
-workload distribution.
+Table~\ref{tab:paired} reports the aggregate, its configuration-clustered
+interval, the observed minimum, and paired win count. Seeds remain grouped
+inside configuration clusters rather than being treated as independent timing
+replicates. These intervals characterize the designed configuration
+population, not raw timing noise, because the harness retains medians and p95
+values rather than the 20 individual timings.
+
+Across all configurations and seeds, the cluster-bootstrap geometric means
+(95\% intervals) are 4.988× [4.472, 5.537] over cuSPARSE, 4.222× [4.064,
+4.392] over grouped cuBLAS, and 2.796× [2.486, 3.124] over the earlier scalar
+kernel. The library-baseline intervals remain well above one, while the
+reported minima separately establish that every tested library comparison is
+a win.
+
+\begin{table}[t]
+\centering
+\caption{Distribution summary of paired baseline/direct GPU-median ratios over
+640 workload--seed instances (128 configurations, five generator seeds).
+Intervals cluster-resample configurations; values above one favor
+VarBlockSpMM.}\label{tab:paired}
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Comparator & Geom. mean & 95\% interval & Minimum & Wins\\
+\midrule
+Earlier scalar direct & 2.796 & [2.486, 3.124] & 0.912 & 572/640\\
+Scalar-CSR cuSPARSE & 4.988 & [4.472, 5.537] & 1.607 & 640/640\\
+Slot-grouped cuBLAS & 4.222 & [4.064, 4.392] & 2.671 & 640/640\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  width=0.88\linewidth,
+  height=5.4cm,
+  xlabel={Percentile of 640 paired instances},
+  ylabel={Baseline/direct speedup},
+  xmin=0, xmax=100,
+  xtick={0,20,40,60,80,100},
+  ymin=0, ymax=13,
+  grid=major,
+  legend style={at={(0.5,-0.27)},anchor=north,legend columns=3},
+  mark size=2.3pt]
+\addplot+[black,dashed,forget plot] coordinates {(0,1) (100,1)};
+\addplot+[blue,thick,mark=none] coordinates
+  {(0,1.607) (5,1.816) (10,1.899) (15,1.966) (20,2.104) (25,3.198)
+   (30,3.755) (35,4.272) (40,4.599) (45,4.836) (50,5.597) (55,6.026)
+   (60,7.013) (65,8.020) (70,8.388) (75,8.846) (80,9.226) (85,9.580)
+   (90,10.262) (95,10.862) (100,12.393)};
+\addlegendentry{cuSPARSE}
+\addplot+[red!75!black,thick,mark=none] coordinates
+  {(0,2.671) (5,2.880) (10,3.010) (15,3.324) (20,3.496) (25,3.620)
+   (30,3.710) (35,3.774) (40,3.865) (45,3.995) (50,4.088) (55,4.233)
+   (60,4.428) (65,4.662) (70,4.847) (75,5.106) (80,5.416) (85,5.574)
+   (90,5.804) (95,6.146) (100,7.225)};
+\addlegendentry{Grouped cuBLAS}
+\addplot+[black!70,thick,mark=none] coordinates
+  {(0,0.912) (5,0.998) (10,1.000) (15,1.001) (20,1.003) (25,1.969)
+   (30,2.355) (35,2.552) (40,2.651) (45,2.743) (50,3.310) (55,3.702)
+   (60,4.004) (65,4.360) (70,4.718) (75,5.110) (80,5.288) (85,5.459)
+   (90,5.807) (95,6.123) (100,6.818)};
+\addlegendentry{Earlier scalar}
+\end{axis}
+\end{tikzpicture}
+\caption{Empirical speedup distributions over all 640 paired workload--seed
+instances, plotted at five-percentile increments. The dashed line denotes
+parity; both library distributions remain above it, while the earlier scalar
+kernel has near-parity RHS-8 cases.}\label{fig:speedup-distribution}
+\end{figure}
+
+\textbf{Exploratory ablation dataset.} The optimization sequence below uses
+the development sweeps \path{data/regime_map.csv},
+\path{data/regime_map_wide_ilp.csv}, \path{data/regime_map_staged.csv}, and
+\path{data/regime_map_double_buffered.csv}: one generator seed, 1,024 block
+rows/columns, three warmups, and seven measured iterations. These data selected
+kernel policy and are reported as exploratory ablations, not as confirmatory
+evidence. Geometric means treat every grid point equally and are not weighted
+to represent a production workload distribution.
 
 \begin{longtable}[]{@{}
   >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.18}}
   >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.18}}
   >{\raggedleft\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.24}}
   >{\raggedleft\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.24}}
-  >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.18}}@{}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.16}}@{}}
 \toprule
 Change & Compared with & Evaluated slice & Geometric-mean median speedup
 & Additional observation \\
 \midrule
 \endhead
 Wider per-thread ILP & Four-accumulator direct kernel & All 128 cases &
-1.24× & RHS 16/32/64: 1.21×/1.33×/1.43× \\
+1.24× & RHS 16: 1.21×; RHS 32: 1.33×; RHS 64: 1.43× \\
 Cooperative \(B\) staging & Wider-ILP kernel & All 128 cases & 1.18× &
 Every RHS-32 and RHS-64 case improved \\
 Wider ILP + staging & Four-accumulator direct kernel & All 128 cases &
-1.46× & Direct path retained 128/128 wins \\
+1.46× & Direct path retained 128/128 library-baseline wins \\
 RHS-32 double buffer + shape dispatch & Single-buffer staged kernel & 32
 RHS-32 cases & 1.11× & All degree-8 and degree-16 cases improved \\
 \bottomrule
@@ -430,7 +592,7 @@ Longer representative measurements provide scale beyond the short sweep:
   >{\raggedright\arraybackslash}p{(\columnwidth - 6\tabcolsep) * \real{0.20}}
   >{\raggedleft\arraybackslash}p{(\columnwidth - 6\tabcolsep) * \real{0.27}}
   >{\raggedleft\arraybackslash}p{(\columnwidth - 6\tabcolsep) * \real{0.27}}
-  >{\raggedleft\arraybackslash}p{(\columnwidth - 6\tabcolsep) * \real{0.27}}@{}}
+  >{\raggedleft\arraybackslash}p{(\columnwidth - 6\tabcolsep) * \real{0.26}}@{}}
 \toprule
 4,096-row workload & Final/accepted kernel & Comparison & Median
 result \\
@@ -449,7 +611,7 @@ representative figures answer an optimization question, but they should
 not substitute for full long-duration reruns of every regime.
 
 \hypertarget{profiling-evidence}{%
-\subsubsection{6.2 Profiling evidence}\label{profiling-evidence}}
+\subsection{Profiling evidence}\label{profiling-evidence}}
 
 Profiling of the original difficult RHS-64/high-degree kernel showed
 99.54\% achieved occupancy but only 0.48 eligible warps per scheduler
@@ -474,7 +636,7 @@ DRAM throughput. These counters support the proposed mechanism, but
 replay-instrumented time is excluded from benchmark speedups.
 
 \hypertarget{discussion}{%
-\subsection{7. Discussion}\label{discussion}}
+\section{Discussion}\label{discussion}}
 
 The results illustrate three broader lessons. First, retaining block
 structure can be valuable even when block dimensions are not
@@ -496,9 +658,61 @@ panel widths, and currently expose only FP32 non-transpose operation.
 These choices make the implementation focused rather than
 general-purpose.
 
+\section{Cross-Architecture Validity}\label{cross-architecture-validity}
+
+The present measurements establish internal validity only for the tested RTX
+5060 Ti and software stack. Kernel choices depend on architecture-sensitive
+quantities: asynchronous-copy support and latency, shared-memory capacity per
+SM, register-file size, warp scheduling, cache hierarchy, memory bandwidth,
+and the cuSPARSE/cuBLAS implementations shipped with each toolkit. The
+RHS-32/RHS-64 double-buffer divergence already demonstrates why source-level
+portability is not performance portability.
+
+A cross-architecture evaluation must use at least three materially different
+GPU generations, including one compute-capability 8.x device, one intermediate
+generation, and the current 12.x device. Every device must run the same five
+seeds and 128 configurations, use a native-architecture Release build, and
+record GPU model, compute capability, driver, toolkit, clocks/power mode, and
+library versions. Primary reporting should show per-device paired log-speedup
+intervals and the interaction between device and RHS width. Kernel policy may
+be retuned only in a separately labeled tuned experiment; the unchanged policy
+must be reported first to distinguish portability from per-device autotuning.
+
+No additional compatible GPU is available in the current workspace, so this
+protocol has not been executed. Consequently, the paper makes no
+architecture-independent performance claim. Passing compilation on another
+architecture would not satisfy this validity requirement.
+
+\section{Real-World Workload Validity}\label{real-world-workload-validity}
+
+Synthetic factors isolate causal effects, but they do not reproduce the joint
+distributions of block dimensions, row degree, locality, and repeated column
+access produced by applications. A real-workload corpus should therefore
+contain at least three provenance-separated sources: adaptively constructed
+hierarchical or \(H^2\) operators, finite-element or multiphysics block
+systems, and another naturally variable-block domain. Matrices must be chosen
+before performance inspection and accompanied by source, license, partitioning
+procedure, scalar dimensions, block counts, block-dimension histogram, degree
+distribution, locality metric, packed bytes, and any zero fill inside stored
+blocks.
+
+Evaluation must preserve each application's block partition rather than
+searching for a partition favorable to VarBlockSpMM. It should report direct
+execution time, preprocessing and transfer time, peak memory, break-even reuse
+count, and end-to-end application impact. Unsupported block sizes must be
+reported as exclusions or handled by a documented fallback; silently rounding
+or dropping matrices is not acceptable. The same paired timing protocol and
+raw-trial retention should be applied to every matrix/RHS pair, with matrices
+as the resampling unit for corpus-level intervals.
+
+The repository currently contains deterministic generators but no loader or
+provenanced application matrix corpus. Real-world validity is therefore an
+open experimental requirement, not a result. The synthetic conclusions are
+restricted to the generated regime grid until that corpus and loader are
+added.
+
 \hypertarget{threats-to-validity-and-limitations}{%
-\subsection{8. Threats to Validity and
-Limitations}\label{threats-to-validity-and-limitations}}
+\section{Threats to Validity and Limitations}\label{threats-to-validity-and-limitations}}
 
 The principal limitations are experimental.
 
@@ -513,10 +727,11 @@ The principal limitations are experimental.
   distribution and column locality, but they do not establish
   performance on matrices from a real application.
 \item
-  \textbf{One seed and short timing runs.} Seven measured repetitions
-  after three warmups are suitable for a development regime map, not
-  publication-grade uncertainty estimates. The grid lacks confidence
-  intervals, repeated process launches, and multi-seed aggregation.
+  \textbf{Summary-only timing retention.} The publication grid uses five
+  seeds and 20 measured iterations after five warmups, but stores only
+  median and p95 summaries. Raw-trial confidence intervals and distributional
+  diagnostics therefore cannot be reconstructed, and each seed was collected
+  in only one process-level sweep.
 \item
   \textbf{Restricted operation.} Only FP32, non-transpose \(A\),
   column-major dense panels, block dimensions 8--64 in steps of eight,
@@ -541,32 +756,47 @@ well-supported single-GPU prototype whose design wins the tested regime
 map---not that it is universally faster than cuSPARSE or cuBLAS.
 
 \hypertarget{reproducibility}{%
-\subsection{9. Reproducibility}\label{reproducibility}}
+\section{Reproducibility}\label{reproducibility}}
 
-The repository requires CMake 3.25 or newer, CUDA 13.4, and an MSVC host
+\textbf{Artifact contents.} The repository requires CMake 3.25 or newer, CUDA 13.4, and an MSVC host
 compiler with C++26 draft support. On Windows:
 
 \begin{Shaded}
-\begin{Highlighting}[]
-\NormalTok{scripts\textbackslash{}build}\OperatorTok{.}\FunctionTok{ps1}
-\NormalTok{build\textbackslash{}Release\textbackslash{}vbsr\_benchmark}\OperatorTok{.}\FunctionTok{exe} \OperatorTok{{-}{-}}\NormalTok{rows 4096 }\OperatorTok{{-}{-}}\NormalTok{degree 8 }\OperatorTok{{-}{-}}\NormalTok{rhs 32 }\OperatorTok{{-}{-}}\NormalTok{distribution high }\OperatorTok{{-}{-}}\NormalTok{locality random }\OperatorTok{{-}{-}}\NormalTok{warmup 10 }\OperatorTok{{-}{-}}\NormalTok{reps 50 }\OperatorTok{{-}{-}}\NormalTok{seed 1}
-\NormalTok{scripts\textbackslash{}run\_grid}\OperatorTok{.}\FunctionTok{ps1} \OperatorTok{{-}}\NormalTok{Rows 4096 }\OperatorTok{{-}}\NormalTok{Reps 20 }\OperatorTok{{-}}\NormalTok{Warmup 5}
-\end{Highlighting}
+\begin{Verbatim}[fontsize=\small]
+scripts\build.ps1
+build\Release\vbsr_benchmark.exe `
+  --rows 4096 --degree 8 --rhs 32 `
+  --distribution high --locality random `
+  --warmup 10 --reps 50 --seed 1
+scripts\run_grid.ps1 -Rows 4096 -Reps 20 -Warmup 5
+\end{Verbatim}
 \end{Shaded}
 
-The complete short sweeps are stored in \texttt{data/regime\_map.csv},
-\texttt{data/regime\_map\_wide\_ilp.csv},
-\texttt{data/regime\_map\_staged.csv}, and
-\texttt{data/regime\_map\_double\_buffered.csv}. Nsight Compute exports
+The five primary publication sweeps are stored under
+\path{data/publication/}; \path{scripts/analyze_publication.ps1} reproduces
+the per-seed paired ratios in Table~\ref{tab:paired}. The earlier exploratory
+sweeps are stored in \path{data/regime_map.csv},
+\path{data/regime_map_wide_ilp.csv},
+\path{data/regime_map_staged.csv}, and
+\path{data/regime_map_double_buffered.csv}. Nsight Compute exports
 are retained separately under \texttt{data/}, and exact profiling
-commands are documented in \texttt{docs/profiling.md}. A stronger
-replication should run at least 20 measured iterations after five
-warmups as already supported by the grid script, repeat each
-configuration across independent process launches and seeds, report
-bootstrap confidence intervals, and test multiple GPU architectures.
+commands are documented in \path{docs/profiling.md}. A stronger replication
+should retain every raw timing, repeat configurations across independent
+process launches, report confidence intervals on paired log-ratios, and test
+multiple GPU architectures.
+
+\textbf{Publication acceptance criteria.} Before making an
+architecture-independent performance claim, the artifact should add (i) at
+least three GPU generations, (ii) application-derived VBR matrices with a
+documented partitioning procedure, (iii) independent process repetitions,
+(iv) raw per-repetition timings with confidence
+intervals, and (v) comparisons to compatible research kernels or a documented
+reason they cannot represent the same operation. The present artifact meets
+the implementation-reproducibility requirement but not these external-validity
+criteria.
 
 \hypertarget{conclusion}{%
-\subsection{10. Conclusion}\label{conclusion}}
+\section{Conclusion}\label{conclusion}}
 
 VarBlockSpMM demonstrates that packed variable-block SpMM can be mapped
 efficiently to CUDA without global block padding, atomic output updates,
@@ -575,14 +805,17 @@ universal kernel but a restrained, measured policy: specialize
 dense-panel width; reuse sparse values through independent accumulators;
 stage dense-panel tiles only when reuse justifies synchronization; and
 double-buffer only the row shapes and degrees that repay its resource
-cost. On the tested RTX 5060 Ti grid, the final implementation beats its
-scalar direct predecessor, persistent scalar-CSR cuSPARSE, and
-slot-grouped cuBLAS in every case. The next scientific step is not
+cost. Across 128 synthetic configurations and five deterministic generator
+seeds on the tested RTX 5060 Ti, the final implementation beats persistent
+scalar-CSR cuSPARSE and slot-grouped cuBLAS in all 640 paired matrix instances
+and beats its scalar direct predecessor in 572 of 640. Generator seeds vary
+matrix instances; they are not independent timing repetitions. The next
+scientific step is not
 further headline optimization, but broader validation across hardware,
 application matrices, seeds, and statistically rigorous runs.
 
 \hypertarget{references}{%
-\subsection{References}\label{references}}
+\section*{References}\addcontentsline{toc}{section}{References}\label{references}}
 
 {[}1{]} C. Yang, A. Buluç, and J. D. Owens, ``Design Principles for
 Sparse Matrix Multiplication on the GPU,'' \emph{Euro-Par 2018}, 2018.
@@ -608,4 +841,17 @@ Sketching Based Construction of H² Matrices on GPUs,'' \emph{IPDPSW
 Guide}.
 \url{https://docs.nvidia.com/cuda/cuda-programming-guide/04-special-topics/async-copies.html}
 
+{[}7{]} R. Vuduc and H.-J. Moon, ``Fast Sparse Matrix--Vector
+Multiplication by Exploiting Variable Block Structure,'' \emph{HPCC 2005},
+2005. doi:10.1007/11557654\_91.
+
+{[}8{]} Berkeley Benchmarking and Optimization Group, ``OSKI Variable
+Block Row Format,'' 2007.
+\url{https://bebop.cs.berkeley.edu/oski/html/group__MATTYPE__VBR.html}
+
+{[}9{]} G. Huang, G. Dai, Y. Wang, and H. Yang, ``GE-SpMM:
+General-Purpose Sparse Matrix--Matrix Multiplication on GPUs for Graph Neural
+Networks,'' \emph{SC20}, 2020. doi:10.1109/SC41405.2020.00076.
+
 \end{document}
+
