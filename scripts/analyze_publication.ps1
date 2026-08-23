@@ -8,6 +8,7 @@ $files = Get-ChildItem -LiteralPath $InputDirectory -Filter "regime_map_seed*.cs
 if ($files.Count -lt 2) { throw "Expected at least two seeded sweep files in $InputDirectory" }
 
 $allRatios = @()
+$perSeedGeomean = @{ scalar = @(); cusparse = @(); grouped = @() }
 "level,seed,comparator,geometric_mean_speedup,ci_low,ci_high,wins,total,minimum_speedup"
 foreach ($file in $files) {
   $data = Import-Csv -LiteralPath $file.FullName
@@ -31,8 +32,28 @@ foreach ($file in $files) {
     $geomean = [Math]::Exp($logMean)
     $wins = ($values | Where-Object { $_ -gt 1.0 }).Count
     $minimum = ($values | Measure-Object -Minimum).Minimum
+    $perSeedGeomean[$name] += $logMean
     "seed,$seed,$name,$($geomean.ToString('F6',[Globalization.CultureInfo]::InvariantCulture)),NA,NA,$wins,$($values.Count),$($minimum.ToString('F6',[Globalization.CultureInfo]::InvariantCulture))"
   }
+}
+
+# Repeated-seed summary. Each seed sweep is one independent replicate of the
+# complete 128-configuration grid, so the across-seed mean of the per-seed mean
+# log ratio and its standard error quantify seed-to-seed reproducibility of the
+# headline effect. The reported error is the standard error of the mean over the
+# five replicates, back-transformed to a multiplicative interval.
+foreach ($name in "scalar", "cusparse", "grouped") {
+  $logs = $perSeedGeomean[$name]
+  $n = $logs.Count
+  $mean = ($logs | Measure-Object -Average).Average
+  $variance = 0.0
+  foreach ($v in $logs) { $variance += [Math]::Pow($v - $mean, 2) }
+  $sd = if ($n -gt 1) { [Math]::Sqrt($variance / ($n - 1)) } else { 0.0 }
+  $sem = if ($n -gt 1) { $sd / [Math]::Sqrt($n) } else { 0.0 }
+  $g = [Math]::Exp($mean)
+  $lo = [Math]::Exp($mean - $sem)
+  $hi = [Math]::Exp($mean + $sem)
+  "seedmean,$n,$name,$($g.ToString('F6',[Globalization.CultureInfo]::InvariantCulture)),$($lo.ToString('F6',[Globalization.CultureInfo]::InvariantCulture)),$($hi.ToString('F6',[Globalization.CultureInfo]::InvariantCulture)),NA,NA,$($sd.ToString('F6',[Globalization.CultureInfo]::InvariantCulture))"
 }
 
 # Cluster bootstrap over the 128 workload configurations. Each sampled cluster
