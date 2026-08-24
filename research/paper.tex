@@ -475,8 +475,8 @@ with standard error
 \]
 
 Reported values are back-transformed to the multiplicative scale as
-\(\exp(\bar y)\) with the interval
-\(\left[\exp(\bar y-\mathrm{SE}),\ \exp(\bar y+\mathrm{SE})\right]\). This
+\(\exp(\bar y)\), with the corresponding interval running from
+\(\exp(\bar y-\mathrm{SE})\) to \(\exp(\bar y+\mathrm{SE})\). This
 quantifies how much the headline effect moves when the entire experiment is
 repeated on a fresh matrix instance, holding the configuration grid fixed.
 
@@ -623,8 +623,8 @@ own mean.
 \centering
 \begin{tikzpicture}
 \begin{groupplot}[
-  group style={group size=3 by 1, horizontal sep=1.35cm},
-  width=0.375\linewidth,
+  group style={group size=3 by 1, horizontal sep=1.0cm},
+  width=0.355\linewidth,
   height=4.6cm,
   xlabel={Generator seed},
   xmin=0.4, xmax=5.6,
