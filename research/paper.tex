@@ -155,7 +155,7 @@ standard error is \(4.988\pm0.021\) times over cuSPARSE and
 \(4.222\pm0.013\) times over grouped cuBLAS, showing that the effect is
 stable under repetition. Cluster bootstrapping over workload
 configurations gives geometric-mean speedups of 4.988 times (95\%
-interval 4.472 to 5.537) over cuSPARSE and 4.222 times (4.064 to 4.392)
+interval 4.463 to 5.554) over cuSPARSE and 4.222 times (4.057 to 4.388)
 over grouped cuBLAS.
 Relative to the earlier four-accumulator direct kernel, successive
 wider-ILP and staging changes provide a 1.46 times geometric-mean
@@ -260,13 +260,13 @@ algorithm.
 Variable blocking predates GPU SpMM. Vuduc and Moon studied variable and
 unaligned block structure for sparse matrix-vector multiplication, observing
 that VBR exposes irregular rectangular dense regions but prevents the fixed
-inner-loop unrolling available to BCSR {[}7{]}. OSKI likewise defines VBR as
+inner-loop unrolling available to BCSR {[}6{]}. OSKI likewise defines VBR as
 independent logical row and column partitions with nonzero blocks stored in
-block-row order {[}8{]}. VarBlockSpMM adopts this classical structural model
+block-row order {[}7{]}. VarBlockSpMM adopts this classical structural model
 but addresses a dense multi-column right operand on CUDA.
 
 Among GPU scalar-CSR systems, GE-SpMM caches sparse rows and merges warps to
-reduce redundant loads while avoiding conversion overhead {[}9{]}. Yang et
+reduce redundant loads while avoiding conversion overhead {[}8{]}. Yang et
 al. instead emphasize merge-based load balancing and instruction-level
 parallelism {[}1{]}. Tensor-core SpMM methods, including the unstructured
 kernel of Li et al., trade preprocessing or structured packing for dense MMA
@@ -280,7 +280,7 @@ Asynchronous global-to-shared copies are a natural mechanism for hiding
 the latency of reusable dense-panel tiles. NVIDIA documents that these
 operations decouple transfer initiation from completion and can overlap
 data movement with computation, and hardware support is available from
-compute capability 8.0 for suitably aligned small copies {[}6{]}. The
+compute capability 8.0 for suitably aligned small copies {[}9{]}. The
 final RHS-32 tall-row kernel applies this mechanism conservatively,
 after profiling showed that a synchronous staged design had shifted its
 principal cost from long-scoreboard stalls toward block barriers.
@@ -347,8 +347,8 @@ floats separates neighboring columns and avoids the worst power-of-two
 bank-alignment pattern. The largest logical RHS-64 tile contains
 \(64\times64\) floats, or 16 KiB.
 
-The compiled synchronous staged kernels use 9,344 bytes of shared memory
-and 56 registers per thread for RHS 32, and 17,664 bytes and 64
+The compiled synchronous staged kernels use 8,320 bytes of shared memory
+and 56 registers per thread for RHS 32, and 16,640 bytes and 64
 registers per thread for RHS 64, without local-memory spills. RHS 16
 remains on direct global loads because its smaller reuse opportunity did
 not repay synchronization overhead.
@@ -368,11 +368,11 @@ when its mean block degree is at least eight. At lower degree,
 measurements showed that the second launch costs more than shape
 separation saves, and homogeneous matrices already require only their
 applicable launch. The final tall-row RHS-32 kernel uses 48 registers
-per thread and 17,664 bytes of shared memory, while its 128-thread
-companion uses 54 registers and 9,344 bytes.
+per thread and 16,640 bytes of shared memory, while its 128-thread
+companion uses 54 registers and 8,320 bytes.
 
 The same policy is deliberately not applied to RHS 64. Two full RHS-64
-tiles require roughly 34 KiB per CTA. In the representative 4,096-row
+tiles require roughly 32.5 KiB per CTA. In the representative 4,096-row
 case, that allocation reduced residency and regressed median time from
 2.891 ms to 4.419 ms. The accepted design therefore retains the
 single-buffer RHS-64 kernel.
@@ -516,8 +516,8 @@ population, not raw timing noise, because the harness retains medians and p95
 values rather than the 20 individual timings.
 
 Across all configurations and seeds, the cluster-bootstrap geometric means
-(95\% intervals) are 4.988 times [4.472, 5.537] over cuSPARSE, 4.222 times
-[4.064, 4.392] over grouped cuBLAS, and 2.796 times [2.486, 3.124] over the
+(95\% intervals) are 4.988 times [4.463, 5.554] over cuSPARSE, 4.222 times
+[4.057, 4.388] over grouped cuBLAS, and 2.796 times [2.480, 3.126] over the
 earlier scalar kernel. The library-baseline intervals remain well above one,
 while the reported minima separately establish that every tested library
 comparison is a win.
@@ -534,9 +534,9 @@ VarBlockSpMM.}\label{tab:paired}
 \toprule
 Comparator & Geom. mean & 95\% interval & Minimum & Wins\\
 \midrule
-Earlier scalar direct & 2.796 & [2.486, 3.124] & 0.912 & 572/640\\
-Scalar-CSR cuSPARSE & 4.988 & [4.472, 5.537] & 1.607 & 640/640\\
-Slot-grouped cuBLAS & 4.222 & [4.064, 4.392] & 2.671 & 640/640\\
+Earlier scalar direct & 2.796 & [2.480, 3.126] & 0.912 & 572/640\\
+Scalar-CSR cuSPARSE & 4.988 & [4.463, 5.554] & 1.607 & 640/640\\
+Slot-grouped cuBLAS & 4.222 & [4.057, 4.388] & 2.671 & 640/640\\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -924,21 +924,21 @@ Toolkit Documentation.
 Sketching Based Construction of H² Matrices on GPUs,'' \emph{IPDPSW
 2025}, 2025. \url{https://arxiv.org/abs/2506.16759}
 
-{[}6{]} NVIDIA, ``Asynchronous Data Copies,'' \emph{CUDA Programming
-Guide}.
-\url{https://docs.nvidia.com/cuda/cuda-programming-guide/04-special-topics/async-copies.html}
-
-{[}7{]} R. Vuduc and H.-J. Moon, ``Fast Sparse Matrix-Vector
+{[}6{]} R. Vuduc and H.-J. Moon, ``Fast Sparse Matrix-Vector
 Multiplication by Exploiting Variable Block Structure,'' \emph{HPCC 2005},
 2005. doi:10.1007/11557654\_91.
 
-{[}8{]} Berkeley Benchmarking and Optimization Group, ``OSKI Variable
+{[}7{]} Berkeley Benchmarking and Optimization Group, ``OSKI Variable
 Block Row Format,'' 2007.
 \url{https://bebop.cs.berkeley.edu/oski/html/group__MATTYPE__VBR.html}
 
-{[}9{]} G. Huang, G. Dai, Y. Wang, and H. Yang, ``GE-SpMM:
+{[}8{]} G. Huang, G. Dai, Y. Wang, and H. Yang, ``GE-SpMM:
 General-Purpose Sparse Matrix-Matrix Multiplication on GPUs for Graph Neural
 Networks,'' \emph{SC20}, 2020. doi:10.1109/SC41405.2020.00076.
+
+{[}9{]} NVIDIA, ``Asynchronous Data Copies,'' \emph{CUDA Programming
+Guide}.
+\url{https://docs.nvidia.com/cuda/cuda-programming-guide/04-special-topics/async-copies.html}
 
 \end{document}
 

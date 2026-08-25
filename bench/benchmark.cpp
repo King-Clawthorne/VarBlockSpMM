@@ -208,7 +208,7 @@ double count_useful_flops(const vbsr::HostMatrix& matrix, int rhs_width) {
 
 void print_csv_header() {
   std::cout << "method,block_rows,degree,distribution,locality,rhs,seed,"
-               "gpu_median_ms,gpu_p95_ms,hot_median_ms,hot_p95_ms,useful_gflops,"
+               "gpu_median_ms,gpu_p95_ms,host_median_ms,host_p95_ms,useful_gflops,"
                "launches,workspace_bytes\n";
 }
 

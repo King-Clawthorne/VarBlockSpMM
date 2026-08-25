@@ -2,3 +2,7 @@
 /data/*.sqlite
 /data/*.nsys-rep
 /data/*.ncu-rep
+/research/*.aux
+/research/*.log
+/research/*.out
+/research/*.toc
