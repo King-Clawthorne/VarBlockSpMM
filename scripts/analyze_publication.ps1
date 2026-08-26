@@ -81,3 +81,21 @@ foreach ($name in "scalar", "cusparse", "grouped") {
   $minimum = ($values | Measure-Object -Minimum).Minimum
   "aggregate,all,$name,$($observed.ToString('F6',[Globalization.CultureInfo]::InvariantCulture)),$($low.ToString('F6',[Globalization.CultureInfo]::InvariantCulture)),$($high.ToString('F6',[Globalization.CultureInfo]::InvariantCulture)),$wins,$($values.Count),$($minimum.ToString('F6',[Globalization.CultureInfo]::InvariantCulture))"
 }
+
+# Empirical percentile distribution of the 640 paired ratios per comparator
+# (Figure 1). Uses linear interpolation between order statistics (the
+# standard "type 7" / numpy-default definition) at five-percentile
+# increments, so the plotted curve is reproducible directly from the
+# checked-in publication CSVs rather than a hand-copied snapshot.
+foreach ($name in "scalar", "cusparse", "grouped") {
+  $sorted = @($allRatios | Where-Object comparator -eq $name | ForEach-Object ratio | Sort-Object)
+  $n = $sorted.Count
+  for ($p = 0; $p -le 100; $p += 5) {
+    $rank = ($p / 100.0) * ($n - 1)
+    $lowIndex = [Math]::Floor($rank)
+    $highIndex = [Math]::Ceiling($rank)
+    $fraction = $rank - $lowIndex
+    $value = $sorted[$lowIndex] + $fraction * ($sorted[$highIndex] - $sorted[$lowIndex])
+    "percentile,$p,$name,$($value.ToString('F6',[Globalization.CultureInfo]::InvariantCulture)),NA,NA,NA,$n,NA"
+  }
+}

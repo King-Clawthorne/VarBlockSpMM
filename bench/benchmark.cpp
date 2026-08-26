@@ -226,10 +226,12 @@ void print_result(const char* method, const Arguments& arguments, const TimingRe
 
 void benchmark_method(const char* method, const Arguments& arguments, double useful_flops,
                       const std::function<void()>& operation, int launch_count,
-                      size_t workspace_bytes) {
+                      const std::function<size_t()>& workspace_bytes) {
   const TimingResult timing =
       time_operation(operation, arguments.warmup_repetitions, arguments.repetitions);
-  print_result(method, arguments, timing, useful_flops, launch_count, workspace_bytes);
+  // Queried after timing so plans that allocate workspace lazily on their
+  // first execute() (e.g. ScalarCsrPlan) report the size they actually used.
+  print_result(method, arguments, timing, useful_flops, launch_count, workspace_bytes());
 }
 
 int run_benchmark(const Arguments& arguments) {
@@ -251,22 +253,23 @@ int run_benchmark(const Arguments& arguments) {
   print_csv_header();
   benchmark_method(
       "row_owned_hybrid", arguments, useful_flops,
-      [&] { direct_plan.execute(device_input, device_output); }, direct_plan.launch_count(), 0);
+      [&] { direct_plan.execute(device_input, device_output); }, direct_plan.launch_count(),
+      [] { return size_t(0); });
   benchmark_method(
       "row_owned_scalar", arguments, useful_flops,
       [&] {
         vbsr::launch_row_owned_scalar(device_matrix.device_view(), device_input, device_output,
                                       arguments.rhs_width, 0);
       },
-      1, 0);
+      1, [] { return size_t(0); });
   benchmark_method(
       "scalar_csr_cusparse", arguments, useful_flops,
       [&] { scalar_csr_plan.execute(device_input, device_output); }, 1,
-      scalar_csr_plan.workspace_bytes());
+      [&] { return scalar_csr_plan.workspace_bytes(); });
   benchmark_method(
       "slot_grouped_cublas", arguments, useful_flops,
       [&] { grouped_gemm_plan.execute(device_input, device_output); },
-      grouped_gemm_plan.launch_count(), 0);
+      grouped_gemm_plan.launch_count(), [&] { return grouped_gemm_plan.workspace_bytes(); });
 
   cudaFree(device_input);
   cudaFree(device_output);

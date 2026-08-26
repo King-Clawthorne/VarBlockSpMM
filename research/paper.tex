@@ -155,7 +155,7 @@ standard error is \(4.988\pm0.021\) times over cuSPARSE and
 \(4.222\pm0.013\) times over grouped cuBLAS, showing that the effect is
 stable under repetition. Cluster bootstrapping over workload
 configurations gives geometric-mean speedups of 4.988 times (95\%
-interval 4.463 to 5.554) over cuSPARSE and 4.222 times (4.057 to 4.388)
+interval 4.472 to 5.537) over cuSPARSE and 4.222 times (4.064 to 4.392)
 over grouped cuBLAS.
 Relative to the earlier four-accumulator direct kernel, successive
 wider-ILP and staging changes provide a 1.46 times geometric-mean
@@ -395,9 +395,11 @@ are outside the timed region, and the library workspace is persistent.
 \((h_i,w_j)\) shape within each nonzero slot. One
 \texttt{cublasSgemmGroupedBatched} call is issued per slot, outputs
 within a call do not overlap, and later slots use \(\beta=1\) to
-accumulate. Device pointer arrays for changing \(B\) and \(C\) addresses
-are refreshed on the execution stream and this required marshaling is
-included in timing.
+accumulate. Each execution first zero-fills the entire output buffer on
+the tested stream, so block rows are correctly initialized regardless of
+slot order; this fill, together with the device pointer arrays for
+changing \(B\) and \(C\) addresses that are refreshed on the execution
+stream, is required marshaling included in timing.
 
 The grouped-cuBLAS baseline uses FP32 \texttt{cublasSgemmGroupedBatched}
 with non-transpose column-major operands, \(\alpha=1\), and \(\beta=0\) for
@@ -516,8 +518,8 @@ population, not raw timing noise, because the harness retains medians and p95
 values rather than the 20 individual timings.
 
 Across all configurations and seeds, the cluster-bootstrap geometric means
-(95\% intervals) are 4.988 times [4.463, 5.554] over cuSPARSE, 4.222 times
-[4.057, 4.388] over grouped cuBLAS, and 2.796 times [2.480, 3.126] over the
+(95\% intervals) are 4.988 times [4.472, 5.537] over cuSPARSE, 4.222 times
+[4.064, 4.392] over grouped cuBLAS, and 2.796 times [2.486, 3.124] over the
 earlier scalar kernel. The library-baseline intervals remain well above one,
 while the reported minima separately establish that every tested library
 comparison is a win.
@@ -534,9 +536,9 @@ VarBlockSpMM.}\label{tab:paired}
 \toprule
 Comparator & Geom. mean & 95\% interval & Minimum & Wins\\
 \midrule
-Earlier scalar direct & 2.796 & [2.480, 3.126] & 0.912 & 572/640\\
-Scalar-CSR cuSPARSE & 4.988 & [4.463, 5.554] & 1.607 & 640/640\\
-Slot-grouped cuBLAS & 4.222 & [4.057, 4.388] & 2.671 & 640/640\\
+Earlier scalar direct & 2.796 & [2.486, 3.124] & 0.912 & 572/640\\
+Scalar-CSR cuSPARSE & 4.988 & [4.472, 5.537] & 1.607 & 640/640\\
+Slot-grouped cuBLAS & 4.222 & [4.064, 4.392] & 2.671 & 640/640\\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -557,22 +559,22 @@ Slot-grouped cuBLAS & 4.222 & [4.057, 4.388] & 2.671 & 640/640\\
   mark size=2.3pt]
 \addplot+[black,dashed,forget plot] coordinates {(0,1) (100,1)};
 \addplot+[blue,thick,mark=none] coordinates
-  {(0,1.607) (5,1.816) (10,1.899) (15,1.966) (20,2.104) (25,3.198)
-   (30,3.755) (35,4.272) (40,4.599) (45,4.836) (50,5.597) (55,6.026)
-   (60,7.013) (65,8.020) (70,8.388) (75,8.846) (80,9.226) (85,9.580)
-   (90,10.262) (95,10.862) (100,12.393)};
+  {(0,1.607) (5,1.816) (10,1.899) (15,1.966) (20,2.104) (25,3.057)
+   (30,3.751) (35,4.266) (40,4.599) (45,4.834) (50,5.583) (55,6.029)
+   (60,7.017) (65,8.021) (70,8.402) (75,8.853) (80,9.227) (85,9.581)
+   (90,10.264) (95,10.863) (100,12.393)};
 \addlegendentry{cuSPARSE}
 \addplot+[red!75!black,thick,mark=none] coordinates
-  {(0,2.671) (5,2.880) (10,3.010) (15,3.324) (20,3.496) (25,3.620)
-   (30,3.710) (35,3.774) (40,3.865) (45,3.995) (50,4.088) (55,4.233)
-   (60,4.428) (65,4.662) (70,4.847) (75,5.106) (80,5.416) (85,5.574)
-   (90,5.804) (95,6.146) (100,7.225)};
+  {(0,2.671) (5,2.880) (10,3.010) (15,3.321) (20,3.496) (25,3.620)
+   (30,3.707) (35,3.773) (40,3.865) (45,3.994) (50,4.087) (55,4.234)
+   (60,4.432) (65,4.669) (70,4.847) (75,5.108) (80,5.418) (85,5.574)
+   (90,5.805) (95,6.146) (100,7.225)};
 \addlegendentry{Grouped cuBLAS}
 \addplot+[black!70,thick,mark=none] coordinates
-  {(0,0.912) (5,0.998) (10,1.000) (15,1.001) (20,1.003) (25,1.969)
-   (30,2.355) (35,2.552) (40,2.651) (45,2.743) (50,3.310) (55,3.702)
-   (60,4.004) (65,4.360) (70,4.718) (75,5.110) (80,5.288) (85,5.459)
-   (90,5.807) (95,6.123) (100,6.818)};
+  {(0,0.912) (5,0.998) (10,1.000) (15,1.001) (20,1.003) (25,1.746)
+   (30,2.353) (35,2.551) (40,2.650) (45,2.743) (50,3.181) (55,3.702)
+   (60,4.004) (65,4.368) (70,4.740) (75,5.115) (80,5.289) (85,5.462)
+   (90,5.808) (95,6.125) (100,6.818)};
 \addlegendentry{Earlier scalar}
 \end{axis}
 \end{tikzpicture}
@@ -857,8 +859,10 @@ scripts\run_grid.ps1 -Rows 4096 -Reps 20 -Warmup 5
 
 The five primary publication sweeps are stored under
 \path{data/publication/}, and \path{scripts/analyze_publication.ps1} reproduces
-the per-seed paired ratios in Table~\ref{tab:paired} together with the
-repeated-seed mean and standard error in Table~\ref{tab:seeds}. The earlier exploratory
+the per-seed paired ratios in Table~\ref{tab:paired}, the repeated-seed mean
+and standard error in Table~\ref{tab:seeds}, and the five-percentile-increment
+distribution plotted in Figure~\ref{fig:speedup-distribution} (linear
+interpolation between order statistics of the 640 paired ratios). The earlier exploratory
 sweeps are stored in \path{data/regime_map.csv},
 \path{data/regime_map_wide_ilp.csv},
 \path{data/regime_map_staged.csv}, and
