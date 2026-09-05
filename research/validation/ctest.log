@@ -1,0 +1,19 @@
+Start testing: Sep 05 21:46 New Zealand Standard Time
+----------------------------------------------------------
+1/1 Testing: vbsr_tests
+1/1 Test: vbsr_tests
+Command: "C:/Users/cohen/VarBlockSpMM/build/Release/vbsr_tests.exe"
+Directory: C:/Users/cohen/VarBlockSpMM/build
+"vbsr_tests" start time: Sep 05 21:46 New Zealand Standard Time
+Output:
+----------------------------------------------------------
+PASS: 128 parameter cases and 16 empty-row cases, explicit CSR algorithms, uniform BSR, cached and changing grouped pointers, non-default streams
+<end of output>
+Test time =   2.24 sec
+----------------------------------------------------------
+Test Passed.
+"vbsr_tests" end time: Sep 05 21:46 New Zealand Standard Time
+"vbsr_tests" time elapsed: 00:00:02
+----------------------------------------------------------
+
+End testing: Sep 05 21:46 New Zealand Standard Time

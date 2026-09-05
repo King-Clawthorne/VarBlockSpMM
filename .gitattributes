@@ -1,0 +1,25 @@
+# Normalize source and documentation to LF across Windows and Unix checkouts.
+* text=auto eol=lf
+
+# Native Windows command scripts use CRLF.
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Preserve archived measurements, application inputs, and rendered artifacts.
+*.zip binary
+*.gz binary
+*.bin binary
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ncu-rep binary
+*.nsys-rep binary
+*.sqlite binary
+
+# Keep generated evidence distinguishable from authored implementation changes.
+data/** linguist-generated=true
+research/generated/** linguist-generated=true
+research/validation/** linguist-generated=true
+research/archive/** linguist-generated=true

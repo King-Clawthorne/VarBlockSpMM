@@ -121,7 +121,12 @@ private:
 /** Persistent cuSPARSE baseline using an expanded scalar CSR representation. */
 class ScalarCsrPlan {
 public:
-  ScalarCsrPlan(const HostMatrix&, int rhs_width);
+  /** Algorithm 0 preserves the historical default. Algorithms 1 to 3 select
+   * explicit CSR variants. Fixed BSR requires uniform 32-by-32 blocks.
+   * Preprocessing, when requested, happens on the first execute call.
+   */
+  ScalarCsrPlan(const HostMatrix&, int rhs_width, int algorithm = 0, bool preprocess = false,
+                bool fixed_bsr = false);
   ~ScalarCsrPlan();
   ScalarCsrPlan(const ScalarCsrPlan&) = delete;
   /** Enqueues the baseline multiplication on `stream`. */
@@ -139,7 +144,12 @@ private:
  * batches. */
 class GroupedGemmPlan {
 public:
-  GroupedGemmPlan(const HostMatrix&, int rhs_width);
+  /** The default preserves the historical pointer-refresh baseline.
+   * Cached mode reuses pointer arrays for unchanged base addresses and skips
+   * the full output clear when no block row is empty. Calls on a plan must
+   * be ordered on one stream or externally synchronized across streams.
+   */
+  GroupedGemmPlan(const HostMatrix&, int rhs_width, bool cache_pointers = false);
   ~GroupedGemmPlan();
   GroupedGemmPlan(const GroupedGemmPlan&) = delete;
   /** Enqueues all grouped GEMM batches on `stream`. */

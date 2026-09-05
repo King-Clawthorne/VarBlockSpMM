@@ -40,6 +40,18 @@ enable_cxx26(vbsr_tests)
 add_executable(vbsr_benchmark bench/benchmark.cpp)
 target_link_libraries(vbsr_benchmark PRIVATE varblockspmm)
 enable_cxx26(vbsr_benchmark)
+add_library(vbsr_benchmark_support STATIC
+  bench/support.cpp
+  bench/application_data.cpp
+  bench/compact_csr.cpp)
+target_link_libraries(vbsr_benchmark_support PUBLIC varblockspmm)
+enable_cxx26(vbsr_benchmark_support)
+add_executable(vbsr_audit bench/audit.cpp)
+target_link_libraries(vbsr_audit PRIVATE vbsr_benchmark_support)
+enable_cxx26(vbsr_audit)
+add_executable(vbsr_application_audit bench/application.cpp)
+target_link_libraries(vbsr_application_audit PRIVATE vbsr_benchmark_support)
+enable_cxx26(vbsr_application_audit)
 enable_testing()
 add_test(NAME vbsr_tests COMMAND vbsr_tests)
 install(TARGETS varblockspmm ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION bin)

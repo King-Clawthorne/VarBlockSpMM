@@ -59,7 +59,7 @@ void execute_and_compare(const std::function<void()>& execute, cudaStream_t stre
 }
 
 void run_case(vbsr::Distribution distribution, int degree, int rhs_width, bool local_columns,
-              uint64_t seed) {
+              uint64_t seed, bool empty_first_row = false) {
   vbsr::GeneratorOptions options;
   options.block_rows = 9;
   options.block_cols = 17;
@@ -68,7 +68,22 @@ void run_case(vbsr::Distribution distribution, int degree, int rhs_width, bool l
   options.local_columns = local_columns;
   options.seed = seed;
 
-  const vbsr::HostMatrix host_matrix = vbsr::generate(options);
+  vbsr::HostMatrix host_matrix = vbsr::generate(options);
+  if (empty_first_row) {
+    int removed_blocks = host_matrix.row_ptr[1];
+    int64_t removed_values = host_matrix.value_off[removed_blocks];
+    host_matrix.block_col.erase(host_matrix.block_col.begin(),
+                                host_matrix.block_col.begin() + removed_blocks);
+    host_matrix.values.erase(host_matrix.values.begin(),
+                             host_matrix.values.begin() + removed_values);
+    host_matrix.value_off.erase(host_matrix.value_off.begin(),
+                                host_matrix.value_off.begin() + removed_blocks);
+    for (auto& offset : host_matrix.value_off)
+      offset -= removed_values;
+    for (size_t i = 1; i < host_matrix.row_ptr.size(); ++i)
+      host_matrix.row_ptr[i] -= removed_blocks;
+    host_matrix.validate();
+  }
   const std::vector<float> input = make_random_input(host_matrix.scalar_cols() * rhs_width, seed);
   const std::vector<float> reference = vbsr::cpu_reference(host_matrix, input, rhs_width);
 
@@ -98,6 +113,35 @@ void run_case(vbsr::Distribution distribution, int degree, int rhs_width, bool l
                       reference, device_output, "cuSPARSE");
   execute_and_compare([&] { grouped_gemm_plan.execute(device_input, device_output, stream); },
                       stream, reference, device_output, "grouped cuBLAS");
+
+  vbsr::GroupedGemmPlan cached_plan(host_matrix, rhs_width, true);
+  execute_and_compare([&] { cached_plan.execute(device_input, device_output, stream); }, stream,
+                      reference, device_output, "cached grouped cuBLAS");
+  execute_and_compare([&] { cached_plan.execute(device_input, device_output, stream); }, stream,
+                      reference, device_output, "cached grouped reuse");
+  float* alternate_input = nullptr;
+  cudaMalloc(&alternate_input, input.size() * sizeof(float));
+  auto alternate_host = input;
+  for (float& x : alternate_host)
+    x *= 0.5f;
+  cudaMemcpy(alternate_input, alternate_host.data(), alternate_host.size() * sizeof(float),
+             cudaMemcpyHostToDevice);
+  const auto alternate_reference = vbsr::cpu_reference(host_matrix, alternate_host, rhs_width);
+  execute_and_compare([&] { cached_plan.execute(alternate_input, device_output, stream); }, stream,
+                      alternate_reference, device_output, "cached grouped changed address");
+  execute_and_compare([&] { cached_plan.execute(device_input, device_output, stream); }, stream,
+                      reference, device_output, "cached grouped restored address");
+  cudaFree(alternate_input);
+  for (int algorithm = 1; algorithm <= 3; ++algorithm) {
+    vbsr::ScalarCsrPlan explicit_plan(host_matrix, rhs_width, algorithm, algorithm != 2);
+    execute_and_compare([&] { explicit_plan.execute(device_input, device_output, stream); }, stream,
+                        reference, device_output, "explicit CSR algorithm");
+  }
+  if (distribution == vbsr::Distribution::Uniform) {
+    vbsr::ScalarCsrPlan bsr_plan(host_matrix, rhs_width, 0, false, true);
+    execute_and_compare([&] { bsr_plan.execute(device_input, device_output, stream); }, stream,
+                        reference, device_output, "fixed BSR");
+  }
 
   cudaStreamDestroy(stream);
   cudaFree(device_input);
@@ -153,9 +197,15 @@ void run_parameter_matrix() {
   for (vbsr::Distribution distribution : distributions) {
     for (int degree : degrees) {
       for (int rhs_width : rhs_widths) {
-        run_case(distribution, degree, rhs_width, (seed & 1) != 0, seed);
+        run_case(distribution, degree, rhs_width, true, seed);
+        run_case(distribution, degree, rhs_width, false, seed);
         ++seed;
       }
+    }
+  }
+  for (auto distribution : distributions) {
+    for (int rhs : rhs_widths) {
+      run_case(distribution, 16, rhs, false, seed++, true);
     }
   }
 }
@@ -166,9 +216,8 @@ int main() {
   try {
     run_negative_tests();
     run_parameter_matrix();
-    std::cout << "PASS: 64 parameter cases x hybrid/scalar/cuSPARSE/grouped "
-                 "paths, non-default streams, validation failures, NaN/Inf "
-                 "checks\n";
+    std::cout << "PASS: 128 parameter cases and 16 empty-row cases, explicit CSR algorithms, "
+                 "uniform BSR, cached and changing grouped pointers, non-default streams\n";
     return 0;
   } catch (const std::exception& error) {
     std::cerr << "FAIL: " << error.what() << '\n';

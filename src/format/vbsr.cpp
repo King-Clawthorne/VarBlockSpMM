@@ -19,8 +19,13 @@ void check_cuda(cudaError_t status) {
 template <class T> T* copy_to_device(const std::vector<T>& source) {
   T* destination = nullptr;
   check_cuda(cudaMalloc(&destination, source.size() * sizeof(T)));
-  check_cuda(
-      cudaMemcpy(destination, source.data(), source.size() * sizeof(T), cudaMemcpyHostToDevice));
+  try {
+    check_cuda(
+        cudaMemcpy(destination, source.data(), source.size() * sizeof(T), cudaMemcpyHostToDevice));
+  } catch (...) {
+    cudaFree(destination);
+    throw;
+  }
   return destination;
 }
 
@@ -95,21 +100,26 @@ Matrix::Matrix(const HostMatrix& host) {
   // without changing VBSR order.
   std::vector<int32_t> row_shape_order(host.block_rows);
   std::iota(row_shape_order.begin(), row_shape_order.end(), int32_t{0});
-  const auto large_begin = std::stable_partition(
-      row_shape_order.begin(), row_shape_order.end(),
-      [&](int32_t block_row) { return host.row_size[block_row] <= 16; });
+  const auto large_begin =
+      std::stable_partition(row_shape_order.begin(), row_shape_order.end(),
+                            [&](int32_t block_row) { return host.row_size[block_row] <= 16; });
   small_row_count_ = int(large_begin - row_shape_order.begin());
   large_row_count_ = host.block_rows - small_row_count_;
 
-  row_ptr_ = copy_to_device(host.row_ptr);
-  block_col_ = copy_to_device(host.block_col);
-  row_size_ = copy_to_device(host.row_size);
-  col_size_ = copy_to_device(host.col_size);
-  row_off_ = copy_to_device(host.row_scalar_off);
-  col_off_ = copy_to_device(host.col_scalar_off);
-  value_off_ = copy_to_device(host.value_off);
-  values_ = copy_to_device(host.values);
-  row_shape_order_ = copy_to_device(row_shape_order);
+  try {
+    row_ptr_ = copy_to_device(host.row_ptr);
+    block_col_ = copy_to_device(host.block_col);
+    row_size_ = copy_to_device(host.row_size);
+    col_size_ = copy_to_device(host.col_size);
+    row_off_ = copy_to_device(host.row_scalar_off);
+    col_off_ = copy_to_device(host.col_scalar_off);
+    value_off_ = copy_to_device(host.value_off);
+    values_ = copy_to_device(host.values);
+    row_shape_order_ = copy_to_device(row_shape_order);
+  } catch (...) {
+    release();
+    throw;
+  }
 }
 void Matrix::release() {
   cudaFree(row_ptr_);
@@ -122,6 +132,13 @@ void Matrix::release() {
   cudaFree(values_);
   cudaFree(row_shape_order_);
   row_ptr_ = nullptr;
+  block_col_ = nullptr;
+  row_size_ = nullptr;
+  col_size_ = nullptr;
+  row_off_ = nullptr;
+  col_off_ = nullptr;
+  value_off_ = nullptr;
+  values_ = nullptr;
   row_shape_order_ = nullptr;
 }
 Matrix::~Matrix() { release(); }

@@ -40,6 +40,10 @@ struct GroupedGemmPlan::Impl {
     float** device_output_pointers{};
   };
   int rhs{};
+  bool cache_pointers = false;
+  bool has_empty_rows = false;
+  const float* cached_input = nullptr;
+  float* cached_output = nullptr;
   int64_t rows{}, cols{};
   float* values{};
   cublasHandle_t handle{};
@@ -56,7 +60,9 @@ struct GroupedGemmPlan::Impl {
   }
 };
 
-GroupedGemmPlan::GroupedGemmPlan(const HostMatrix& a, int rhs) : impl_(new Impl) {
+GroupedGemmPlan::GroupedGemmPlan(const HostMatrix& a, int rhs, bool cache_pointers)
+    : impl_(new Impl) {
+  impl_->cache_pointers = cache_pointers;
   a.validate();
   if (rhs != 8 && rhs != 16 && rhs != 32 && rhs != 64)
     throw std::invalid_argument("invalid rhs width");
@@ -68,8 +74,10 @@ GroupedGemmPlan::GroupedGemmPlan(const HostMatrix& a, int rhs) : impl_(new Impl)
                         cudaMemcpyHostToDevice));
   blas_check(cublasCreate(&impl_->handle));
   int max_degree = 0;
-  for (int i = 0; i < a.block_rows; i++)
+  for (int i = 0; i < a.block_rows; i++) {
     max_degree = std::max(max_degree, a.row_ptr[i + 1] - a.row_ptr[i]);
+    impl_->has_empty_rows |= a.row_ptr[i + 1] == a.row_ptr[i];
+  }
   impl_->slots.resize(max_degree);
   // Slot k contains the kth block from every row that has one. Executing slots
   // in order lets the first overwrite C and later slots accumulate into it.
@@ -119,21 +127,27 @@ GroupedGemmPlan::~GroupedGemmPlan() = default;
 int GroupedGemmPlan::launch_count() const { return int(impl_->slots.size()); }
 void GroupedGemmPlan::execute(const float* B, float* C, cudaStream_t stream) {
   blas_check(cublasSetStream(impl_->handle, stream));
-  cuda_check(cudaMemsetAsync(C, 0, impl_->rows * impl_->rhs * sizeof(float), stream));
+  if (!impl_->cache_pointers || impl_->has_empty_rows) {
+    cuda_check(cudaMemsetAsync(C, 0, impl_->rows * impl_->rhs * sizeof(float), stream));
+  }
+  const bool refresh =
+      !impl_->cache_pointers || B != impl_->cached_input || C != impl_->cached_output;
   for (auto& slot : impl_->slots) {
     // A pointers are persistent. B and C pointers depend on this call's base
     // addresses.
-    std::vector<const float*> input_pointers(slot.matrix_a_pointers.size());
-    std::vector<float*> output_pointers(slot.matrix_a_pointers.size());
-    for (size_t index = 0; index < input_pointers.size(); ++index) {
-      input_pointers[index] = B + slot.input_offsets[index];
-      output_pointers[index] = C + slot.output_offsets[index];
+    if (refresh) {
+      std::vector<const float*> input_pointers(slot.matrix_a_pointers.size());
+      std::vector<float*> output_pointers(slot.matrix_a_pointers.size());
+      for (size_t index = 0; index < input_pointers.size(); ++index) {
+        input_pointers[index] = B + slot.input_offsets[index];
+        output_pointers[index] = C + slot.output_offsets[index];
+      }
+      const size_t pointer_bytes = input_pointers.size() * sizeof(float*);
+      cuda_check(cudaMemcpyAsync(slot.device_matrix_b_pointers, input_pointers.data(),
+                                 pointer_bytes, cudaMemcpyHostToDevice, stream));
+      cuda_check(cudaMemcpyAsync(slot.device_output_pointers, output_pointers.data(), pointer_bytes,
+                                 cudaMemcpyHostToDevice, stream));
     }
-    const size_t pointer_bytes = input_pointers.size() * sizeof(float*);
-    cuda_check(cudaMemcpyAsync(slot.device_matrix_b_pointers, input_pointers.data(), pointer_bytes,
-                               cudaMemcpyHostToDevice, stream));
-    cuda_check(cudaMemcpyAsync(slot.device_output_pointers, output_pointers.data(), pointer_bytes,
-                               cudaMemcpyHostToDevice, stream));
     blas_check(cublasSgemmGroupedBatched(
         impl_->handle, slot.matrix_a_operations.data(), slot.matrix_b_operations.data(),
         slot.row_counts.data(), slot.column_counts.data(), slot.inner_dimensions.data(),
@@ -142,6 +156,8 @@ void GroupedGemmPlan::execute(const float* B, float* C, cudaStream_t stream) {
         slot.device_output_pointers, slot.output_strides.data(), int(slot.group_sizes.size()),
         slot.group_sizes.data()));
   }
+  impl_->cached_input = B;
+  impl_->cached_output = C;
 }
 
 void slot_split_baseline(const HostMatrix& a, const float* B, float* C, int rhs,

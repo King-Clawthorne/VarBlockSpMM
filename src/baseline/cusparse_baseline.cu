@@ -1,6 +1,7 @@
 #include <cuda_runtime.h>
 #include <cusparse.h>
 
+#include <algorithm>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -63,17 +64,59 @@ ScalarCsrData expand_to_scalar_csr(const HostMatrix& matrix) {
   return csr;
 }
 
+cusparseSpMMAlg_t select_csr_algorithm(int algorithm) {
+  switch (algorithm) {
+  case 0:
+    return CUSPARSE_SPMM_ALG_DEFAULT;
+  case 1:
+    return CUSPARSE_SPMM_CSR_ALG1;
+  case 2:
+    return CUSPARSE_SPMM_CSR_ALG2;
+  case 3:
+    return CUSPARSE_SPMM_CSR_ALG3;
+  default:
+    throw std::invalid_argument("invalid CSR algorithm");
+  }
+}
+
+ScalarCsrData pack_fixed_bsr(const HostMatrix& matrix) {
+  ScalarCsrData csr;
+  if (!std::all_of(matrix.row_size.begin(), matrix.row_size.end(), [](int x) { return x == 32; }) ||
+      !std::all_of(matrix.col_size.begin(), matrix.col_size.end(), [](int x) { return x == 32; })) {
+    throw std::invalid_argument("fixed BSR baseline requires uniform 32 blocks");
+  }
+  csr.row_offsets = matrix.row_ptr;
+  csr.column_indices = matrix.block_col;
+  csr.values.resize(matrix.values.size());
+  for (size_t block_index = 0; block_index < matrix.block_col.size(); ++block_index) {
+    for (int local_row = 0; local_row < 32; ++local_row) {
+      for (int local_column = 0; local_column < 32; ++local_column) {
+        csr.values[matrix.value_off[block_index] + local_row * 32 + local_column] =
+            matrix.values[matrix.value_off[block_index] + local_row + local_column * 32];
+      }
+    }
+  }
+  return csr;
+}
+
 template <typename T> T* copy_to_device(const std::vector<T>& source) {
   T* destination = nullptr;
   check_cuda(cudaMalloc(&destination, source.size() * sizeof(T)));
-  check_cuda(
-      cudaMemcpy(destination, source.data(), source.size() * sizeof(T), cudaMemcpyHostToDevice));
+  try {
+    check_cuda(
+        cudaMemcpy(destination, source.data(), source.size() * sizeof(T), cudaMemcpyHostToDevice));
+  } catch (...) {
+    cudaFree(destination);
+    throw;
+  }
   return destination;
 }
 
 } // namespace
 
 struct ScalarCsrPlan::Impl {
+  cusparseSpMMAlg_t algorithm = CUSPARSE_SPMM_ALG_DEFAULT;
+  bool preprocess = false;
   int rhs_width{};
   int64_t row_count{};
   int64_t column_count{};
@@ -120,10 +163,9 @@ struct ScalarCsrPlan::Impl {
     constexpr float one = 1.0f;
     constexpr float zero = 0.0f;
 
-    check_cusparse(cusparseSpMM_bufferSize(handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                           CUSPARSE_OPERATION_NON_TRANSPOSE, &one, sparse_matrix,
-                                           input_matrix, &zero, output_matrix, CUDA_R_32F,
-                                           CUSPARSE_SPMM_ALG_DEFAULT, &workspace_size));
+    check_cusparse(cusparseSpMM_bufferSize(
+        handle, CUSPARSE_OPERATION_NON_TRANSPOSE, CUSPARSE_OPERATION_NON_TRANSPOSE, &one,
+        sparse_matrix, input_matrix, &zero, output_matrix, CUDA_R_32F, algorithm, &workspace_size));
 
     if (workspace_size > 0) {
       check_cuda(cudaMalloc(&workspace, workspace_size));
@@ -136,13 +178,24 @@ struct ScalarCsrPlan::Impl {
   }
 };
 
-ScalarCsrPlan::ScalarCsrPlan(const HostMatrix& matrix, int rhs_width) : impl_(new Impl) {
+ScalarCsrPlan::ScalarCsrPlan(const HostMatrix& matrix, int rhs_width, int algorithm,
+                             bool preprocess, bool fixed_bsr)
+    : impl_(new Impl) {
   matrix.validate();
   if (!is_supported_rhs_width(rhs_width)) {
     throw std::invalid_argument("invalid rhs width");
   }
 
-  const ScalarCsrData csr = expand_to_scalar_csr(matrix);
+  impl_->algorithm = select_csr_algorithm(algorithm);
+  impl_->preprocess = preprocess;
+  ScalarCsrData csr;
+  if (fixed_bsr) {
+    csr = pack_fixed_bsr(matrix);
+    impl_->algorithm = CUSPARSE_SPMM_BSR_ALG1;
+    impl_->preprocess = false;
+  } else {
+    csr = expand_to_scalar_csr(matrix);
+  }
   impl_->rhs_width = rhs_width;
   impl_->row_count = matrix.scalar_rows();
   impl_->column_count = matrix.scalar_cols();
@@ -152,6 +205,13 @@ ScalarCsrPlan::ScalarCsrPlan(const HostMatrix& matrix, int rhs_width) : impl_(ne
   impl_->values = copy_to_device(csr.values);
 
   check_cusparse(cusparseCreate(&impl_->handle));
+  if (fixed_bsr) {
+    check_cusparse(cusparseCreateBsr(
+        &impl_->sparse_matrix, matrix.block_rows, matrix.block_cols, matrix.block_col.size(), 32,
+        32, impl_->row_offsets, impl_->column_indices, impl_->values, CUSPARSE_INDEX_32I,
+        CUSPARSE_INDEX_32I, CUSPARSE_INDEX_BASE_ZERO, CUDA_R_32F, CUSPARSE_ORDER_ROW));
+    return;
+  }
   check_cusparse(cusparseCreateCsr(&impl_->sparse_matrix, impl_->row_count, impl_->column_count,
                                    impl_->nonzero_count, impl_->row_offsets, impl_->column_indices,
                                    impl_->values, CUSPARSE_INDEX_32I, CUSPARSE_INDEX_32I,
@@ -168,6 +228,13 @@ void ScalarCsrPlan::execute(const float* input, float* output, cudaStream_t stre
   if (!impl_->input_matrix) {
     impl_->create_dense_descriptors(input, output);
     impl_->allocate_workspace();
+    if (impl_->preprocess) {
+      constexpr float one = 1.0f, zero = 0.0f;
+      check_cusparse(cusparseSpMM_preprocess(
+          impl_->handle, CUSPARSE_OPERATION_NON_TRANSPOSE, CUSPARSE_OPERATION_NON_TRANSPOSE, &one,
+          impl_->sparse_matrix, impl_->input_matrix, &zero, impl_->output_matrix, CUDA_R_32F,
+          impl_->algorithm, impl_->workspace));
+    }
   } else {
     impl_->update_dense_pointers(input, output);
   }
@@ -177,7 +244,7 @@ void ScalarCsrPlan::execute(const float* input, float* output, cudaStream_t stre
   check_cusparse(cusparseSpMM(impl_->handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
                               CUSPARSE_OPERATION_NON_TRANSPOSE, &one, impl_->sparse_matrix,
                               impl_->input_matrix, &zero, impl_->output_matrix, CUDA_R_32F,
-                              CUSPARSE_SPMM_ALG_DEFAULT, impl_->workspace));
+                              impl_->algorithm, impl_->workspace));
 }
 
 void cusparse_scalar_baseline(const HostMatrix& matrix, const float* input, float* output,

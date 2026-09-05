@@ -1,0 +1,3 @@
+========= COMPUTE-SANITIZER
+PASS: 128 parameter cases and 16 empty-row cases, explicit CSR algorithms, uniform BSR, cached and changing grouped pointers, non-default streams
+========= RACECHECK SUMMARY: 0 hazards displayed (0 errors, 0 warnings)

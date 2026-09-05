@@ -6,3 +6,4 @@
 /research/*.log
 /research/*.out
 /research/*.toc
+/scripts/__pycache__/
