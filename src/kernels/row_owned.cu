@@ -1,5 +1,5 @@
-#include <cuda_runtime.h>
 #include <cuda_pipeline_primitives.h>
+#include <cuda_runtime.h>
 
 #include <stdexcept>
 
@@ -115,9 +115,9 @@ __device__ void stage_input_async(DeviceMatrix matrix, const float* __restrict__
 }
 
 template <int RHS, int VectorWidth, int Threads, bool IndirectRows>
-__global__ void row_owned_single_buffered(
-    DeviceMatrix matrix, const int32_t* __restrict__ row_order, const float* __restrict__ input,
-    float* __restrict__ output) {
+__global__ void
+row_owned_single_buffered(DeviceMatrix matrix, const int32_t* __restrict__ row_order,
+                          const float* __restrict__ input, float* __restrict__ output) {
   constexpr int max_block_width = 64;
   constexpr int shared_stride = max_block_width + 1;
   __shared__ float shared_input[RHS * shared_stride];
@@ -182,8 +182,8 @@ __global__ void row_owned_single_buffered(
 // retains its measured register allocation and occupancy.
 template <int RHS, int VectorWidth>
 __global__ void row_owned_single_buffered_direct(DeviceMatrix matrix,
-                                                  const float* __restrict__ input,
-                                                  float* __restrict__ output) {
+                                                 const float* __restrict__ input,
+                                                 float* __restrict__ output) {
   constexpr int max_block_width = 64;
   constexpr int shared_stride = max_block_width + 1;
   __shared__ float shared_input[RHS * shared_stride];
@@ -340,8 +340,7 @@ void launch_shape_dispatched(DeviceMatrix matrix, const int32_t* row_shape_order
   // At low mean degree the second launch costs more than shape separation
   // saves for mixed-height matrices. Use the original one-CTA-per-row path in
   // that regime; homogeneous matrices still get the fitting one-launch path.
-  if (small_row_count != 0 && large_row_count != 0 &&
-      matrix.nnzb < 8 * matrix.block_rows) {
+  if (small_row_count != 0 && large_row_count != 0 && matrix.nnzb < 8 * matrix.block_rows) {
     launch_single_buffered<RHS, VectorWidth>(matrix, input, output, stream);
     return;
   }
@@ -351,9 +350,8 @@ void launch_shape_dispatched(DeviceMatrix matrix, const int32_t* row_shape_order
         <<<small_row_count, 128, 0, stream>>>(matrix, row_shape_order, input, output);
   }
   if (large_row_count != 0) {
-    row_owned_double_buffered<RHS, VectorWidth, 256>
-        <<<large_row_count, 256, 0, stream>>>(matrix, row_shape_order + small_row_count, input,
-                                              output);
+    row_owned_double_buffered<RHS, VectorWidth, 256><<<large_row_count, 256, 0, stream>>>(
+        matrix, row_shape_order + small_row_count, input, output);
   }
 }
 
