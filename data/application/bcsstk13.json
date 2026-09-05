@@ -1,0 +1,36 @@
+{
+  "name": "bcsstk13",
+  "url": "https://sparse.tamu.edu/MM/HB/bcsstk13.tar.gz",
+  "source_page": "https://math.nist.gov/MatrixMarket/data/Harwell-Boeing/bcsstruc1/bcsstk13.html",
+  "numpy_version": "2.4.6",
+  "scipy_version": "1.17.1",
+  "source_sha256": "8a100114d7a05226b82fe5107018ebe021c4f3fe5dd600022d744d00dab3572b",
+  "binary_sha256": "9d85166604b5a513ebe4ab312fb813e3934f55aba1f57f233d16164c0914e145",
+  "original_shape": [
+    2003,
+    2003
+  ],
+  "padded_shape": [
+    2008,
+    2008
+  ],
+  "normalization_divisor": 1191785641270.0,
+  "scalar_nonzeros": 83883,
+  "packed_values": 945728,
+  "block_count": 769,
+  "block_rows": 68,
+  "block_cols": 66,
+  "fill_fraction": 0.08869675001691818,
+  "row_partition_cycle": [
+    8,
+    16,
+    32,
+    64
+  ],
+  "column_partition_cycle": [
+    64,
+    32,
+    16,
+    8
+  ]
+}

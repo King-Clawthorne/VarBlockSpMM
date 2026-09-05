@@ -29,12 +29,29 @@ The implementation includes:
 - RHS 64 retains one 256-thread, single-buffer CTA per row. Two full RHS-64 buffers reduce occupancy enough to lose performance on the release GPU; RHS 16 likewise retains direct global loads.
 - A persistent scalar-CSR cuSPARSE plan.
 - A persistent slot-split plan using CUDA 13.4 `cublasSgemmGroupedBatched`, grouped by row and column block size.
-- A 64-case correctness matrix covering every supported RHS width, all distributions, degrees `{1,4,8,16}`, both locality modes, and non-default streams.
+- A 128-case correctness matrix covering every supported RHS width, all distributions, degrees `{1,4,8,16}`, both locality modes, and non-default streams, plus 16 empty-row cases and cached-pointer address changes.
 - A reproducible 128-case regime sweep reporting GPU-event and synchronized host median/p95 timing.
 
 Nsight Compute identified memory latency as the scalar kernel's primary constraint. The direct kernel was tuned by panel width to reuse each matrix value across eight or sixteen RHS accumulators, then changed to load reusable `B` slices cooperatively for wide panels. Neither optimization introduces atomics or external workspace.
 
-## Result
+## Revised paper and evidence
+
+The [revised paper](research/paper.pdf) reports stronger library controls, raw GPU and host timings, and three fresh process observations for each of 168 synthetic configurations. It adds explicit CSR algorithms with preprocessing, cached grouped cuBLAS, fixed-block BSR on uniform inputs, size scaling, and variable degrees with empty rows. Three published structural matrices are evaluated with documented artificial partitions and compact-CSR controls.
+
+The revised results and evidence limits are recorded in [the validation report](research/revision-validation.md). The original five-seed summaries remain historical evidence and are not measurements of the revised baseline configurations.
+
+To reproduce in fresh directories, run GPU campaigns serially:
+
+```powershell
+python scripts/run_revision.py --output data/revision-rerun
+python scripts/prepare_application.py
+python scripts/run_application.py --output data/application/rerun
+python scripts/analyze_revision.py --revision data/revision-rerun --application data/application/rerun --output build/rerun-tables
+```
+
+The application preparation step requires NumPy, SciPy, and Requests. Run `scripts/build_paper.ps1` to validate the checked-in datasets, regenerate tables, and rebuild the manuscript PDF.
+
+## Historical development results
 
 The optimized hybrid direct kernel won all 128 workloads in the 1,024-row regime grid, including the former RHS-64/high-degree grouped-GEMM regime. The measured release therefore does not include split-row partial buffers.
 
@@ -81,7 +98,7 @@ build\Release\vbsr_benchmark.exe --rows 4096 --degree 8 --rhs 32 --distribution 
 scripts\run_grid.ps1 -Rows 4096 -Reps 20 -Warmup 5
 ```
 
-WSL users can run `ROWS=4096 REPS=20 WARMUP=5 bash scripts/run_grid.sh`. Results are written to `data/regime_map.csv`. Format construction and host-to-device input transfer are excluded; required hot-path pointer marshaling for grouped GEMM is included.
+WSL users can run `ROWS=4096 REPS=20 WARMUP=5 bash scripts/run_grid.sh`. Results are written to `data/regime_map.csv`. This is the historical harness. It excludes construction and input transfer and includes per-call grouped pointer refreshes. Use the revision runner above for the stronger controls.
 
 ## API lifetime
 
