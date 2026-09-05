@@ -8,6 +8,35 @@
 namespace vbsr {
 namespace {
 
+template <int VectorWidth, int Threads>
+__global__ void row_owned_rhs8_tiled(DeviceMatrix matrix, const float* __restrict__ input,
+                                     float* __restrict__ output) {
+  const int row = blockIdx.x;
+  const int height = matrix.row_size[row];
+  // Groups of eight contiguous lanes follow the format's minimum row extent.
+  for (int tile = threadIdx.x; tile < height * (8 / VectorWidth); tile += Threads) {
+    const int local_row = (tile / (64 / VectorWidth)) * 8 + tile % 8;
+    const int first_rhs = ((tile / 8) % (8 / VectorWidth)) * VectorWidth;
+    float sums[VectorWidth] = {};
+    for (int block = matrix.row_ptr[row]; block < matrix.row_ptr[row + 1]; ++block) {
+      const int column = matrix.block_col[block];
+      const int width = matrix.col_size[column];
+      const float* a = matrix.values + matrix.value_off[block] + local_row;
+      const float* b = input + matrix.col_scalar_off[column] + int64_t(first_rhs) * matrix.scalar_cols;
+#pragma unroll 4
+      for (int k = 0; k < width; ++k) {
+        const float value = a[k * height];
+#pragma unroll
+        for (int v = 0; v < VectorWidth; ++v)
+          sums[v] = fmaf(value, b[k + int64_t(v) * matrix.scalar_cols], sums[v]);
+      }
+    }
+#pragma unroll
+    for (int v = 0; v < VectorWidth; ++v)
+      output[matrix.row_scalar_off[row] + local_row + int64_t(first_rhs + v) * matrix.scalar_rows] = sums[v];
+  }
+}
+
 template <int RHS>
 __global__ void row_owned_scalar(DeviceMatrix matrix, const float* __restrict__ input,
                                  float* __restrict__ output) {
@@ -400,7 +429,12 @@ void launch_row_owned(DeviceMatrix matrix, const int32_t* row_shape_order, int s
   // wider than these measured points loses more parallelism than it saves.
   switch (rhs_width) {
   case 8:
-    launch_scalar<8>(matrix, input, output, stream);
+    // Small grids need the extra CTAs of the original mapping to expose enough
+    // parallel work. Keep that path below the measured large-grid regime.
+    if (matrix.block_rows < 512)
+      launch_scalar<8>(matrix, input, output, stream);
+    else
+      row_owned_rhs8_tiled<2, 256><<<matrix.block_rows, 256, 0, stream>>>(matrix, input, output);
     break;
   case 16:
     launch_ilp<16, 8>(matrix, input, output, stream);

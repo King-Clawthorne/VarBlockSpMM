@@ -6,7 +6,7 @@
 
 ## Direct kernel
 
-The row-owned family specializes only RHS width `{8,16,32,64}`. Runtime block dimensions remain loop bounds. RHS 8 assigns one output element per thread. RHS 16/32 assign eight RHS columns of one local row to each thread, while RHS 64 assigns sixteen. The wider mapping reuses each A load across more independent accumulators while retaining enough threads per row; still wider candidates lost performance.
+The row-owned family specializes only RHS width `{8,16,32,64}`. Runtime block dimensions remain loop bounds. RHS 8 uses one 256-thread CTA per block row for matrices with at least 512 block rows. Each warp covers eight local rows and all eight RHS columns, with two accumulators per thread and groups of eight lanes accessing contiguous rows. Smaller grids use the scalar mapping with one output element per thread and two CTAs per block row. RHS 16/32 assign eight RHS columns of one local row to each thread, while RHS 64 assigns sixteen. The wider mapping reuses each A load across more independent accumulators while retaining enough threads per row; still wider candidates lost performance.
 
 RHS 32 classifies block rows once when `Matrix` is constructed. Rows up to 16 scalars high form a light list; the rest form a reuse-heavy list. Light rows use 128-thread single-buffer CTAs. Heavy rows use 256-thread CTAs with two shared tiles: per-thread asynchronous copies preload the next `B` slice while FMAs consume the current slice. A pipeline wait and CTA barrier at each block boundary make the new tile visible and prevent premature buffer reuse. Four-byte asynchronous copies preserve the 65-float shared leading dimension used to avoid bank conflicts.
 

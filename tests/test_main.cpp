@@ -173,6 +173,19 @@ void run_negative_tests() {
   malformed_matrix.row_size[0] = 7;
   expect_invalid_argument([&] { malformed_matrix.validate(); }, "unsupported block size accepted");
 
+  for (int shift : {-1, 1}) {
+    malformed_matrix = valid_matrix;
+    for (auto& offset : malformed_matrix.row_scalar_off)
+      offset += shift;
+    expect_invalid_argument([&] { malformed_matrix.validate(); },
+                            "nonzero row offset origin accepted");
+    malformed_matrix = valid_matrix;
+    for (auto& offset : malformed_matrix.col_scalar_off)
+      offset += shift;
+    expect_invalid_argument([&] { malformed_matrix.validate(); },
+                            "nonzero column offset origin accepted");
+  }
+
   vbsr::Matrix device_matrix(valid_matrix);
   expect_invalid_argument(
       [&] {
@@ -184,6 +197,96 @@ void run_negative_tests() {
         vbsr::Plan plan(device_matrix, {8, vbsr::Kernel::SplitRow});
       },
       "unjustified split-row accepted");
+}
+
+void run_reference_cancellation_test() {
+  vbsr::HostMatrix matrix;
+  matrix.block_rows = 2;
+  matrix.block_cols = 3;
+  matrix.row_ptr = {0, 3, 3};
+  matrix.block_col = {0, 1, 2};
+  matrix.row_size = {8, 8};
+  matrix.col_size = {8, 8, 8};
+  matrix.row_scalar_off = {0, 8, 16};
+  matrix.col_scalar_off = {0, 8, 16, 24};
+  matrix.value_off = {0, 64, 128, 192};
+  matrix.values.resize(192, 0.0f);
+  matrix.values[0] = 100000000.0f;
+  matrix.values[64] = 1.0f;
+  matrix.values[128] = -100000000.0f;
+  matrix.validate();
+
+  for (int rhs : {8, 16, 32, 64}) {
+    std::vector<float> input(matrix.scalar_cols() * rhs);
+    for (int column = 0; column < rhs; ++column) {
+      for (int row = 0; row < matrix.scalar_cols(); ++row)
+        input[row + column * matrix.scalar_cols()] = float(column + 1);
+    }
+    const auto result = vbsr::cpu_reference(matrix, input, rhs);
+    for (int column = 0; column < rhs; ++column) {
+      for (int row = 0; row < matrix.scalar_rows(); ++row) {
+        const float expected = row == 0 ? float(column + 1) : 0.0f;
+        if (result[row + column * matrix.scalar_rows()] != expected)
+          throw std::runtime_error("CPU reference lost cross-block precision or output layout");
+      }
+    }
+  }
+}
+
+void run_rhs8_shape_test() {
+  vbsr::HostMatrix matrix;
+  matrix.block_rows = 512;
+  matrix.block_cols = 8;
+  matrix.row_ptr = {0};
+  matrix.row_scalar_off = matrix.col_scalar_off = {0};
+  matrix.value_off = {0};
+  for (int size = 8; size <= 64; size += 8) {
+    matrix.col_size.push_back(size);
+    matrix.col_scalar_off.push_back(matrix.col_scalar_off.back() + size);
+  }
+  for (int row = 0; row < matrix.block_rows; ++row) {
+    const int size = (row % 8 + 1) * 8;
+    matrix.row_size.push_back(size);
+    matrix.row_scalar_off.push_back(matrix.row_scalar_off.back() + size);
+    // Alternate eight populated shapes with eight empty shapes.
+    for (int column = 0; column < (row % 16 < 8 ? 8 : 0); ++column) {
+      matrix.block_col.push_back(column);
+      matrix.value_off.push_back(matrix.value_off.back() +
+                                 matrix.row_size[row] * matrix.col_size[column]);
+    }
+    matrix.row_ptr.push_back(int32_t(matrix.block_col.size()));
+  }
+  matrix.values = make_random_input(matrix.value_off.back(), 731);
+  matrix.validate();
+  const auto input = make_random_input(matrix.scalar_cols() * 8, 732);
+  const auto reference = vbsr::cpu_reference(matrix, input, 8);
+  vbsr::Matrix device(matrix);
+  float* device_input = nullptr;
+  float* device_output = nullptr;
+  cudaStream_t stream = nullptr;
+  auto check = [](cudaError_t status) {
+    if (status != cudaSuccess)
+      throw std::runtime_error(cudaGetErrorString(status));
+  };
+  try {
+    check(cudaStreamCreate(&stream));
+    check(cudaMalloc(&device_input, input.size() * sizeof(float)));
+    check(cudaMalloc(&device_output, reference.size() * sizeof(float)));
+    check(cudaMemcpy(device_input, input.data(), input.size() * sizeof(float), cudaMemcpyHostToDevice));
+    check(cudaMemset(device_output, 0xff, reference.size() * sizeof(float)));
+    vbsr::Plan plan(device, {8, vbsr::Kernel::RowOwned});
+    plan.execute(device_input, device_output, stream);
+    check(cudaStreamSynchronize(stream));
+    compare_device_result(reference, device_output, "RHS-8 all 64 block shapes");
+  } catch (...) {
+    cudaStreamDestroy(stream);
+    cudaFree(device_input);
+    cudaFree(device_output);
+    throw;
+  }
+  cudaStreamDestroy(stream);
+  cudaFree(device_input);
+  cudaFree(device_output);
 }
 
 void run_parameter_matrix() {
@@ -215,6 +318,8 @@ void run_parameter_matrix() {
 int main() {
   try {
     run_negative_tests();
+    run_reference_cancellation_test();
+    run_rhs8_shape_test();
     run_parameter_matrix();
     std::cout << "PASS: 128 parameter cases and 16 empty-row cases, explicit CSR algorithms, "
                  "uniform BSR, cached and changing grouped pointers, non-default streams\n";

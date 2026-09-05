@@ -24,7 +24,7 @@ The implementation includes:
 - A validated host format and owning GPU format with 64-bit scalar and value offsets.
 - Deterministic generators for uniform, low-variance, high-variance, and bimodal block sizes with local or random column patterns.
 - A double-accumulating CPU reference for correctness checks.
-- RHS-specialized row-owned CUDA kernels. RHS 16 and 32 reuse each `A` load across eight independent output accumulators, RHS 64 uses sixteen, and RHS 8 retains the lower-overhead scalar mapping.
+- RHS-specialized row-owned CUDA kernels. RHS 16 and 32 reuse each `A` load across eight independent output accumulators, and RHS 64 uses sixteen. RHS 8 uses eight-row tiles and two accumulators per thread for matrices with at least 512 block rows, retaining the scalar mapping for smaller grids.
 - RHS 32 uses a measured row-shape dispatch. Rows up to 16 scalars high use a 128-thread single-buffer CTA; taller rows use 256 threads and asynchronous double buffering so the next `B` slice loads while the current block computes. Mixed-height matrices use the split only from mean degree 8 upward, where two launches amortize.
 - RHS 64 retains one 256-thread, single-buffer CTA per row. Two full RHS-64 buffers reduce occupancy enough to lose performance on the release GPU; RHS 16 likewise retains direct global loads.
 - A persistent scalar-CSR cuSPARSE plan.
@@ -36,9 +36,22 @@ Nsight Compute identified memory latency as the scalar kernel's primary constrai
 
 ## Revised paper and evidence
 
+The [paper](research/paper.pdf) evaluates the optimized direct dispatch against
+persistent library controls. Its main tables and both graphs are generated from
+`data/optimized-revision/` and `data/application/optimized-results/`.
+The [optimization report](docs/optimization-report.md) documents the RHS-8 mapping
+and its comparison against the scalar baseline. The paper build validates the
+library campaigns and the separate kernel ablation.
+
+Compare the current RHS-8 dispatch with its retained release baseline using:
+
+```powershell
+python scripts/benchmark_kernel.py --output data/kernel-rhs8-rerun
+```
+
 The [revised paper](research/paper.pdf) reports stronger library controls, raw GPU and host timings, and three fresh process observations for each of 168 synthetic configurations. It adds explicit CSR algorithms with preprocessing, cached grouped cuBLAS, fixed-block BSR on uniform inputs, size scaling, and variable degrees with empty rows. Three published structural matrices are evaluated with documented artificial partitions and compact-CSR controls.
 
-The revised results and evidence limits are recorded in [the validation report](research/revision-validation.md). The original five-seed summaries remain historical evidence and are not measurements of the revised baseline configurations.
+The revised results and evidence limits are recorded in [the validation report](research/optimized-validation.md). The original five-seed summaries remain historical evidence and are not measurements of the revised baseline configurations.
 
 To reproduce in fresh directories, run GPU campaigns serially:
 

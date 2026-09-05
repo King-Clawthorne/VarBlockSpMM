@@ -45,6 +45,9 @@ void HostMatrix::validate() const {
       col_scalar_off.size() != size_t(block_cols + 1)) {
     throw std::invalid_argument("scalar offsets size mismatch");
   }
+  if (row_scalar_off.front() != 0 || col_scalar_off.front() != 0) {
+    throw std::invalid_argument("scalar offsets must start at zero");
+  }
   if (row_ptr.front() != 0 || row_ptr.back() < 0 || size_t(row_ptr.back()) != block_col.size()) {
     throw std::invalid_argument("bad row_ptr");
   }
@@ -188,18 +191,17 @@ std::vector<float> cpu_reference(const HostMatrix& matrix, const std::vector<flo
   }
 
   // The reference mirrors the packed block layout but accumulates each dot
-  // product in double.
+  // product in double, including contributions from different blocks.
   std::vector<float> output(matrix.scalar_rows() * rhs_width, 0.0f);
   for (int block_row = 0; block_row < matrix.block_rows; ++block_row) {
     const int row_height = matrix.row_size[block_row];
-    for (int block_index = matrix.row_ptr[block_row]; block_index < matrix.row_ptr[block_row + 1];
-         ++block_index) {
-      const int block_column = matrix.block_col[block_index];
-      const int column_width = matrix.col_size[block_column];
-
-      for (int local_row = 0; local_row < row_height; ++local_row) {
-        for (int rhs_column = 0; rhs_column < rhs_width; ++rhs_column) {
-          double sum = 0.0;
+    for (int local_row = 0; local_row < row_height; ++local_row) {
+      for (int rhs_column = 0; rhs_column < rhs_width; ++rhs_column) {
+        double sum = 0.0;
+        for (int block_index = matrix.row_ptr[block_row];
+             block_index < matrix.row_ptr[block_row + 1]; ++block_index) {
+          const int block_column = matrix.block_col[block_index];
+          const int column_width = matrix.col_size[block_column];
           for (int local_column = 0; local_column < column_width; ++local_column) {
             const auto value_index =
                 matrix.value_off[block_index] + local_row + local_column * row_height;
@@ -207,10 +209,10 @@ std::vector<float> cpu_reference(const HostMatrix& matrix, const std::vector<flo
                                      int64_t(rhs_column) * matrix.scalar_cols();
             sum += double(matrix.values[value_index]) * input[input_index];
           }
-          const auto output_index = matrix.row_scalar_off[block_row] + local_row +
-                                    int64_t(rhs_column) * matrix.scalar_rows();
-          output[output_index] += float(sum);
         }
+        const auto output_index = matrix.row_scalar_off[block_row] + local_row +
+                                   int64_t(rhs_column) * matrix.scalar_rows();
+        output[output_index] = float(sum);
       }
     }
   }

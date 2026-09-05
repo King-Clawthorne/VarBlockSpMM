@@ -39,7 +39,7 @@ def table(filename, header, rows, columns):
     text += ' & '.join(header) + r' \\' + '\n\\midrule\n'
     text += '\n'.join(' & '.join(map(str, row)) + r' \\' for row in rows)
     text += '\n\\bottomrule\n\\end{tabular}\n'
-    (GENERATED / filename).write_text(text, encoding='utf-8')
+    (GENERATED / filename).write_text(text, encoding='utf-8', newline='\n')
 
 
 def ratio(methods, comparator, clock='gpu'):
@@ -66,13 +66,14 @@ def summarize(records, comparator, clock='gpu'):
 def main():
     global GENERATED
     parser = argparse.ArgumentParser()
-    parser.add_argument('--revision', type=Path, default=ROOT / 'data/revision')
-    parser.add_argument('--application', type=Path, default=ROOT / 'data/application/results')
+    parser.add_argument('--revision', type=Path, default=ROOT / 'data/optimized-revision')
+    parser.add_argument('--application', type=Path, default=ROOT / 'data/application/optimized-results')
     parser.add_argument('--output', type=Path, default=GENERATED)
     args = parser.parse_args()
     GENERATED = args.output
     GENERATED.mkdir(parents=True, exist_ok=True)
     manifest = json.loads((args.revision / 'manifest.json').read_text())
+    manifest['sources'] = {path.replace('\\', '/'): digest for path, digest in manifest['sources'].items()}
     with zipfile.ZipFile(args.revision / 'source_snapshot.zip') as snapshot:
         for path, digest in manifest['sources'].items():
             if hashlib.sha256(snapshot.read(path.replace('\\', '/'))).hexdigest() != digest:
@@ -134,6 +135,11 @@ def main():
 
     application = {}
     app_manifest = json.loads((args.application / 'manifest.json').read_text())
+    app_manifest['sources'] = {path.replace('\\', '/'): digest for path, digest in app_manifest['sources'].items()}
+    with zipfile.ZipFile(args.application / 'source_snapshot.zip') as snapshot:
+        for path, digest in app_manifest['sources'].items():
+            if hashlib.sha256(snapshot.read(path.replace('\\', '/'))).hexdigest() != digest:
+                raise ValueError('Application source snapshot hash mismatch')
     for path, digest in app_manifest['inputs'].items():
         if hashlib.sha256((ROOT / 'data/application' / path).read_bytes()).hexdigest() != digest:
             raise ValueError('Application input checksum mismatch')
@@ -159,14 +165,46 @@ def main():
     summary['total_configurations'] = len(records)
     summary['raw_trials'] = sum((9 if k[3] == 'uniform' else 8) * 20 * 3 for k in records) + 12 * 5 * 20 * 3
     summary['matrix_seed'] = 1
-    (GENERATED / 'summary.json').write_text(json.dumps(summary, indent=2))
+    summary['provenance'] = {
+        'synthetic_directory': args.revision.as_posix(),
+        'application_directory': args.application.as_posix(),
+        'synthetic_executable_sha256': manifest['executable_sha256'],
+        'application_executable_sha256': app_manifest['executable_sha256'],
+        'kernel_sha256': manifest['sources']['src/kernels/row_owned.cu'],
+    }
+    if manifest['sources']['src/kernels/row_owned.cu'] != app_manifest['sources']['src/kernels/row_owned.cu']:
+        raise ValueError('Synthetic and application campaigns used different kernels')
+    (GENERATED / 'summary.json').write_text(json.dumps(summary, indent=2), newline='\n')
     commands = [('AuditCsr', summary['csr_best']['geomean']), ('AuditGrouped', summary['grouped_cached']['geomean']),
-                ('AuditBsr', summary['bsr32']['geomean']), ('AuditApplication', summary['application']['geomean'])]
+                ('AuditBsr', summary['bsr32']['geomean']), ('AuditApplication', summary['application']['geomean']),
+                ('AuditDefaultCsr', summary['csr_default']['geomean']),
+                ('AuditApplicationGrouped', summary['application_grouped']['geomean']),
+                ('AuditApplicationGroupedLow', summary['application_grouped']['process_range'][0]),
+                ('AuditApplicationGroupedHigh', summary['application_grouped']['process_range'][1]),
+                ('AuditCompactSpeedup', 1 / summary['application']['geomean'])]
     text = ''.join('\\newcommand{\\' + name + '}{' + f'{value:.3f}' + '}\n' for name, value in commands)
     for command, key in [('AuditCsrWins', 'csr_best'), ('AuditGroupedWins', 'grouped_cached'),
                          ('AuditBsrWins', 'bsr32'), ('AuditApplicationWins', 'application')]:
         text += '\\newcommand{\\' + command + '}{' + str(summary[key]['wins']) + '}\n'
-    (GENERATED / 'macros.tex').write_text(text)
+    text += '\\newcommand{\\AuditBsrLosses}{' + str(32 - summary['bsr32']['wins']) + '}\n'
+    text += '\\newcommand{\\AuditApplicationLosses}{' + str(12 - summary['application']['wins']) + '}\n'
+    (GENERATED / 'macros.tex').write_text(text, newline='\n')
+    from plot_revision import render_figures
+    chart_data = {
+        'provenance': summary['provenance'],
+        'core': [dict(configuration=list(key), **{
+            name: geomean(ratio(methods, name) for methods in processes.values())
+            for name in ('csr_default', 'csr_best', 'grouped_cached')})
+            for key, processes in sorted(core.items())],
+        'uniform': [dict(configuration=list(key), rhs=key[2],
+                         ratio=geomean(ratio(methods, 'bsr32') for methods in processes.values()))
+                    for key, processes in sorted(uniform.items())],
+        'application': [dict(matrix=key[0], rhs=key[1],
+                             ratio=geomean(ratio(methods, 'compact_best') for methods in processes.values()))
+                        for key, processes in sorted(application.items())],
+    }
+    (GENERATED / 'figure-data.json').write_text(json.dumps(chart_data, indent=2), newline='\n')
+    render_figures(GENERATED, chart_data)
     print(json.dumps(summary, indent=2))
 
 

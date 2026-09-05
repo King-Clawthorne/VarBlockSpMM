@@ -1,0 +1,2283 @@
+{
+  "provenance": {
+    "synthetic_directory": "C:/Users/cohen/VarBlockSpMM/data/optimized-revision",
+    "application_directory": "C:/Users/cohen/VarBlockSpMM/data/application/optimized-results",
+    "synthetic_executable_sha256": "f72f5523770fe859c4112db616d385071cb87632de59835269d423a0f730b31f",
+    "application_executable_sha256": "295954573f06424c45db554e3588f3fb3bd74e3ea4f9034c0056ea5b8fc91dba",
+    "kernel_sha256": "480305b815bca081efcf1536baaf168b07a5d833fcfc6b13a13b2723c8e28fc9"
+  },
+  "core": [
+    {
+      "configuration": [
+        4096,
+        2,
+        8,
+        "bimodal",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 3.016297161899466,
+      "csr_best": 1.8997442380754082,
+      "grouped_cached": 5.142372024992026
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        8,
+        "bimodal",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 3.249201444160618,
+      "csr_best": 2.03003129492308,
+      "grouped_cached": 5.521748331803061
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        8,
+        "high",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 3.2851286052481634,
+      "csr_best": 1.9569420881543944,
+      "grouped_cached": 5.2640081911821595
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        8,
+        "high",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 3.4714691350426254,
+      "csr_best": 2.003761607202414,
+      "grouped_cached": 5.501461791772574
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        8,
+        "low",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 2.9546404138511693,
+      "csr_best": 1.745364804557276,
+      "grouped_cached": 5.5366149540343335
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        8,
+        "low",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 3.27961130640697,
+      "csr_best": 1.8872741232987436,
+      "grouped_cached": 6.186000187131963
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        8,
+        "uniform",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 3.2550548517705584,
+      "csr_best": 1.8429799225125523,
+      "grouped_cached": 5.960226541104842
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        8,
+        "uniform",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 3.3902343872416347,
+      "csr_best": 1.9026180176932999,
+      "grouped_cached": 6.250736139266898
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        16,
+        "bimodal",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 3.288916410093758,
+      "csr_best": 2.202927914200217,
+      "grouped_cached": 3.5949367219431134
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        16,
+        "bimodal",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 3.6683399868807642,
+      "csr_best": 2.378180274461012,
+      "grouped_cached": 3.977361025596645
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        16,
+        "high",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 3.3300131487590665,
+      "csr_best": 1.8408751617678965,
+      "grouped_cached": 3.4156997848474746
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        16,
+        "high",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 3.6440496425398243,
+      "csr_best": 1.9754043498384426,
+      "grouped_cached": 3.7100518350152303
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        16,
+        "low",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 3.1540812894538672,
+      "csr_best": 2.090904050350083,
+      "grouped_cached": 3.751115185156319
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        16,
+        "low",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 3.5129035616482183,
+      "csr_best": 2.2920249673560114,
+      "grouped_cached": 4.1687079562260925
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        16,
+        "uniform",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 3.5754396382888842,
+      "csr_best": 2.3694086615268155,
+      "grouped_cached": 4.1867283232040835
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        16,
+        "uniform",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 3.857326078638529,
+      "csr_best": 2.616720368573923,
+      "grouped_cached": 4.501496030479372
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        32,
+        "bimodal",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 5.3489582745006405,
+      "csr_best": 3.371970856644396,
+      "grouped_cached": 3.164375895402013
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        32,
+        "bimodal",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 5.720046275634127,
+      "csr_best": 3.5822691635702335,
+      "grouped_cached": 3.394766504054948
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        32,
+        "high",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 5.771642610531798,
+      "csr_best": 2.926771416622553,
+      "grouped_cached": 3.164569138687476
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        32,
+        "high",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 5.984201040640666,
+      "csr_best": 2.9822892178927387,
+      "grouped_cached": 3.2452728269081597
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        32,
+        "low",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 5.5094258776252065,
+      "csr_best": 3.5202899516207378,
+      "grouped_cached": 3.5615177404817078
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        32,
+        "low",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 5.738381729546294,
+      "csr_best": 3.669966064794978,
+      "grouped_cached": 3.7185803345851984
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        32,
+        "uniform",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 5.609292587125269,
+      "csr_best": 3.6803688424527476,
+      "grouped_cached": 3.613939428988334
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        32,
+        "uniform",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 5.871758106936966,
+      "csr_best": 3.8767595762973235,
+      "grouped_cached": 3.7920099894308743
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        64,
+        "bimodal",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 7.9813941441083065,
+      "csr_best": 4.917422778475237,
+      "grouped_cached": 2.7290178050532004
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        64,
+        "bimodal",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 7.870870663050075,
+      "csr_best": 4.866912967789099,
+      "grouped_cached": 2.6647805933291218
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        64,
+        "high",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 8.572009171591649,
+      "csr_best": 4.138924951024581,
+      "grouped_cached": 2.6892313019115384
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        64,
+        "high",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 8.373083804862002,
+      "csr_best": 4.019102540373541,
+      "grouped_cached": 2.620211176027582
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        64,
+        "low",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 7.43697117665704,
+      "csr_best": 4.656960031762229,
+      "grouped_cached": 2.8248498746204205
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        64,
+        "low",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 7.478050604542272,
+      "csr_best": 4.653141516860063,
+      "grouped_cached": 2.8546855239794406
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        64,
+        "uniform",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 7.422546293286364,
+      "csr_best": 4.768332104700399,
+      "grouped_cached": 2.7013583182119687
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        64,
+        "uniform",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 7.690906089924568,
+      "csr_best": 4.994738342728967,
+      "grouped_cached": 2.8027119266126843
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        8,
+        "bimodal",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 3.6193588780972177,
+      "csr_best": 3.039323767325843,
+      "grouped_cached": 6.197600816684112
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        8,
+        "bimodal",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 3.7786859728491295,
+      "csr_best": 3.155843962954914,
+      "grouped_cached": 6.414838944457843
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        8,
+        "high",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 3.920685880042708,
+      "csr_best": 3.2809259240429904,
+      "grouped_cached": 6.254838985559152
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        8,
+        "high",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 4.016375942956461,
+      "csr_best": 3.3535542233584446,
+      "grouped_cached": 6.381709426024784
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        8,
+        "low",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 3.658080974263978,
+      "csr_best": 2.486784236066906,
+      "grouped_cached": 6.872661781743645
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        8,
+        "low",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 3.758346112415629,
+      "csr_best": 2.6138056380591577,
+      "grouped_cached": 7.093007411357473
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        8,
+        "uniform",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 3.7722353764960235,
+      "csr_best": 2.2064319405846162,
+      "grouped_cached": 7.128002891439437
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        8,
+        "uniform",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 3.7470530499709294,
+      "csr_best": 2.3107136828590833,
+      "grouped_cached": 7.069115470794763
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        16,
+        "bimodal",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 4.0152477143058904,
+      "csr_best": 2.6234789571931296,
+      "grouped_cached": 4.495597246177341
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        16,
+        "bimodal",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 4.1948506471388125,
+      "csr_best": 2.725755714833686,
+      "grouped_cached": 4.6407994432398985
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        16,
+        "high",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 4.0890134484894265,
+      "csr_best": 2.413923154298698,
+      "grouped_cached": 4.191834034932115
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        16,
+        "high",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 4.06740598073644,
+      "csr_best": 2.402683941477761,
+      "grouped_cached": 4.2077027395326345
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        16,
+        "low",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 3.8404920783675363,
+      "csr_best": 2.3794936492044165,
+      "grouped_cached": 4.625953396918879
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        16,
+        "low",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 4.092025970441626,
+      "csr_best": 2.508139875901605,
+      "grouped_cached": 4.942051581752056
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        16,
+        "uniform",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 4.292591006474125,
+      "csr_best": 2.633715588302064,
+      "grouped_cached": 5.077111283171422
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        16,
+        "uniform",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 4.489286827861173,
+      "csr_best": 2.7996179552742104,
+      "grouped_cached": 5.290781761942868
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        32,
+        "bimodal",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 6.140184363477913,
+      "csr_best": 3.5844165132902384,
+      "grouped_cached": 3.7151007070465907
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        32,
+        "bimodal",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 6.053161627529036,
+      "csr_best": 3.5293378543614295,
+      "grouped_cached": 3.6451951815858172
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        32,
+        "high",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 6.586932866653657,
+      "csr_best": 3.0385708447902022,
+      "grouped_cached": 3.687885523766208
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        32,
+        "high",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 6.493847366709253,
+      "csr_best": 2.9805051005600505,
+      "grouped_cached": 3.594673972384477
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        32,
+        "low",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 6.744241915353791,
+      "csr_best": 3.9910743258674644,
+      "grouped_cached": 4.49543234134429
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        32,
+        "low",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 6.855637528459201,
+      "csr_best": 4.04857473039255,
+      "grouped_cached": 4.490999287232625
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        32,
+        "uniform",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 6.797622096215039,
+      "csr_best": 4.099671418557062,
+      "grouped_cached": 4.703164515248944
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        32,
+        "uniform",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 6.765327868870849,
+      "csr_best": 4.152833192007176,
+      "grouped_cached": 4.589556611380346
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        64,
+        "bimodal",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 9.504450263119093,
+      "csr_best": 5.481335243703054,
+      "grouped_cached": 3.46276986926724
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        64,
+        "bimodal",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 9.120773329737784,
+      "csr_best": 5.22818981764856,
+      "grouped_cached": 3.2458015252470536
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        64,
+        "high",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 10.562795658119224,
+      "csr_best": 4.435872280399735,
+      "grouped_cached": 3.4919959107620615
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        64,
+        "high",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 9.747144500876152,
+      "csr_best": 4.104250723870431,
+      "grouped_cached": 3.144822612366044
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        64,
+        "low",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 9.001243477916743,
+      "csr_best": 5.232035165256836,
+      "grouped_cached": 3.646836019295051
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        64,
+        "low",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 8.638302437384208,
+      "csr_best": 4.997578840946169,
+      "grouped_cached": 3.436752551044069
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        64,
+        "uniform",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 8.842742493541058,
+      "csr_best": 5.290762065531685,
+      "grouped_cached": 3.5100059559735364
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        64,
+        "uniform",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 8.681021126152096,
+      "csr_best": 5.299204405935137,
+      "grouped_cached": 3.424358460152846
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        8,
+        "bimodal",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 3.9810870452491787,
+      "csr_best": 3.978261392776732,
+      "grouped_cached": 7.015317659549908
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        8,
+        "bimodal",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 3.9820612921677783,
+      "csr_best": 3.956453362221245,
+      "grouped_cached": 6.910107023796984
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        8,
+        "high",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 4.305009903152117,
+      "csr_best": 4.305009903152117,
+      "grouped_cached": 6.9905976974160735
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        8,
+        "high",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 4.216846292450985,
+      "csr_best": 4.205505559150162,
+      "grouped_cached": 9.872162108579369
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        8,
+        "low",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 4.1660174503811795,
+      "csr_best": 4.161813671989507,
+      "grouped_cached": 7.831110964934843
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        8,
+        "low",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 4.124288484801859,
+      "csr_best": 4.075926953121544,
+      "grouped_cached": 7.630536187228528
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        8,
+        "uniform",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 4.828588769304073,
+      "csr_best": 4.551408919569211,
+      "grouped_cached": 8.102467668336308
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        8,
+        "uniform",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 4.636657926283165,
+      "csr_best": 4.591458272209157,
+      "grouped_cached": 7.8320673501828555
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        16,
+        "bimodal",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 4.599347069420382,
+      "csr_best": 3.5638306783172253,
+      "grouped_cached": 5.201657926477803
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        16,
+        "bimodal",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 4.473134817542555,
+      "csr_best": 3.461455211960896,
+      "grouped_cached": 5.031451217013116
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        16,
+        "high",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 4.537792812850815,
+      "csr_best": 3.539649142795876,
+      "grouped_cached": 4.800312603219386
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        16,
+        "high",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 4.436928935659501,
+      "csr_best": 3.4291589923023373,
+      "grouped_cached": 4.630608486431844
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        16,
+        "low",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 4.428339604667305,
+      "csr_best": 3.3492991855864096,
+      "grouped_cached": 5.305356974053626
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        16,
+        "low",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 4.447317154466729,
+      "csr_best": 3.3207771072021086,
+      "grouped_cached": 5.281277473354886
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        16,
+        "uniform",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 5.232048691791157,
+      "csr_best": 3.2964274837728373,
+      "grouped_cached": 5.768624353359284
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        16,
+        "uniform",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 5.258846584337848,
+      "csr_best": 3.609456914351231,
+      "grouped_cached": 5.7402510863793275
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        32,
+        "bimodal",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 8.633308972140016,
+      "csr_best": 4.924349062057622,
+      "grouped_cached": 5.278486627186094
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        32,
+        "bimodal",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 8.662766824676728,
+      "csr_best": 4.894606619276468,
+      "grouped_cached": 5.201709407788732
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        32,
+        "high",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 8.718770000783328,
+      "csr_best": 4.275070810412228,
+      "grouped_cached": 5.000585525700054
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        32,
+        "high",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 8.63095120517325,
+      "csr_best": 4.210189593682861,
+      "grouped_cached": 4.819643280000542
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        32,
+        "low",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 7.774607011919319,
+      "csr_best": 4.4139875800511215,
+      "grouped_cached": 5.127127339656908
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        32,
+        "low",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 7.672548723874131,
+      "csr_best": 4.310904321172967,
+      "grouped_cached": 4.99458806717307
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        32,
+        "uniform",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 8.282573360792988,
+      "csr_best": 4.442584168462504,
+      "grouped_cached": 5.317342296194938
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        32,
+        "uniform",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 8.01749905718439,
+      "csr_best": 4.4278697730666225,
+      "grouped_cached": 5.07082985344998
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        64,
+        "bimodal",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 10.495472505164845,
+      "csr_best": 5.88453022904138,
+      "grouped_cached": 3.8732947792500334
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        64,
+        "bimodal",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 9.792647104055275,
+      "csr_best": 5.508092841399894,
+      "grouped_cached": 3.536731104727073
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        64,
+        "high",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 11.501834891200058,
+      "csr_best": 4.741023422629014,
+      "grouped_cached": 3.9342201332040516
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        64,
+        "high",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 10.454149456046114,
+      "csr_best": 4.32682587570286,
+      "grouped_cached": 3.4943374832847027
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        64,
+        "low",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 10.568319583332535,
+      "csr_best": 5.653091425605476,
+      "grouped_cached": 4.199139822121234
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        64,
+        "low",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 9.501249171061506,
+      "csr_best": 5.1756702427332995,
+      "grouped_cached": 3.778695121399174
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        64,
+        "uniform",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 11.158215814859256,
+      "csr_best": 5.772732816108906,
+      "grouped_cached": 4.095568703189803
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        64,
+        "uniform",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 10.23466277771226,
+      "csr_best": 5.533833212033693,
+      "grouped_cached": 3.7933117190231482
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        8,
+        "bimodal",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 3.627865778554296,
+      "csr_best": 2.202148563552572,
+      "grouped_cached": 7.478108644064211
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        8,
+        "bimodal",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 3.5462608675117027,
+      "csr_best": 2.1562522515875235,
+      "grouped_cached": 7.183089461379832
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        8,
+        "high",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 3.956087006508197,
+      "csr_best": 1.9573442320980665,
+      "grouped_cached": 7.695272084562794
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        8,
+        "high",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 3.8049858307792923,
+      "csr_best": 1.8926818260306353,
+      "grouped_cached": 7.345040672030106
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        8,
+        "low",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 3.7278351083135854,
+      "csr_best": 2.2526604418626417,
+      "grouped_cached": 8.202858841212416
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        8,
+        "low",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 3.6504908533254756,
+      "csr_best": 2.1727133179720095,
+      "grouped_cached": 7.996136370855796
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        8,
+        "uniform",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 4.166079314328748,
+      "csr_best": 2.3348548966877165,
+      "grouped_cached": 8.663373311305396
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        8,
+        "uniform",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 3.9993371666558626,
+      "csr_best": 2.340498205947839,
+      "grouped_cached": 8.31359139799082
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        16,
+        "bimodal",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 4.518096241635124,
+      "csr_best": 3.156275559456229,
+      "grouped_cached": 5.703643432369556
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        16,
+        "bimodal",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 4.276884115532654,
+      "csr_best": 2.9574496108337756,
+      "grouped_cached": 5.305687828949833
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        16,
+        "high",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 4.483991632927958,
+      "csr_best": 2.3077662156631966,
+      "grouped_cached": 5.217873897674692
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        16,
+        "high",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 4.154980104517403,
+      "csr_best": 2.1425801405401863,
+      "grouped_cached": 4.816804078949968
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        16,
+        "low",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 4.3487760272101585,
+      "csr_best": 3.0007050107699635,
+      "grouped_cached": 5.8173076221565205
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        16,
+        "low",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 4.210026893251513,
+      "csr_best": 2.8901112818422194,
+      "grouped_cached": 5.551419263489663
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        16,
+        "uniform",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 5.058859725092698,
+      "csr_best": 3.3876211944375236,
+      "grouped_cached": 6.459597103888547
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        16,
+        "uniform",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 4.682753503875298,
+      "csr_best": 3.2126678288077026,
+      "grouped_cached": 6.025248081904661
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        32,
+        "bimodal",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 8.609541909818867,
+      "csr_best": 5.849766392216096,
+      "grouped_cached": 5.792941718061508
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        32,
+        "bimodal",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 8.41429639714925,
+      "csr_best": 5.730757668664642,
+      "grouped_cached": 5.569062340907375
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        32,
+        "high",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 8.569571107941906,
+      "csr_best": 4.16841117654062,
+      "grouped_cached": 5.329954341868461
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        32,
+        "high",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 8.311367460043789,
+      "csr_best": 4.094792340875157,
+      "grouped_cached": 5.212936282596451
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        32,
+        "low",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 7.6562836519213615,
+      "csr_best": 5.224471890850285,
+      "grouped_cached": 5.68077658699279
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        32,
+        "low",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 7.374381298429165,
+      "csr_best": 4.998871527055801,
+      "grouped_cached": 5.301214049415717
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        32,
+        "uniform",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 7.817611396110407,
+      "csr_best": 5.165103918783469,
+      "grouped_cached": 5.866338778267567
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        32,
+        "uniform",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 7.627547411145716,
+      "csr_best": 5.186880807641479,
+      "grouped_cached": 5.516225660240887
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        64,
+        "bimodal",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 10.279549399673238,
+      "csr_best": 6.883103699564656,
+      "grouped_cached": 4.270183536870375
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        64,
+        "bimodal",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 9.212207996244063,
+      "csr_best": 6.192788100814231,
+      "grouped_cached": 3.7620883569914474
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        64,
+        "high",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 10.860007061056681,
+      "csr_best": 5.141412901438071,
+      "grouped_cached": 4.2383183871781815
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        64,
+        "high",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 9.716313568537293,
+      "csr_best": 4.6600930099310505,
+      "grouped_cached": 3.7023948149916492
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        64,
+        "low",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 9.953241847475715,
+      "csr_best": 6.656265718544099,
+      "grouped_cached": 4.612665461804963
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        64,
+        "low",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 8.914175122820446,
+      "csr_best": 5.9954809985908755,
+      "grouped_cached": 4.053492786002181
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        64,
+        "uniform",
+        "local",
+        1,
+        0
+      ],
+      "csr_default": 10.245018220829788,
+      "csr_best": 6.690454484724899,
+      "grouped_cached": 4.627698742071464
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        64,
+        "uniform",
+        "random",
+        1,
+        0
+      ],
+      "csr_default": 9.241640840718869,
+      "csr_best": 6.216015590477456,
+      "grouped_cached": 4.033268631963052
+    }
+  ],
+  "uniform": [
+    {
+      "configuration": [
+        4096,
+        2,
+        8,
+        "uniform",
+        "local",
+        1,
+        0
+      ],
+      "rhs": 8,
+      "ratio": 0.714032840732784
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        8,
+        "uniform",
+        "random",
+        1,
+        0
+      ],
+      "rhs": 8,
+      "ratio": 0.7203190902614951
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        16,
+        "uniform",
+        "local",
+        1,
+        0
+      ],
+      "rhs": 16,
+      "ratio": 0.5586671682412695
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        16,
+        "uniform",
+        "random",
+        1,
+        0
+      ],
+      "rhs": 16,
+      "ratio": 0.5904803446532504
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        32,
+        "uniform",
+        "local",
+        1,
+        0
+      ],
+      "rhs": 32,
+      "ratio": 0.9099545142559895
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        32,
+        "uniform",
+        "random",
+        1,
+        0
+      ],
+      "rhs": 32,
+      "ratio": 1.028325689337495
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        64,
+        "uniform",
+        "local",
+        1,
+        0
+      ],
+      "rhs": 64,
+      "ratio": 1.223070993947122
+    },
+    {
+      "configuration": [
+        4096,
+        2,
+        64,
+        "uniform",
+        "random",
+        1,
+        0
+      ],
+      "rhs": 64,
+      "ratio": 1.2981747583051155
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        8,
+        "uniform",
+        "local",
+        1,
+        0
+      ],
+      "rhs": 8,
+      "ratio": 0.7557960838843206
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        8,
+        "uniform",
+        "random",
+        1,
+        0
+      ],
+      "rhs": 8,
+      "ratio": 0.73051348505156
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        16,
+        "uniform",
+        "local",
+        1,
+        0
+      ],
+      "rhs": 16,
+      "ratio": 0.5821029853499958
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        16,
+        "uniform",
+        "random",
+        1,
+        0
+      ],
+      "rhs": 16,
+      "ratio": 0.6187087185938638
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        32,
+        "uniform",
+        "local",
+        1,
+        0
+      ],
+      "rhs": 32,
+      "ratio": 0.9041288082138873
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        32,
+        "uniform",
+        "random",
+        1,
+        0
+      ],
+      "rhs": 32,
+      "ratio": 0.9528893936180569
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        64,
+        "uniform",
+        "local",
+        1,
+        0
+      ],
+      "rhs": 64,
+      "ratio": 1.1773052761253802
+    },
+    {
+      "configuration": [
+        4096,
+        4,
+        64,
+        "uniform",
+        "random",
+        1,
+        0
+      ],
+      "rhs": 64,
+      "ratio": 1.2162911621408576
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        8,
+        "uniform",
+        "local",
+        1,
+        0
+      ],
+      "rhs": 8,
+      "ratio": 0.7699540425724103
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        8,
+        "uniform",
+        "random",
+        1,
+        0
+      ],
+      "rhs": 8,
+      "ratio": 0.7452766038812428
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        16,
+        "uniform",
+        "local",
+        1,
+        0
+      ],
+      "rhs": 16,
+      "ratio": 0.582514232227599
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        16,
+        "uniform",
+        "random",
+        1,
+        0
+      ],
+      "rhs": 16,
+      "ratio": 0.595561300991335
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        32,
+        "uniform",
+        "local",
+        1,
+        0
+      ],
+      "rhs": 32,
+      "ratio": 0.9094940310960592
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        32,
+        "uniform",
+        "random",
+        1,
+        0
+      ],
+      "rhs": 32,
+      "ratio": 0.9076370296095904
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        64,
+        "uniform",
+        "local",
+        1,
+        0
+      ],
+      "rhs": 64,
+      "ratio": 1.1627989605138078
+    },
+    {
+      "configuration": [
+        4096,
+        8,
+        64,
+        "uniform",
+        "random",
+        1,
+        0
+      ],
+      "rhs": 64,
+      "ratio": 1.1704134402151503
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        8,
+        "uniform",
+        "local",
+        1,
+        0
+      ],
+      "rhs": 8,
+      "ratio": 0.7737518211953921
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        8,
+        "uniform",
+        "random",
+        1,
+        0
+      ],
+      "rhs": 8,
+      "ratio": 0.7471761200496619
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        16,
+        "uniform",
+        "local",
+        1,
+        0
+      ],
+      "rhs": 16,
+      "ratio": 0.5982457704835887
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        16,
+        "uniform",
+        "random",
+        1,
+        0
+      ],
+      "rhs": 16,
+      "ratio": 0.5732110028454293
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        32,
+        "uniform",
+        "local",
+        1,
+        0
+      ],
+      "rhs": 32,
+      "ratio": 0.9136411788480162
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        32,
+        "uniform",
+        "random",
+        1,
+        0
+      ],
+      "rhs": 32,
+      "ratio": 0.907115916992005
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        64,
+        "uniform",
+        "local",
+        1,
+        0
+      ],
+      "rhs": 64,
+      "ratio": 1.1734302728005452
+    },
+    {
+      "configuration": [
+        4096,
+        16,
+        64,
+        "uniform",
+        "random",
+        1,
+        0
+      ],
+      "rhs": 64,
+      "ratio": 1.1111324059411287
+    }
+  ],
+  "application": [
+    {
+      "matrix": "bcsstk13",
+      "rhs": 8,
+      "ratio": 0.18758893389857192
+    },
+    {
+      "matrix": "bcsstk13",
+      "rhs": 16,
+      "ratio": 0.12879071671397443
+    },
+    {
+      "matrix": "bcsstk13",
+      "rhs": 32,
+      "ratio": 0.21517701067990586
+    },
+    {
+      "matrix": "bcsstk13",
+      "rhs": 64,
+      "ratio": 0.3261389545755969
+    },
+    {
+      "matrix": "bcsstk14",
+      "rhs": 8,
+      "ratio": 0.3524809995286431
+    },
+    {
+      "matrix": "bcsstk14",
+      "rhs": 16,
+      "ratio": 0.25269947129920434
+    },
+    {
+      "matrix": "bcsstk14",
+      "rhs": 32,
+      "ratio": 0.5366294812859187
+    },
+    {
+      "matrix": "bcsstk14",
+      "rhs": 64,
+      "ratio": 0.598798377493374
+    },
+    {
+      "matrix": "bcsstk15",
+      "rhs": 8,
+      "ratio": 0.26165773492695776
+    },
+    {
+      "matrix": "bcsstk15",
+      "rhs": 16,
+      "ratio": 0.1999966037089198
+    },
+    {
+      "matrix": "bcsstk15",
+      "rhs": 32,
+      "ratio": 0.4134485090399494
+    },
+    {
+      "matrix": "bcsstk15",
+      "rhs": 64,
+      "ratio": 0.42581468404817285
+    }
+  ]
+}

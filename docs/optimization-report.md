@@ -1,5 +1,94 @@
 # Optimization report
 
+## 6 September 2026: RHS-8 tiling
+
+The current direct dispatch uses a new RHS-8 kernel for matrices with at least
+512 block rows. One 256-thread CTA owns each block row. Each warp covers eight
+local rows and all eight RHS columns, with two accumulators per thread. Groups
+of eight lanes load contiguous matrix rows and reuse each A value across two
+output columns. The mapping uses constant divisions instead of dividing by the
+runtime row height. It needs no shared memory, output atomics, or workspace.
+Smaller matrices retain the September 5 scalar mapping. RHS 16, 32, and 64
+retain their previous kernels and dispatch.
+
+### Measurements
+
+All new measurements use the local RTX 5060 Ti, compute capability 12.0, CUDA
+runtime/driver API 13.4, and the Release build. Ratios are legacy time divided
+by current time. Each observation uses five warmups and 30 timed calls with
+GPU-event and synchronized host durations. Method order is randomized within
+each process, and process jobs are shuffled and executed serially.
+
+The final campaign covers 144 configurations and three matrix seeds in separate
+processes per configuration, for 432 processes and 25,920 raw timed calls.
+These are three different matrix instances, not three repeats of a fixed
+instance. Configuration ratios average the three seed ratios in log space.
+The grid includes sizes 256, 512, 1,024, and 4,096, degrees 2, 4, 8, and 16,
+four shape distributions, and both localities. Additional high-variance and
+bimodal configurations use repeating degrees 0, 1, 16, 16 at every size and
+both localities.
+
+| Block rows | Geometric speedup | Dispatch |
+| --- | ---: | --- |
+| 256 | 0.995x | Original scalar kernel |
+| 512 | 1.278x | New tiled kernel |
+| 1,024 | 1.491x | New tiled kernel |
+| 4,096 | 2.002x | New tiled kernel |
+
+All 108 configurations using the new kernel improve after aggregation across
+seeds, with geometric speedup 1.563x and minimum 1.028x. Across all 144 cases,
+including the unchanged small-grid path, geometric speedup is 1.396x. The
+unchanged path's individual ratios fluctuate around parity and are not kernel
+regressions or gains. Clocks are not locked, and timing noise remains present.
+
+For the 4,096-row bimodal/random/degree-16 case, geometric means of seed medians
+are 2.245 ms for legacy and 1.086 ms for tiled, a 2.067x ratio. These are local
+RHS-8 execution results, not new comparisons against library baselines or
+end-to-end application measurements.
+
+An initial 32-case exploration compared single-CTA scalar execution and tiled
+variants with one, two, and four accumulators. The two-accumulator variant won
+all 32 cases at 4,096 rows. A subsequent 108-case size/seed campaign revealed
+small-grid losses, motivating the conservative fallback. That exploratory
+campaign is retained separately in `data/kernel-rhs8-20260906/`. Final dispatch
+measurements are in `data/kernel-rhs8-final-20260906/`. Each contains raw CSVs
+and process records in `runs.zip`, per-entry checksums, a summary, and the
+measured source snapshot and manifest. The runner subsequently gained automatic
+archiving and additional input checks, without changing the measured kernel.
+
+### Correctness and profiling
+
+The Release build and CTest pass, including the prior 128 parameter cases and
+16 empty-row cases. A new deterministic test exercises all 64 block shapes in
+the tiled path, including empty rows, a non-default stream, and an output buffer
+initialized to NaNs to detect unwritten elements. Every campaign process passes
+64 CPU probes per method on its actual matrix. Full-output test comparisons use
+the corrected CPU reference that accumulates complete dot products in double.
+Compute Sanitizer memcheck reports zero errors, and racecheck filtered to the
+new tiled kernel reports zero errors or warnings.
+
+Nsight Compute on the representative 4,096-row bimodal/random/degree-16 case
+reports 4,096 CTAs instead of 8,192, 47 registers per thread instead of 40,
+0.55 eligible warps per scheduler instead of 0.40, and 0.32 issued warps per
+scheduler instead of 0.26. These workload-specific counters support improved
+instruction scheduling. Profiler durations are excluded from speedup estimates.
+Build, test, sanitizer, and profiler evidence is retained in the final campaign's
+`validation/` directory.
+
+### Reproduction
+
+```powershell
+scripts/build.ps1
+python scripts/benchmark_kernel.py --output data/kernel-rhs8-rerun
+build/Release/vbsr_kernel_audit.exe 4096 16 bimodal random 1 71 0 30
+```
+
+The existing `launch_row_owned_scalar` API retains the original RHS-8 kernel
+for direct comparisons. The paper now evaluates this dispatch in a fresh main campaign under
+`data/optimized-revision/` and `data/application/optimized-results/`. Its primary
+tables and graphs use those measurements. The archived September 5 evidence
+remains available as historical data.
+
 ## 20 August 2026
 
 ### Environment

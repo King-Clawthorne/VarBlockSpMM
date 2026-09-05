@@ -1,76 +1,83 @@
 {
   "csr_default": {
-    "geomean": 4.932494858356992,
-    "minimum": 1.654723089689432,
+    "geomean": 5.65638899734581,
+    "minimum": 2.9546404138511693,
     "wins": 128,
     "count": 128,
     "process_range": [
-      4.892873024410869,
-      4.979415896330324
+      5.650051183342613,
+      5.667649414440569
     ]
   },
   "csr_best": {
-    "geomean": 3.035879432659115,
-    "minimum": 0.8504870706947111,
-    "wins": 123,
+    "geomean": 3.518341423220429,
+    "minimum": 1.745364804557276,
+    "wins": 128,
     "count": 128,
     "process_range": [
-      3.0236607937802646,
-      3.050317913200782
+      3.5149174095843727,
+      3.520174320222547
     ]
   },
   "grouped_cached": {
-    "geomean": 4.128752324182443,
-    "minimum": 2.6055341047589993,
+    "geomean": 4.768925726606555,
+    "minimum": 2.620211176027582,
     "wins": 128,
     "count": 128,
     "process_range": [
-      4.1160672963275875,
-      4.152652257990414
+      4.747487865499635,
+      4.804911934946247
     ]
   },
   "grouped_changing": {
-    "geomean": 4.152902673956253,
-    "minimum": 2.639409925420255,
+    "geomean": 4.769425208395267,
+    "minimum": 2.6231386154868526,
     "wins": 128,
     "count": 128,
     "process_range": [
-      4.134909828824484,
-      4.180841855497577
+      4.763964199594319,
+      4.775836228422252
     ]
   },
   "bsr32": {
-    "geomean": 0.7154463713415039,
-    "minimum": 0.3999656162020951,
-    "wins": 8,
+    "geomean": 0.8336636056285169,
+    "minimum": 0.5586671682412695,
+    "wins": 9,
     "count": 32,
     "process_range": [
-      0.7138589193670328,
-      0.7164263623389961
+      0.8325365941626258,
+      0.8357827185317785
     ]
   },
   "application": {
-    "geomean": 0.30247863523137597,
-    "minimum": 0.1304004805967565,
+    "geomean": 0.29570952532799355,
+    "minimum": 0.12879071671397443,
     "wins": 0,
     "count": 12,
     "process_range": [
-      0.2988123586514018,
-      0.3088201244341257
+      0.2935260090801928,
+      0.2979170958787993
     ]
   },
   "application_grouped": {
-    "geomean": 4.878369969416478,
-    "minimum": 3.584695354096101,
+    "geomean": 6.924328348412197,
+    "minimum": 3.6267799476555855,
     "wins": 12,
     "count": 12,
     "process_range": [
-      4.855022166291293,
-      4.916967687864399
+      6.019600966319869,
+      7.851133289471563
     ]
   },
   "core_configurations": 128,
   "total_configurations": 168,
   "raw_trials": 86160,
-  "matrix_seed": 1
+  "matrix_seed": 1,
+  "provenance": {
+    "synthetic_directory": "C:/Users/cohen/VarBlockSpMM/data/optimized-revision",
+    "application_directory": "C:/Users/cohen/VarBlockSpMM/data/application/optimized-results",
+    "synthetic_executable_sha256": "f72f5523770fe859c4112db616d385071cb87632de59835269d423a0f730b31f",
+    "application_executable_sha256": "295954573f06424c45db554e3588f3fb3bd74e3ea4f9034c0056ea5b8fc91dba",
+    "kernel_sha256": "480305b815bca081efcf1536baaf168b07a5d833fcfc6b13a13b2723c8e28fc9"
+  }
 }
