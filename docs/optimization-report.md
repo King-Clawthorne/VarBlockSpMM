@@ -48,7 +48,9 @@ end-to-end application measurements.
 
 An initial 32-case exploration compared single-CTA scalar execution and tiled
 variants with one, two, and four accumulators. The two-accumulator variant won
-all 32 cases at 4,096 rows. A subsequent 108-case size/seed campaign revealed
+all 32 cases at 4,096 rows. Its raw timings and harness are retained in
+`data/kernel-rhs8-variants-20260906.zip`, without a complete measured kernel
+source snapshot. A subsequent 108-case size/seed campaign revealed
 small-grid losses, motivating the conservative fallback. That exploratory
 campaign is retained separately in `data/kernel-rhs8-20260906/`. Final dispatch
 measurements are in `data/kernel-rhs8-final-20260906/`. Each contains raw CSVs
