@@ -11,7 +11,7 @@ from build_verified import verified_build, find_sanitizer
 def main():
     parser = argparse.ArgumentParser(__doc__)
     parser.add_argument('--output-root', type=Path, required=True,
-                        help='Fresh root for synthetic, published, native, ablation, robustness, and validation records')
+                        help='Fresh root for all paper campaigns, including MAGMA and transport, plus validation records')
     root = parser.parse_args().output_root.resolve()
     executable, receipt = verified_build('vbsr_tests')
     logs = root / 'validation'
@@ -35,6 +35,10 @@ def main():
         ('run_supplement.py', ['native', '--output', str(root / 'native')]),
         ('run_supplement.py', ['ablation', '--output', str(root / 'ablation')]),
         ('run_robustness.py', ['--output', str(root / 'robustness')]),
+        ('prepare_magma.py', []),
+        ('prepare_transport.py', ['--all']),
+        ('build_relevance.py', []),
+        ('run_relevance.py', ['--output', str(root / 'relevance')]),
     ]:
         print('Running ' + script + ' ' + ' '.join(args), flush=True)
         subprocess.run([sys.executable, str(ROOT / 'scripts' / script), *args], cwd=ROOT, check=True)

@@ -2,7 +2,41 @@
 
 Validated on 6 September 2026 on an RTX 5060 Ti, CUDA 13.4, Windows, and MSVC 19.44. The [paper](paper.pdf) and its [source](paper.tex) describe the final evidence. Earlier validation notes are archived history.
 
-## Findings and resolutions
+## Replacement campaign validation
+
+The replacement campaign in `data/relevance-v2/` completed all 2,397 processes
+in 11,065.2 seconds. The following resolves review findings 1, 2, 3, and 5.
+
+- Transport now uses characteristic DG projection at `dt=h/4` and a common
+  physical horizon `T=1/128`. All six inputs reject unchanged state with a
+  tenfold margin on both coefficient criteria. All 432 actual GPU analytic
+  checks pass, with maximum relative physical L2 error `1.70636e-6`. The
+  independent FP64 refinement errors are `1.05856e-6`, `6.25343e-9`, and
+  `3.47850e-11` for 16, 32, and 64 elements at fixed physical time.
+- Exact transport payloads are archived in checked 64 MiB ZIP parts. A
+  parts-only temporary checkout passed the full 2,397-process analyzer.
+  Missing hashes, altered payloads, bad command metadata, and corrupt or
+  missing parts are covered by rejection regressions. The original unsplit
+  ZIP remains a local convenience and is excluded from Git.
+- The MAGMA core crosses three seeds, three processes per seed, and two
+  timing modes, with twenty samples per method. Independent raw-CSV reduction
+  gives ratios `1.1390938758` and `1.1306437714` for individual and queued
+  products. Configuration wins are 105/128 and 101/128. The corrected large
+  transport trace gives `1.4385603561` over the fastest tested library.
+- The complete reproduction runner includes MAGMA preparation, all transport
+  inputs, comparison build and CTest, and collection under `relevance/`.
+  An orchestration regression checks that routing. The paper build also
+  passed through a results-root view of the validated retained campaigns.
+  The earlier campaigns were not remeasured for this check.
+- Both CUDA correctness suites passed the rebuilt comparison. Transport
+  Compute Sanitizer memcheck reported zero errors. All 21 Python regression
+  tests pass. The 16-page paper and six-page supplement compile twice with
+  no reference or box warnings and pass the punctuation checks.
+
+The current paper and README use the replacement results. The earlier notes
+below retain their original protocols and numbers as historical evidence.
+
+## Earlier findings and resolutions
 
 | Finding | Resolution and evidence |
 | --- | --- |
@@ -51,7 +85,7 @@ The approved eight-minute campaign completed in 299.6 seconds. Its 221 processes
 
 Native metadata now preserves its original archived CRLF bytes through `.gitattributes`, restoring exact input checksums without changing scientific content. The native fill description also acknowledges the few FP32 underflows instead of claiming every stored value is nonzero.
 
-## Current validation
+## Earlier focused-campaign validation
 
 - Current CUDA 13.4 Release builds and both project and MAGMA CTest suites pass. The installed external consumer builds and passes its CPU reference comparison.
 - Compute Sanitizer memcheck reports zero errors for the device API and both MAGMA compositions.

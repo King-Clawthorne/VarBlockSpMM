@@ -115,27 +115,46 @@ one favor direct execution.}\label{tab:native}
 \FloatBarrier
 \section{Transport discretization and follow-up controls}
 For element width \(h\), the modal mass matrix has entries
-\(M_{ii}=h/(2i+1)\). On the reference interval, define
-\(Q_{ij}=\int_{-1}^{1}P_i'(x)P_j(x)\,dx\), which equals two when
-\(i>j\) and \(i-j\) is odd and zero otherwise. The periodic upwind
-transport operator has blocks
+\(M_{ii}=h/(2i+1)\). Set the characteristic displacement fraction to
+\(\theta=\Delta t/h=1/4\). Exact translation followed by elementwise
+\(L^2\) projection gives the stored one-step blocks
 \[
- L^{\mathrm{self}}_{ij}=\frac{2i+1}{h}(Q_{ij}-1),\qquad
- L^{\mathrm{upwind}}_{ij}=\frac{2i+1}{h}(-1)^i.
+ A^{\mathrm{self}}_{ij}=\frac{2i+1}{2}
+ \int_{-1+2\theta}^{1}P_i(\xi)P_j(\xi-2\theta)\,d\xi,
 \]
-The stored matrix is \(I+\Delta t L\), with
-\(\Delta t=0.05h/64^2\). Element polynomial orders repeat
-\(7,15,31,63\). Their unequal modal counts produce the variable block
-sizes directly. All entries in each stored block are nonzero for the
-chosen timestep. Initialization projects \(\sin(2\pi kx)\) for
-\(k=1,\ldots,N\) using 96-point Gauss-Legendre quadrature. The analytic
-comparison projects \(\sin(2\pi k(x-32\Delta t))\) and weights coefficient
-errors by \(h/(2i+1)\). The reported short-trace check is not a long-time
-stability or convergence study.
+\[
+ A^{\mathrm{upwind}}_{ij}=\frac{2i+1}{2}
+ \int_{-1}^{-1+2\theta}P_i(\xi)P_j(\xi+2-2\theta)\,d\xi.
+\]
+The 96-point Gauss-Legendre rule integrates these polynomial products exactly
+up to floating-point roundoff. Element orders repeat \(7,15,31,63\).
+The block product retains each element's own basis and its upstream basis,
+without scalar reblocking. This is a semi-Lagrangian DG update, replacing
+the original forward-Euler experiment. Orthogonal projection after translation
+is nonexpansive in physical \(L^2\) in exact arithmetic.
+
+Initialization projects \(\sin(2\pi kx)\) for \(k=1,\ldots,N\).
+All performance cases reach \(T=1/128\). Their 256, 1,024, and 4,096 elements
+require 8, 32, and 128 products, respectively. Analytic comparisons project
+\(\sin(2\pi k(x-T))\) and weight coefficient errors by \(h/(2i+1)\).
+Every measured method checks its actual GPU result against that physical
+reference as well as the independent repeated sparse-product reference.
+An unchanged-state operation must fail the coefficient tolerances before
+any timing starts. All six prepared inputs exceed a tenfold rejection
+margin in both maximum absolute and relative coefficient error.
+
+A separate FP64 spatial-refinement check keeps \(T=1/16\), the eight initial
+waves, the repeating order schedule, and \(\theta=1/4\) fixed. With 16, 32,
+and 64 elements, the analytic relative errors are
+\(1.059\times10^{-6}\), \(6.253\times10^{-9}\), and
+\(3.478\times10^{-11}\). The preparation script rejects a failure to reduce
+error by at least a factor of four at each refinement. This is a smooth-wave
+spatial-refinement check, not evidence for arbitrary nonlinear problems.
+The FP64 check isolates discretization behavior from quantized FP32 arithmetic.
 
 The trace comparator starts from identical prepared host blocks. Startup
 includes method construction and one complete trace, including the reset
-of its initial device buffer. Common panel allocations and Python assembly
+of its initial device buffer and output poisoning. Common panel allocations and Python assembly
 are excluded. Every method's output is checked against repeated
 FP64 sparse products using the assembled FP32 coefficients. No CPU reference
 work occurs inside timing.

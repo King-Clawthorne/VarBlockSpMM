@@ -1,9 +1,10 @@
 # Focused research follow-up
 
-This follow-up adds a closest-method MAGMA comparison, an application trace,
-controlled workload factors, and a device-input API. The old ablations are not
-rerun. The collector stops at its requested wall-clock cap and retains partial
-evidence without presenting it as a complete campaign.
+The replacement follow-up repeats the closest-method MAGMA comparison across
+seeds, processes, and queue modes, and adds a numerically meaningful transport
+trace. The old ablations remain separate. The collector has no default time cap.
+An explicitly requested `--max-seconds` cap retains incomplete evidence without
+presenting it as a completed campaign.
 
 ## MAGMA comparison
 
@@ -35,27 +36,37 @@ performance of their whole hierarchical algorithm or its larger leaves.
 
 ## Standalone transport application
 
-`scripts/prepare_transport.py` discretizes periodic one-dimensional advection
-with upwind discontinuous Galerkin fluxes in a Legendre modal basis. Element
-orders repeat 7, 15, 31, and 63, giving genuinely variable dense blocks of 8,
-16, 32, and 64 coefficients. Every block row couples its own element and its
-upwind neighbor. The dense neighbor block comes from the modal boundary trace.
-There is no post hoc grouping of scalar nonzeros.
+`scripts/prepare_transport.py` implements periodic one-dimensional advection
+using semi-Lagrangian DG projection in a Legendre modal basis. Element orders
+repeat 7, 15, 31, and 63. Each step translates the field by a quarter cell along
+exact characteristics, then projects onto the receiving basis. Exact polynomial
+overlap integrals produce dense self and upstream blocks of sizes 8, 16, 32,
+and 64. This replaces the archived forward-Euler trace.
 
-`vbsr_transport` advances independent sine-wave initial conditions with 32
-forward-Euler steps. Its two buffers alternate, so successive products are
-dependent. Each timing sample is a whole trace, including the device reset of
-the initial state. Methods use the same initial conditions, step count, and
-assembled FP32 operator. Every output coefficient is checked against repeated
-double-precision sparse products. Preparation separately compares the solution
-with the analytically translated sine waves in the physical L2 norm.
+All performance cases reach physical time `T = 1/128`, with `dt = h/4`.
+Element counts 256, 1024, and 4096 therefore take 8, 32, and 128 products.
+The initial waves have frequencies 1 through the RHS width. The two buffers
+alternate, so successive products are dependent. Each timing sample includes
+the complete trace, the initial-state reset, and output poisoning.
 
-The timestep is `0.05 * element_width / 64^2`. This short trace tests a specific
-transport component, not time-to-solution for a production PDE solver. The
-polynomial-order schedule is prescribed, not an adaptive error estimator.
-Startup records include constructing a method from prepared host blocks and
-one complete trace. They exclude common input-buffer allocation, Python
-assembly, and CPU validation. Steady traces exclude method construction.
+Every final coefficient is checked against repeated FP64 sparse products of
+the same assembled FP32 matrix. Actual GPU output also passes the analytic
+physical L2 check with relative tolerance `2e-3`. Before timing any method, the
+executable must reject returning the unchanged initial state. Preparation
+requires a tenfold rejection margin on both coefficient error limits.
+
+A separate FP64 spatial-refinement study holds physical time `T = 1/16`,
+frequencies 1 through 8, the order schedule, and quarter-cell displacement fixed.
+Refining from 16 to 32 to 64 elements gives physical relative errors
+`1.05856e-6`, `6.25343e-9`, and `3.47850e-11`. Preparation rejects failure to
+reduce error by at least fourfold per refinement. This isolates discretization
+convergence from FP32 arithmetic. The main paper cites the established
+[semi-Lagrangian DG formulation](https://doi.org/10.1051/m2an/2016004).
+
+The order schedule is prescribed. This is a standalone transport component,
+not an adaptive solver or a comparison against DG-specific optimized kernels.
+Startup includes method construction and one completed trace, excluding
+common panel allocation, Python assembly, and reference validation.
 
 ## Controlled factors
 
@@ -87,33 +98,59 @@ GPU-produced or structurally changing matrices.
 
 ## Reproduction
 
-The retained campaign completed all 221 processes in 299.6 seconds, below its
-eight-minute cap. The core ratio including MAGMA is 1.138 with 103/128 direct
-wins. The large RHS-64 transport trace has ratios of 1.438 against the fastest
-library and 1.823 against the faster MAGMA composition. Five of six transport
-configurations favor direct in every process. The smallest RHS-8 case favors
-BSR8. Full rows and controlled contrasts are in the paper and supplement.
+Activate the locked Python environment and select the intended CUDA toolkit.
+The measured Windows environment uses CUDA 13.4. From the repository root:
 
-The accompanying `data/relevance/MAGMA-COPYRIGHT` retains the upstream license
-for MAGMA sources in the evidence archive. The project's MIT license applies
-to the comparison wrapper and original project code.
+```powershell
+$env:CUDAToolkit_ROOT = $env:CUDA_PATH_V13_4
+$env:CUDA_PATH = $env:CUDAToolkit_ROOT
+python scripts/prepare_magma.py
+python scripts/prepare_transport.py --all
+python scripts/build_relevance.py
+python scripts/run_relevance.py --output data/relevance-rerun
+python scripts/run_relevance.py --analyze --output data/relevance-rerun
+python scripts/export_relevance.py --input data/relevance-rerun
+```
 
-Activate the locked Python environment, then run `python scripts/prepare_magma.py`.
-Configure and build the optional CMake targets `vbsr_relevance`, `vbsr_transport`,
-`vbsr_updates`, and `vbsr_magma_tests`, and run CTest. Generate transport inputs
-for element counts 256, 1024, and 4096 and widths 8 and 64 with
-`python scripts/prepare_transport.py --elements <count> --rhs <width>`.
+The collector runs 2,304 core processes: 128 configurations, seeds 2, 3, and 5,
+three processes per seed, and batches of one and eight. Each method receives
+five warmups and twenty timing samples. Queued samples divide elapsed time by
+eight. The buffers remain fixed in this core comparison. Jobs and methods are
+randomized, and GPU processes run serially. It also collects 72 controlled
+processes, 18 transport processes, and three API-update processes, for 2,397
+processes in total. Those controls and traces retain six samples per method,
+and the update experiment retains twenty.
 
-On the validated Windows configuration, set `CUDAToolkit_ROOT` to the installed
-CUDA toolkit and run `python scripts/build_relevance.py` to build these targets,
-run both correctness suites, and write the required build receipt.
+The main headline averages single-product paired log ratios equally over
+configuration, seed, and process. Its wins count 128 configurations after
+averaging seeds and processes. The repeatability table additionally reports
+both modes, seed ranges, process-label ranges, and wins on 96 configuration
+and seed combinations per width. Ranges are descriptive, not confidence
+intervals. The NVIDIA-only campaigns retain their separate protocols.
 
-`python scripts/run_relevance.py --output data/relevance --max-seconds 480`
-collects 128 core processes, 72 controlled processes, 18 transport traces, and
-three update processes. Each ordinary process records six timing samples per
-method. The update experiment records twenty. This deliberately smaller
-protocol remains separate from the earlier twenty-sample campaigns.
+`data/relevance-v2/` is the replacement canonical archive. Its exact input ZIP, stored in 64 MiB parts named `inputs.zip.000` onward,
+contains every exact matrix, initial state, coefficient reference, analytic
+reference, mass-weight vector, metadata file, and the convergence observations.
+The analyzer requires complete coverage, checks each payload hash and extent,
+and verifies the command/metadata protocol and numerical diagnostic records.
+It also validates source snapshots, build receipts, executable hashes, raw
+records, method coverage, trial coverage, and the complete crossed design.
+The analyzer verifies all parts and reconstructs the original ZIP automatically when the local unsplit file is absent. The upstream license is retained as `MAGMA-COPYRIGHT`.
 
-The manifest preserves exact commands, executable hashes, inputs, source files,
-MAGMA revision, raw timing and diagnostic hashes, and the complete design.
-`python scripts/run_relevance.py --analyze` validates the retained evidence.
+The earlier `data/relevance/` archive remains historical evidence. Its near-identity
+Euler traces and single-seed MAGMA headline do not generate current results.
+The analyzer requires explicit `allow_legacy=True` for historical review and
+never silently treats its input hashes as verified archived payloads.
+
+For a complete fresh paper rerun, `scripts/run_final_validation.py` now also
+prepares MAGMA and transport, builds and tests the comparison, and collects it
+under the requested root's `relevance/` directory. The README command sequence
+therefore supplies every campaign required by `build_paper.ps1 -ResultsRoot`.
+
+The completed replacement campaign ran 2,397 processes in 11,065.2 seconds.
+The fastest-library ratios are 1.139 for individual products and 1.131 for
+eight-product batches, with 105 and 101 configuration wins out of 128.
+The 4,096-element/RHS-64 transport trace takes 50.824 ms and gives ratios
+1.439 over the fastest library and 1.833 over the faster MAGMA composition.
+All six cases reject unchanged input, and every measured method passes the
+coefficient and analytic checks.

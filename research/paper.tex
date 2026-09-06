@@ -46,7 +46,7 @@ speedup of \RelevanceCoreRatio{} over the fastest tested library, with
 \RelevanceCoreWins{} direct wins. Wide panels give the strongest advantage.
 A standalone variable-order discontinuous Galerkin transport program
 provides an application trace: at 4,096 elements and 64 simultaneous fields,
-32 dependent steps run \TransportLargeRatio{} times faster than the fastest
+128 dependent steps run \TransportLargeRatio{} times faster than the fastest
 library and \TransportLargeMagmaRatio{} times faster than the better MAGMA
 composition. Smaller and narrow cases retain losses. On the separate
 covariance component, BSR8 wins steady state with a library-to-direct ratio
@@ -105,8 +105,9 @@ favor direct execution.
 \centering
 \includegraphics[width=\linewidth]{generated/magma-use-cases.pdf}
 \caption{Direct execution by panel width on the 128-case core with MAGMA.
-Each point is one configuration on seed 2, measured in one process with
-six timing samples. Lines show geometric means. The right panel includes
+Each point averages paired log ratios over three matrix seeds and three
+processes per seed, with twenty timing samples per process. Lines show
+geometric means across configurations. The right panel includes
 both MAGMA compositions and every applicable NVIDIA control. Horizontal
 offsets separate points. Ratios above one favor direct execution.}
 \label{fig:use-cases}
@@ -539,8 +540,9 @@ policies. The focused protocol and application traces are described below.
 \begin{table}[!htbp]
 \centering\small
 \caption{Choosing an implementation on the 4,096-block-row core, matrix
-seed 2. Ratios divide comparator time by direct time. Each configuration
-uses one process with six samples per method.}
+seeds 2, 3, and 5. Ratios divide comparator time by direct time and average
+in log space over three processes per seed. Each process uses twenty samples
+per method and single-product synchronization.}
 \label{tab:use-cases}
 \input{generated/magma-use-cases.tex}
 \end{table}
@@ -790,7 +792,8 @@ process observations describe repeatability over this campaign, while
 long-term drift and hardware variation require separate measurements.
 The original synthetic grid uses one matrix seed. The full-core follow-up
 adds three matrix seeds, with one process per instance and timing mode.
-The matched and native experiments each use three instances with three
+The replacement MAGMA-inclusive campaign crosses the three seeds with three
+processes per seed in both timing modes. The matched and native experiments each use three instances with three
 processes per instance.
 These chosen workloads do not define a random application population.
 Historical measurements use separate protocols and are excluded from the
@@ -832,13 +835,23 @@ uv sync --locked
 uv run --locked powershell -File scripts/build_paper.ps1
 \end{verbatim}
 The build validates the archives and regenerates tables before compiling
-both PDFs. The README gives fresh-output commands for the five earlier
-campaigns. The focused follow-up has a separate builder and capped runner
-in \path{scripts/build_relevance.py} and \path{scripts/run_relevance.py}.
+both PDFs. The README gives a complete fresh-output workflow, including
+MAGMA preparation, the comparison build, all six transport inputs, and collection
+under the required relevance subdirectory. The comparison also has standalone
+commands in \path{scripts/build_relevance.py} and \path{scripts/run_relevance.py}.
 Its MAGMA revision, transport input recipe, and commands are documented
 in \path{docs/relevance.md}. Python dependencies are pinned in
 \path{pyproject.toml} and \path{uv.lock}. Paper building also uses
 pdfLaTeX and pdftotext.
+
+The replacement archive is \path{data/relevance-v2/}. Its checksummed
+\path{inputs.zip}, stored in checked 64 MiB parts, retains every transport matrix, initial state, numerical
+and analytic reference, mass-weight vector, metadata file, and refinement
+observation. Validation requires complete input coverage, payload hashes,
+expected panel extents, and agreement between commands and physical metadata.
+It also requires the executable's unchanged-state rejection and all GPU
+analytic checks. The earlier \path{data/relevance/} archive is retained for
+historical review and is excluded from current headline results.
 
 \path{scripts/build_verified.py} hashes all compiled inputs before a
 clean build, checks them again afterward, runs CTest, and records the
@@ -936,6 +949,10 @@ Revision \texttt{c3de65f855dd}, accessed 6 September 2026.
 Methods for Convection-Dominated Problems. \emph{Journal of Scientific
 Computing}, 16, 2001, pages 173 to 261.
 \url{https://www.dam.brown.edu/people/shu/pub.html}
+\bibitem{sldg} O. Bokanowski and G. Simarmata. Semi-Lagrangian discontinuous
+Galerkin schemes for some first- and second-order partial differential equations.
+\emph{ESAIM: Mathematical Modelling and Numerical Analysis}, 50(6), 2016,
+pages 1699 to 1730. \url{https://doi.org/10.1051/m2an/2016004}
 \end{thebibliography}
 }
 \end{document}

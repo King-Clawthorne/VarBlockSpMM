@@ -7,7 +7,7 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'scripts'))
 from run_relevance import analyze
 parser=argparse.ArgumentParser(description='Validate and export the focused comparison.')
-parser.add_argument('--input',type=Path,default=ROOT/'data/relevance')
+parser.add_argument('--input',type=Path,default=ROOT/'data/relevance-v2')
 args=parser.parse_args()
 data=analyze(args.input)
 manifest=json.loads((args.input/'manifest.json').read_text())
@@ -21,28 +21,54 @@ def time(r,m):return r['medians'][m]['gpu_ms']
 def ratio(r,m):return time(r,m)/time(r,'direct')
 def magma(r):return min(ratio(r,m) for m in ('magma_slots','magma_reduce'))
 def best(r):return min(ratio(r,m) for m in r['medians'] if m!='direct')
-core=[r for r in data if r['kind']=='core']
+all_core=[r for r in data if r['kind']=='core']
+core=[r for r in all_core if r['batch']==1]
 transport=[r for r in data if r['kind']=='transport']
 controls=[r for r in data if r['kind']=='control']
 def table(name,columns,header,rows):
     text='\\begin{tabular}{'+columns+'}\n\\toprule\n'+header+'\\\\\n\\midrule\n'
     text+='\n'.join(' & '.join(map(str,row))+'\\\\' for row in rows)
     (OUT/name).write_text(text+'\n\\bottomrule\n\\end{tabular}\n')
+def configurations(records, metric=best):
+    grouped=defaultdict(list)
+    for r in records:
+        grouped[tuple(r['args'][:4])+(r['args'][8],)].append(metric(r))
+    return [gm(values) for _,values in sorted(grouped.items())]
+
 rows=[]
 for rhs in (8,16,32,64):
     part=[r for r in core if r['args'][2]==rhs]
     rows.append([rhs,f'{gm(ratio(r,"bsr8") for r in part):.3f}',f'{gm(magma(r) for r in part):.3f}',
-                 f'{gm(best(r) for r in part):.3f}',f'{sum(best(r)>1 for r in part)}/32'])
+                 f'{gm(best(r) for r in part):.3f}',f'{sum(v>1 for v in configurations(part))}/32'])
 table('magma-use-cases.tex','rrrrr','RHS & BSR8 & MAGMA best & Best library & Direct wins',rows)
+core_rows=list(rows)
+repeat_rows=[]
+repeat_summary=[]
+for batch in (1,8):
+    for rhs in (8,16,32,64):
+        part=[r for r in all_core if r['batch']==batch and r['args'][2]==rhs]
+        seeds=[gm(best(r) for r in part if r['args'][4]==seed) for seed in (2,3,5)]
+        processes=[gm(best(r) for r in part if r['process']==process) for process in (0,1,2)]
+        instances=defaultdict(list)
+        for r in part: instances[tuple(r['args'][:5])+(r['args'][8],)].append(best(r))
+        wins=sum(gm(v)>1 for v in instances.values())
+        repeat_rows.append([rhs,batch,f'{gm(best(r) for r in part):.3f}',
+                            f'{min(seeds):.3f} to {max(seeds):.3f}',
+                            f'{min(processes):.3f} to {max(processes):.3f}',f'{wins}/96'])
+        repeat_summary.append(dict(rhs=rhs,batch=batch,ratio=gm(best(r) for r in part),
+                                   seed_ratios=seeds,process_ratios=processes,instance_wins=wins))
+table('magma-repeatability.tex','rrrrrr',
+      'RHS & Batch & Best library & Seed range & Process range & Wins',repeat_rows)
+
 groups=defaultdict(list)
 for r in transport:
     e=int(r['args'][0].split('_e')[1].split('_')[0]);groups[e,r['args'][1]].append(r)
 rows=[]
 for (e,rhs),part in sorted(groups.items()):
-    rows.append([f'{e:,}',rhs,f'{gm(time(r,"direct") for r in part):.3f}',f'{gm(magma(r) for r in part):.3f}',
+    rows.append([f'{e:,}',rhs,part[0]['args'][2],f'{gm(time(r,"direct") for r in part):.3f}',f'{gm(magma(r) for r in part):.3f}',
                  f'{gm(best(r) for r in part):.3f}',f'{sum(best(r)>1 for r in part)}/3'])
 transport_rows=list(rows)
-table('transport.tex','rrrrrr','Elements & RHS & Direct ms & MAGMA best & Best library & Wins',rows)
+table('transport.tex','rrrrrrr','Elements & RHS & Steps & Direct ms & MAGMA best & Best library & Wins',rows)
 groups_control=defaultdict(list)
 for r in controls:groups_control[tuple(r['args'][:4])].append(r)
 rows=[]
@@ -51,7 +77,10 @@ for (nr,d,rhs,s),part in sorted(groups_control.items()):
                  f'{gm(magma(r) for r in part):.3f}',f'{gm(best(r) for r in part):.3f}'])
 table('controlled.tex','rrrrrrrr','Rows & Degree & Size & RHS & Direct ms & BSR8 & MAGMA best & Best library',rows)
 large=groups[4096,64]
-macros=dict(RelevanceCoreRatio=gm(best(r) for r in core),RelevanceCoreWins=sum(best(r)>1 for r in core),
+queued=[r for r in all_core if r['batch']==8]
+macros=dict(RelevanceCoreRatio=gm(best(r) for r in core),RelevanceCoreWins=sum(v>1 for v in configurations(core)),
+            RelevanceQueuedRatio=gm(best(r) for r in queued),
+            RelevanceQueuedWins=sum(v>1 for v in configurations(queued)),
             RelevanceMagmaRatio=gm(magma(r) for r in core),TransportLargeRatio=gm(best(r) for r in large),
             TransportLargeMagmaRatio=gm(magma(r) for r in large))
 (OUT/'relevance-macros.tex').write_text(''.join('\\newcommand{\\'+k+'}{'+(str(v) if isinstance(v,int) else f'{v:.3f}')+'}\n' for k,v in macros.items()))
@@ -88,7 +117,8 @@ ut={name:gm(r['medians'][name]['host_ms'] for r in updates) for name in ('value_
     'two pre-existing device payloads on fixed degree-four structure. Structural cases alternate between '
     'degree-four and degree-eight matrices already on the GPU. Thus this is an API-path cost comparison, '
     'not an equal-work kernel speedup or a measurement of assembling a new structure.\n')
-summary=dict(macros=macros,contrasts=contrasts,updates=ut,transport_rows=transport_rows)
+summary=dict(macros=macros,contrasts=contrasts,updates=ut,transport_rows=transport_rows,
+             core_rows=core_rows,repeatability=repeat_summary,processes=len(data))
 (OUT/'relevance-summary.json').write_text(json.dumps(summary,indent=2))
 print(json.dumps(dict(macros=macros,contrasts=contrasts,updates=ut),indent=2))
 
@@ -101,12 +131,13 @@ fig,axes=plt.subplots(1,2,figsize=(7.2,3.1),sharey=True)
 for ax,fn,title in zip(axes,(lambda r:ratio(r,'bsr8'),best),('Padding-free BSR8','Fastest tested library, including MAGMA')):
     means=[]
     for i,rhs in enumerate((8,16,32,64)):
-        vals=sorted(fn(r) for r in core if r['args'][2]==rhs)
+        vals=sorted(configurations([r for r in core if r['args'][2]==rhs],fn))
         ax.scatter([i+(j-15.5)/90 for j in range(32)],vals,s=9,alpha=.48,color='#487db5',edgecolors='none')
         means.append(gm(vals))
     ax.plot(range(4),means,marker='D',color='#123d65',lw=1.4,ms=4)
     ax.axhline(1,color='.3',ls='--',lw=.8);ax.set_yscale('log',base=2)
-    ax.set_ylim(.75,1.75)
+    all_values=configurations(core,fn)
+    ax.set_ylim(min(.75,min(all_values)*.95),max(1.75,max(all_values)*1.05))
     ax.set_yticks([.75,1,1.25,1.5,1.75])
     ax.yaxis.set_major_formatter(FuncFormatter(lambda value,position:f'{value:g}'))
     ax.yaxis.set_minor_locator(NullLocator())

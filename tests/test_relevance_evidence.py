@@ -19,7 +19,7 @@ class RelevanceEvidenceTests(unittest.TestCase):
             manifest=json.loads((dest/'manifest.json').read_text())
             alter(manifest)
             (dest/'manifest.json').write_text(json.dumps(manifest))
-            with self.assertRaisesRegex(ValueError,error): analyze(dest)
+            with self.assertRaisesRegex(ValueError,error): analyze(dest, allow_legacy=True)
 
     def test_changed_command_is_rejected(self):
         self.check_rejected(lambda m:m['records'][0]['command'].append('unexpected'), 'command')

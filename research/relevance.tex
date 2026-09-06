@@ -11,42 +11,74 @@ Setup validates dimensions before calling the dispatcher used by MAGMA's
 \texttt{max\_nocheck} interface. Its normal launch and attribute-setting
 overhead remains inside timing.
 
-The comparison repeats the 128-case core on matrix seed 2, with one fresh
-process and six timing samples per method. It includes the same explicit
-CSR algorithms, grouped cuBLAS, BSR8, and applicable BSR32 controls, plus
-both MAGMA compositions. This smaller follow-up is separate from the
-three-seed and queued campaigns. The related hierarchical study reports
+The replacement comparison crosses all 128 core configurations with matrix
+seeds 2, 3, and 5, three fresh processes per seed, and batches of one or
+eight products. Each process records twenty timing samples per method,
+for 2,304 core processes. Eight-product samples divide elapsed time by eight.
+They reuse the same input and output buffers and synchronize once per batch.
+Methods and jobs are randomized, with all GPU processes run serially.
+The comparator set includes the explicit CSR algorithms, grouped cuBLAS,
+BSR8, applicable BSR32, and both MAGMA compositions. This campaign is separate
+from the original NVIDIA-only campaigns. The related hierarchical study reports
 leaf sizes of 64 to 256, whereas this implementation supports 8 to 64 in
 steps of eight. The comparison therefore measures the compatible block
 product, not that study's larger leaves or complete construction algorithm.
 
-\paragraph{An application trace.}
-A standalone periodic transport example solves \(u_t+u_x=0\) with an
-upwind discontinuous Galerkin discretization in a Legendre modal basis [13].
-Prescribed element orders repeat 7, 15, 31, and 63. The resulting blocks
-have sizes 8, 16, 32, and 64, with dense self and upwind-neighbor couplings.
-Their block structure comes from the discretization, not a partition of
-scattered scalar entries. The program advances ensembles of sine waves
-through 32 forward-Euler steps using alternating device buffers. Each
-timing sample includes the complete dependent trace and a device copy
-that resets the initial state. All methods use the same FP32 operator.
-Every final coefficient is checked against double-precision sparse
-products. A separate physical \(L^2\) check compares with the analytically
-translated waves. The largest relative error among the six prepared
-cases is below \(4.2\times10^{-7}\).
-
-Element counts are 256, 1,024, and 4,096, and ensemble widths are 8 and 64.
-Each case has three fresh processes, with six trace samples per method.
-The timestep is \(0.05h/64^2\), where \(h\) is the element width.
-This tests a short transport component, not production time-to-solution
-or an adaptive-order solver. The full discretization and retained startup
-observations are described in the supplement.
-The comparison replaces the generic block-product backend. It does not
-compare DG-specific kernels that exploit the modal operator's algebra.
+\paragraph{Repeatability.}
+The headline and width plot use single-product timings. A configuration ratio
+averages paired log ratios equally over three seeds and three processes per
+seed. Table~\ref{tab:magma-repeatability} retains both timing modes. Its wins
+use the three-process geometric mean for each configuration and seed.
+Seed ranges average over processes, and process-label ranges average over
+seeds. These descriptive ranges are not confidence intervals. Repeating both
+factors avoids using timing trials as independent matrix samples.
 
 \begin{table}[!htbp]
 \centering\small
-\caption{Complete 32-step transport traces. Ratios divide comparator time
+\caption{Repeated MAGMA-inclusive comparisons. Each width and batch contains
+32 configurations, three seeds, and three processes per seed. Ratios above
+one favor direct. Wins count 96 configuration and seed combinations.}
+\label{tab:magma-repeatability}
+\input{generated/magma-repeatability.tex}
+\end{table}
+
+The overall ratios are \RelevanceCoreRatio{} for individual products and
+\RelevanceQueuedRatio{} for batches of eight. The corresponding configuration
+win counts, averaged across both seeds and processes, are
+\RelevanceCoreWins{} and \RelevanceQueuedWins{} out of 128.
+
+\paragraph{An application trace.}
+A standalone periodic transport example solves \(u_t+u_x=0\) using
+semi-Lagrangian discontinuous Galerkin projection in a Legendre modal basis [14].
+Prescribed element orders repeat 7, 15, 31, and 63, giving block sizes
+8, 16, 32, and 64. Each step translates the field by one quarter cell along
+exact characteristics, then projects it onto the receiving element basis.
+The self and upwind-neighbor overlap integrals define the two dense blocks
+in each row. Their structure comes directly from the discretization.
+
+All six cases reach the same physical time \(T=1/128\), with
+\(\Delta t=h/4\). Element counts 256, 1,024, and 4,096 therefore take
+8, 32, and 128 dependent products, respectively. Ensemble widths are 8 and 64.
+Each case has three fresh processes and six trace samples per method.
+A sample includes the entire alternating-buffer trace, an initial-state
+reset, and output poisoning. All methods use the same assembled FP32 matrix.
+Every final coefficient is compared with repeated double-precision sparse
+products. The actual GPU output also passes a physical \(L^2\) comparison
+with the analytically translated waves, with relative tolerance \(2\times10^{-3}\).
+The executable must reject unchanged input before measuring any method.
+Preparation requires more than a tenfold rejection margin on both coefficient
+error criteria. A separate FP64 spatial-refinement study at fixed physical
+time checks the discretization without the FP32 arithmetic floor.
+
+This replaces the original near-identity forward-Euler trace. The old trace
+remains historical evidence and does not contribute to current results.
+The full overlap equations, refinement observations, and startup definition
+are in the supplement. This remains a standalone transport component with
+prescribed orders. It does not compare optimized DG-specific implementations.
+
+\begin{table}[!htbp]
+\centering\small
+\caption{Complete transport traces to \(T=1/128\). Ratios divide comparator time
 by direct time and first average paired process ratios in log space.
 The best-library column includes both MAGMA compositions and all tested
 NVIDIA controls. Times are direct GPU milliseconds per trace.}

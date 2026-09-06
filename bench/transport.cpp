@@ -5,6 +5,7 @@
 #include <iostream>
 #include <random>
 #include <algorithm>
+#include <cmath>
 #include <magma_v2.h>
 
 namespace b = vbsr::bench;
@@ -28,13 +29,35 @@ int main(int argc,char** argv) {
     auto host=b::load_application(base+".bin").packed;
     auto size=b::panel_elements(host.scalar_rows(),rhs);
     auto initial=read_panel(base+".input",size), reference=read_panel(base+".reference",size);
+    auto exact=read_panel(base+".exact",size);
+    auto weights=read_panel(base+".weights",size_t(host.scalar_rows()));
     if(magma_init()!=MAGMA_SUCCESS) throw std::runtime_error("MAGMA init failed");
     {
       b::DeviceBuffer<float> original(size), x(size), y(size);
       original.upload(initial);
+      bool identity_rejected=false;
+      try { b::verify_output(reference,original.data()); }
+      catch(const std::runtime_error&) { identity_rejected=true; }
+      if(!identity_rejected) throw std::runtime_error("unchanged-state negative control was accepted");
+      std::cerr << "identity_negative_control,rejected\n";
       auto reset=[&] { b::check_cuda(cudaMemcpyAsync(x.data(),original.data(),size*sizeof(float),cudaMemcpyDeviceToDevice)); };
       float* result=steps%2 ? y.data() : x.data();
-      auto validate=[&] { b::verify_output(reference,result); };
+      auto validate=[&] {
+        b::verify_output(reference,result);
+        std::vector<float> actual(size);
+        b::check_cuda(cudaMemcpy(actual.data(),result,size*sizeof(float),cudaMemcpyDeviceToHost));
+        double error=0, norm=0;
+        for(size_t i=0;i<size;++i) {
+          double w=weights[i%weights.size()], difference=double(actual[i])-exact[i];
+          if(!(w>0) || !std::isfinite(w) || !std::isfinite(exact[i]))
+            throw std::runtime_error("invalid analytic reference or mass weight");
+          error+=w*difference*difference; norm+=w*double(exact[i])*exact[i];
+        }
+        double relative=std::sqrt(error/norm);
+        if(!std::isfinite(relative) || relative>2e-3)
+          throw std::runtime_error("GPU transport analytic L2 check failed");
+        std::cerr << "analytic_relative_l2," << relative << '\n';
+      };
       std::vector<std::string> methods={"direct","magma_slots","magma_reduce","bsr8","csr1","csr2","csr3","grouped"};
       std::shuffle(methods.begin(),methods.end(),std::mt19937(seed));
       b::print_environment(&host); b::print_timing_header();
@@ -44,6 +67,7 @@ int main(int argc,char** argv) {
         auto run=[&](auto&& execute) {
           auto operation=[&](int) {
             reset();
+            b::check_cuda(cudaMemsetAsync(y.data(),0xff,size*sizeof(float)));
             for(int step=0;step<steps;++step)
               execute(step,step%2?y.data():x.data(),step%2?x.data():y.data());
           };
@@ -51,7 +75,7 @@ int main(int argc,char** argv) {
           auto ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count();
           std::cerr<<"startup_trace_ms,"<<name<<","<<ms<<"\n";
           validate();
-          // Each timing observation is a complete dependent 32-step trace.
+          // Each observation reaches the same physical time, T=1/128.
           b::measure(name,operation,validate,reps,pos);
         };
         if(name=="direct") {

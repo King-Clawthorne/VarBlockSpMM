@@ -6,7 +6,8 @@ The current paper uses these retained inputs and measurements:
 | --- | --- |
 | `product-evaluation/` | Final synthetic, published-matrix, native-component, and matched-control campaigns, with build receipts, source snapshots, raw trials, and validation records |
 | `robustness/` | Full core grid on seeds 2, 3, and 5 with individual and eight-product queued timing, retaining 768 processes in checksummed archives |
-| `relevance/` | Bounded MAGMA, transport, controlled-factor, and API-update follow-up with 221 processes, source and raw archives, and upstream MAGMA copyright |
+| `relevance-v2/` | Replacement MAGMA comparison across three seeds, three processes per seed, and two queue modes, plus characteristic DG transport, exact input payloads, source and raw archives |
+| `relevance/` | Historical 221-process follow-up with single-seed MAGMA and near-identity Euler traces, excluded from current headlines |
 | `narrow-tuning/`, `narrow-tuning-2/` | Development sweeps on seed 4, kept separate from the final evaluation |
 | `native/*.json`, `native/*-geometry.npz` | Native input descriptions and geometry used to reconstruct the large binary matrices |
 | `application/` | Published-matrix inputs and earlier tracked results |

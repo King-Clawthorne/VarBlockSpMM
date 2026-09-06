@@ -9,18 +9,20 @@
 int main(int argc, char** argv) {
   namespace b = vbsr::bench;
   try {
-    if (argc != 9 && argc != 10) throw std::invalid_argument("usage: relevance rows degree rhs shape seed reps order input-file-or-none [locality]");
+    if (argc < 9 || argc > 11) throw std::invalid_argument("usage: relevance rows degree rhs shape seed reps order input-file-or-none [locality] [batch-size]");
     int rows = b::parse_integer<int>(argv[1], "rows"), degree = b::parse_integer<int>(argv[2], "degree");
     int rhs = b::parse_integer<int>(argv[3], "rhs"), shape = b::parse_integer<int>(argv[4], "shape");
     unsigned seed = b::parse_integer<unsigned>(argv[5], "seed"), order = b::parse_integer<unsigned>(argv[7], "order");
     int reps = b::parse_integer<int>(argv[6], "reps");
+    int batch = argc == 11 ? b::parse_integer<int>(argv[10], "batch-size") : 1;
+    if (batch != 1 && batch != 8) throw std::invalid_argument("batch-size must be 1 or 8");
     b::validate_panel_width(rhs); b::validate_repetitions(reps);
     vbsr::HostMatrix host;
     if (std::string(argv[8]) != "none") host = b::load_application(argv[8]).packed;
     else {
       if (degree < 1 || degree > rows) throw std::invalid_argument("degree must be in [1,rows]");
       auto distribution = shape==-3 ? vbsr::Distribution::Uniform : shape==-2 ? vbsr::Distribution::LowVariance : shape==-1 ? vbsr::Distribution::HighVariance : vbsr::Distribution::Bimodal;
-      bool local=argc==10 ? b::parse_locality(argv[9]) : false;
+      bool local=argc>=10 ? b::parse_locality(argv[9]) : false;
       host = vbsr::generate({rows,rows,std::min(degree,16),rhs,distribution,local,seed});
       if (shape>0) {
         if (shape < 8 || shape > 64 || shape % 8) throw std::invalid_argument("shape must be 0 or a supported size");
@@ -65,18 +67,18 @@ int main(int argc, char** argv) {
         b::check_cuda(cudaMemset(dc.data(),0xff,dc.size()*sizeof(float)));
         if (name=="direct") {
           vbsr::Plan plan(matrix.device_view(),{rhs});
-          b::measure(name,[&](int){plan.execute(db.data(),dc.data());},validate,reps,pos);
+          b::measure(name,[&](int){plan.execute(db.data(),dc.data());},validate,reps,pos,batch);
         } else if (name.starts_with("magma")) {
           b::MagmaPlan plan(host,matrix.device_view(),db.data(),dc.data(),rhs,name=="magma_reduce");
-          b::measure(name,[&](int){plan.execute();},validate,reps,pos);
+          b::measure(name,[&](int){plan.execute();},validate,reps,pos,batch);
         } else if (name=="grouped") {
           vbsr::GroupedGemmPlan plan(host,rhs,true);
-          b::measure(name,[&](int){plan.execute(db.data(),dc.data());},validate,reps,pos);
+          b::measure(name,[&](int){plan.execute(db.data(),dc.data());},validate,reps,pos,batch);
         } else {
           bool bsr=name.starts_with("bsr");
           int alg=bsr ? 0 : name.back()-'0';
           vbsr::ScalarCsrPlan plan(host,rhs,alg,alg==1||alg==3,bsr,name=="bsr32"?32:8);
-          b::measure(name,[&](int){plan.execute(db.data(),dc.data());},validate,reps,pos);
+          b::measure(name,[&](int){plan.execute(db.data(),dc.data());},validate,reps,pos,batch);
         }
       }
     }

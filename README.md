@@ -6,16 +6,16 @@ VarBlockSpMM executes directly on your packed blocks. It avoids scalar CSR expan
 
 ## When to use it
 
-The comparison including **MAGMA variable-size batched GEMM** gives a **1.138x geometric-mean speedup over the fastest tested library**, with 103/128 direct wins on the full core grid. It tests both slot-based MAGMA and batched products followed by reduction. Each configuration uses matrix seed 2, one process, and six timing samples.
+The comparison including **MAGMA variable-size batched GEMM** gives a **1.139x geometric-mean speedup over the fastest tested library**, with 105/128 direct wins on the full core grid. It tests both slot-based MAGMA and batched products followed by reduction. The replacement campaign crosses seeds 2, 3, and 5 with three fresh processes per seed and both single-product and eight-product queued timings. Each method receives twenty samples per process. Headline ratios average paired log ratios over all seeds and processes in single-product mode. Eight-product queued execution gives 1.131x and 101/128 configuration wins.
 
 | RHS width | Over BSR8 | Over faster MAGMA | Over fastest library | Direct wins |
 | --- | --- | --- | --- | --- |
-| 8 | 1.076x | 2.357x | 1.052x | 25/32 |
-| 16 | 1.093x | 2.132x | 1.048x | 24/32 |
-| 32 | 1.127x | 1.598x | 1.087x | 22/32 |
-| 64 | 1.451x | 2.057x | 1.401x | 32/32 |
+| 8 | 1.083x | 2.385x | 1.060x | 27/32 |
+| 16 | 1.090x | 2.098x | 1.045x | 24/32 |
+| 32 | 1.128x | 1.593x | 1.088x | 22/32 |
+| 64 | 1.446x | 2.019x | 1.398x | 32/32 |
 
-A standalone variable-order discontinuous Galerkin transport program provides a dependent application trace. At 4,096 elements and RHS 64, its 32 steps are **1.438x faster than the fastest tested library** and **1.823x faster than the faster MAGMA composition**. Direct execution wins five of the six tested element-count/width configurations in all three process repetitions. BSR8 wins the smallest RHS-8 case. The program checks every final coefficient against a CPU reference and checks the discretization against the analytic transport solution.
+A standalone variable-order discontinuous Galerkin transport program provides a dependent application trace. At 4,096 elements and RHS 64, its 128 steps to physical time `T = 1/128` are **1.439x faster than the fastest tested library** and **1.833x faster than the faster MAGMA composition**. Direct execution wins five of the six tested element-count/width configurations in all three process repetitions. The smallest RHS-8 case favors BSR8 in the process-averaged result, with one of three processes favoring direct. Each quarter-cell characteristic DG update translates and projects the field. The program checks every final coefficient against a CPU reference, checks actual GPU output against the analytic solution, and requires rejection of unchanged input. A separate fixed-time FP64 spatial-refinement study verifies convergence.
 
 The separate three-seed NVIDIA-library campaign retains its 1.139x individual-product and 1.132x queued-product results. Those measurements exclude MAGMA and use twenty timing samples per process. Their protocols and aggregates remain separate from this focused comparison. The [supplement](research/supplement.pdf) retains detailed controls and historical evidence, and [follow-up documentation](docs/relevance.md) gives the MAGMA compatibility boundary and transport equations.
 
@@ -40,7 +40,8 @@ Here `host` contains your validated packed matrix, and the dense buffers use col
 The evaluation includes:
 
 - 168 synthetic configurations, each repeated in three fresh processes.
-- A separate full-core follow-up on matrix seeds 2, 3, and 5, comparing synchronization after one product with synchronization after eight queued products. Each seed and mode uses one process per configuration, for 768 processes.
+- A MAGMA-inclusive full core campaign with three seeds, three processes per seed, and two queue modes, retaining 2,304 core processes plus 93 transport, factor-control, and update processes.
+- A separate NVIDIA-only full-core follow-up on matrix seeds 2, 3, and 5, comparing synchronization after one product with synchronization after eight queued products. Each seed and mode uses one process per configuration, for 768 processes.
 - Explicit cuSPARSE CSR algorithms with persistent setup and preprocessing, cached grouped cuBLAS, and changing-address controls with stream-ordered device pointer generation.
 - Padding-free BSR8 subdivision on every variable-block input, plus BSR32 on uniform inputs.
 - Three published scalar sparse matrices with artificial partitions and compact-CSR controls.
@@ -66,13 +67,15 @@ The full-output tests poison output before each comparison, reject a deliberatel
 The paper environment uses Python 3.13 and uv. Install its pinned dependencies with `uv sync --locked`, then activate `.venv` before running the commands below (`.venv\Scripts\Activate.ps1` in PowerShell, or `source .venv/bin/activate` on Linux). The `paper` dependency group captures NumPy, SciPy, Requests, Matplotlib, and their required dependencies from the validated environment. PDF building additionally requires pdfLaTeX and pdftotext.
 
 ```powershell
+$env:CUDAToolkit_ROOT = $env:CUDA_PATH_V13_4
+$env:CUDA_PATH = $env:CUDAToolkit_ROOT
 python scripts/prepare_application.py
 python scripts/prepare_native.py
 python scripts/run_final_validation.py --output-root data/rerun
 powershell -File scripts/build_paper.ps1 -ResultsRoot data/rerun
 ```
 
-The final runner performs a verified build, CTest, memcheck, and filtered racecheck, then runs the five earlier GPU campaigns serially into the specified fresh root. The focused MAGMA/transport comparison is separate, as described in `docs/relevance.md`. A fresh `-ResultsRoot` paper build also requires that comparison under its `relevance/` subdirectory. It can take substantial time. Benchmark runners verify a build receipt tying compiled source hashes to the actual executable bytes, and snapshot the source used for each campaign. Existing records are resumed only with matching provenance and commands. Run `scripts/build_paper.ps1` without `-ResultsRoot` to rebuild the checked-in paper from its canonical campaigns instead.
+The final runner performs a verified build, memcheck, and filtered racecheck, then runs the five earlier GPU campaigns serially into the specified fresh root. It also fetches the pinned MAGMA sources, prepares all six transport inputs and the convergence study, builds and runs both comparison correctness suites through CTest, and collects the complete MAGMA/transport campaign under that root's `relevance/` directory. This supplies every campaign required by the following paper-build command. It can take substantial time. Benchmark runners verify a build receipt tying compiled source hashes to the actual executable bytes, and snapshot the source used for each campaign. Existing records are resumed only with matching provenance and commands. Run `scripts/build_paper.ps1` without `-ResultsRoot` to rebuild the checked-in paper from its canonical campaigns instead.
 
 Use individual runners and fresh output directories for independent repetitions:
 
@@ -88,7 +91,7 @@ python -m unittest discover -s tests -p 'test_*.py'
 
 Native binary arrays are large and excluded from Git. Their generator, geometry, partition metadata, assembly observations, and checksums are retained. `prepare_native.py` reconstructs identical binaries while preserving the archived CPU assembly observations. `--output` with a fresh directory remeasures preparation.
 
-The canonical campaigns are under `data/product-evaluation/`, in `synthetic/`, `published/`, `native/`, and `ablation/`. Sanitizer records are in its `validation/` subdirectory. The analyzers reject checksum, build receipt, design, command, process, method, and timing inconsistencies before emitting tables.
+The replacement MAGMA/transport archive is `data/relevance-v2/`, including exact transport payloads stored as `inputs.zip.000` through `inputs.zip.003`. The analyzer checks and reconstructs these parts automatically. The earlier `data/relevance/` archive remains historical and does not generate the current headline. The original canonical campaigns are under `data/product-evaluation/`, in `synthetic/`, `published/`, `native/`, and `ablation/`. Sanitizer records are in its `validation/` subdirectory. The analyzers reject checksum, build receipt, design, command, process, method, and timing inconsistencies before emitting tables.
 
 ## API contract
 
