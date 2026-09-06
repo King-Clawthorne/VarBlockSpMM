@@ -6,20 +6,24 @@ VarBlockSpMM executes directly on your packed blocks. It avoids scalar CSR expan
 
 ## When to use it
 
-On the 128-case synthetic core grid, direct execution is **1.175 times faster than BSR8 overall**, winning **124 of 128 cases**. It is **1.137 times faster than the fastest tested library option overall**, winning **103 of 128 cases**. These are geometric means of paired process ratios on one RTX 5060 Ti.
+Across the full 128-case core on three additional matrix seeds, direct execution has a **1.139x geometric-mean speedup over the fastest tested library for individual products** and **1.132x for batches of eight queued products**. It wins 308/384 individual-product comparisons and 304/384 queued comparisons on one RTX 5060 Ti.
 
-| RHS width | Speedup over BSR8 | Speedup over fastest tested library | Wins over all tested libraries |
-| --- | --- | --- | --- |
-| 8 | 1.078x | 1.057x | 26/32 |
-| 16 | 1.086x | 1.042x | 24/32 |
-| 32 | 1.128x | 1.087x | 21/32 |
-| 64 | 1.444x | 1.397x | 32/32 |
+| RHS width | Individual speedup | Queued speedup | Individual wins | Queued wins |
+| --- | --- | --- | --- | --- |
+| 8 | 1.056x | 1.050x | 75/96 | 73/96 |
+| 16 | 1.046x | 1.034x | 72/96 | 72/96 |
+| 32 | 1.091x | 1.086x | 65/96 | 64/96 |
+| 64 | 1.395x | 1.392x | 96/96 | 95/96 |
 
-The library comparison includes explicit CSR algorithms, cached grouped cuBLAS, BSR8, and BSR32 on uniform blocks. Each width includes all four shape distributions, two locality patterns, and four degrees at 4,096 block rows, with three processes per configuration.
+Each width includes four shape distributions, two locality patterns, four degrees, and matrix seeds 2, 3, and 5 at 4,096 block rows. Each seed and timing mode has one fresh process per configuration. The library comparison includes explicit CSR algorithms, cached grouped cuBLAS, BSR8, and BSR32 on uniform inputs. The geometric-mean speedups over BSR8 alone are 1.178x for individual products and 1.173x for queued products.
+
+The original seed-1 campaign remains in the paper as a separate three-process comparison. Its best-library ratio is 1.137x with 103/128 wins. The new seed ranges and timing-mode results support the same width-dependent performance pattern.
 
 Use the direct plan when your application already produces dense variable blocks and you want to retain that layout. Wider panels benefit from sharing input tiles across rows and reusing each sparse value across RHS columns. Widths 8 and 16 use a 64-thread CTA with full-panel accumulation, selected through measured comparisons with alternative kernels.
 
 Direct execution can also be useful for matrices that change frequently or are used for only a few products, since converting to a library format has a setup cost. On the generated native component, startup from prepared host formats is 3.953 times faster than the best tested library alternative, including one completed product. Compact scalar CSR uses 1.948 times the explicit device storage of the direct representation on those inputs. The paper reports those costs separately from steady-state speed and distinguishes already prepared blocks from CPU assembly.
+
+On that native component, BSR8 is faster in steady state, with a library-to-direct ratio of 0.390. Including CPU assembly also favors the libraries at every reported reuse count. The startup benefit therefore applies to the stated prepared-input starting point.
 
 The paper's width table compares direct execution with both BSR8 and the fastest tested library method per case. Compact CSR remains the appropriate control for scattered scalar nonzeros, and dense SGEMM is included for high overall density. These comparisons help identify whether your input fits the direct kernel's strengths.
 
@@ -33,9 +37,10 @@ Here `host` contains your validated packed matrix, and the dense buffers use col
 
 ## Comparisons and evidence
 
-The final evaluation includes:
+The evaluation includes:
 
 - 168 synthetic configurations, each repeated in three fresh processes.
+- A separate full-core follow-up on matrix seeds 2, 3, and 5, comparing synchronization after one product with synchronization after eight queued products. Each seed and mode uses one process per configuration, for 768 processes.
 - Explicit cuSPARSE CSR algorithms with persistent setup and preprocessing, cached grouped cuBLAS, and changing-address controls with stream-ordered device pointer generation.
 - Padding-free BSR8 subdivision on every variable-block input, plus BSR32 on uniform inputs.
 - Three published scalar sparse matrices with artificial partitions and compact-CSR controls.
@@ -48,7 +53,7 @@ The tables report each panel width and the full comparison grid. Numerical resul
 
 ## Build and correctness
 
-The Windows reference workflow requires CUDA 13.4, Visual Studio 2022 Build Tools, and CMake 3.25 or newer. Host translation units use the compiler's C++26 draft mode, and CUDA translation units use C++20.
+The library uses C++20 for both host and CUDA sources and requires CMake 3.25 or newer. The configured toolkit minimum is CUDA 12.6 to include both grouped GEMM and generic BSR SpMM. The measured Windows configuration is CUDA 13.4 with Visual Studio 2022 Build Tools. Earlier toolkits and other operating systems have not been runtime validated. Set `CUDAToolkit_ROOT` to choose a toolkit explicitly. The verified runner also checks `CUDA_PATH`, while ordinary CMake builds use CMake's toolkit discovery.
 
 ```powershell
 scripts/build.ps1
@@ -58,7 +63,7 @@ The full-output tests poison output before each comparison, reject a deliberatel
 
 ## Reproduce the paper
 
-Python preparation dependencies are NumPy, SciPy, Requests, and Matplotlib. PDF building additionally requires pdfLaTeX and pdftotext.
+The paper environment uses Python 3.13 and uv. Install its pinned dependencies with `uv sync --locked`, then activate `.venv` before running the commands below (`.venv\Scripts\Activate.ps1` in PowerShell, or `source .venv/bin/activate` on Linux). The `paper` dependency group captures NumPy, SciPy, Requests, Matplotlib, and their required dependencies from the validated environment. PDF building additionally requires pdfLaTeX and pdftotext.
 
 ```powershell
 python scripts/prepare_application.py
@@ -94,3 +99,31 @@ The canonical campaigns are under `data/product-evaluation/`, in `synthetic/`, `
 Library plans own mutable handles and metadata. Order calls to one plan on one stream, or externally synchronize across streams and host threads. Grouped GEMM refreshes pointers on the execution stream and safely supports queued address changes.
 
 See the [design](docs/design.md), [prior-art discussion](docs/prior-art.md), and [review closure record](research/review-closure.md).
+
+## Install and use from another project
+
+VarBlockSpMM is a standalone library. The consumer example checks its installed public API without depending on the benchmark code.
+
+```powershell
+cmake -S . -B build/package -DCMAKE_CUDA_ARCHITECTURES=native -DVARBLOCKSPMM_BUILD_BENCHMARKS=OFF -DBUILD_TESTING=OFF
+cmake --build build/package --config Release
+cmake --install build/package --config Release --prefix "$PWD/build/install"
+cmake -S examples/consumer -B build/consumer "-DCMAKE_PREFIX_PATH=$PWD/build/install"
+cmake --build build/consumer --config Release
+ctest --test-dir build/consumer -C Release --output-on-failure
+```
+
+Consumers use `find_package(VarBlockSpMM CONFIG REQUIRED)` and link `VarBlockSpMM::varblockspmm`. The export supplies headers, the C++20 requirement, and CUDA library dependencies. Choose a CUDA architecture supported by the toolkit and target GPU. The native architecture used in local measurements does not establish binary portability to other GPUs.
+
+## License
+
+Original project code is available under the [MIT license](LICENSE). NVIDIA libraries and the downloaded Harwell-Boeing matrix inputs retain their respective third-party terms. The project license does not relicense those dependencies or input datasets.
+
+## Additional seeds and queued throughput
+
+```powershell
+python scripts/run_robustness.py --output data/robustness-rerun
+python scripts/export_robustness.py --input data/robustness-rerun
+```
+
+The default paper build validates the retained `data/robustness/` archive. A full `run_final_validation.py` rerun also collects this follow-up under its output root. The original three-process, seed-1 campaign remains separately identifiable. Queued measurements report time per product across batches of eight with one synchronization per batch. They use the same mathematical operation and retained library sources.

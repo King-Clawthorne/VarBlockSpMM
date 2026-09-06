@@ -127,7 +127,11 @@ void verify_probes(const vbsr::HostMatrix& matrix, const std::vector<float>& inp
 }
 
 void measure(std::string_view name, const std::function<void(int)>& operation,
-             const std::function<void()>& validate, int reps, int position) {
+             const std::function<void()>& validate, int reps, int position, int batch_size) {
+  if (batch_size < 1 || batch_size > 1024)
+    throw std::invalid_argument("batch size must be between 1 and 1024");
+  if (reps < 2 || reps > std::numeric_limits<int>::max() / batch_size)
+    throw std::invalid_argument("invalid repetition and batch-size combination");
   for (int i = 0; i < warmup_count; ++i)
     operation(i);
   check_cuda(cudaDeviceSynchronize());
@@ -136,7 +140,8 @@ void measure(std::string_view name, const std::function<void(int)>& operation,
   for (int i = 0; i < reps; ++i) {
     auto start = std::chrono::steady_clock::now();
     check_cuda(cudaEventRecord(begin.get()));
-    operation(i);
+    for (int queued = 0; queued < batch_size; ++queued)
+      operation(i * batch_size + queued);
     check_cuda(cudaEventRecord(end.get()));
     check_cuda(cudaEventSynchronize(end.get()));
     auto finish = std::chrono::steady_clock::now();
@@ -145,6 +150,8 @@ void measure(std::string_view name, const std::function<void(int)>& operation,
     double host = std::chrono::duration<double, std::milli>(finish - start).count();
     if (!(gpu > 0) || !std::isfinite(gpu))
       throw std::runtime_error("invalid timing");
+    gpu /= batch_size;
+    host /= batch_size;
     std::cout << name << ',' << position << ',' << i << ',' << gpu << ',' << host << '\n';
   }
   validate();

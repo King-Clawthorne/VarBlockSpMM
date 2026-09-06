@@ -91,6 +91,6 @@ void verify_output(const std::vector<float>& reference, const float* output);
 // Keep warmup indices, event placement, validation, and CSV schema consistent
 // across both audit executables. Raw timings belong to the executable that ran.
 void measure(std::string_view name, const std::function<void(int)>& operation,
-             const std::function<void()>& validate, int repetitions, int position);
+             const std::function<void()>& validate, int repetitions, int position, int batch_size = 1);
 
 } // namespace vbsr::bench

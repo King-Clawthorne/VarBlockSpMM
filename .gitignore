@@ -1,4 +1,5 @@
 /build/
+/.venv/
 /data/*.sqlite
 /data/*.nsys-rep
 /data/*.ncu-rep
@@ -25,3 +26,9 @@ __pycache__/
 !/data/native/
 !/data/native/*.json
 !/data/native/*-geometry.npz
+
+# Validated additional-seed and queued-throughput evidence.
+!/data/robustness/
+!/data/robustness/manifest.json
+!/data/robustness/source_snapshot.zip
+!/data/robustness/runs.zip

@@ -30,13 +30,24 @@ BSR32 wins 22 of 32 uniform cases, and compact CSR wins all twelve published-mat
 
 The paper now leads with the execution, startup, and storage benefits and identifies the input conditions where they apply. It retains the full comparison tables, including the cases where another implementation is preferable.
 
+## Follow-up review resolutions
+
+The standalone scope is explicit. No external solver integration or application speedup is claimed. The contribution is the packed-block execution policy and its measured performance boundary against library conversions.
+
+The complete 128-configuration core was repeated on independent matrix seeds 2, 3, and 5, with one fresh process per seed, configuration, and timing mode. All 768 processes completed, retaining 639,360 timed products. Individual-product synchronization gives a fastest-library-to-direct geometric mean of 1.139 with 308 wins out of 384. Queuing eight products before synchronization gives 1.132 with 304 wins. RHS 64 reaches about 1.39 in both modes. Every width has an aggregate advantage on each new seed in both modes. These observations complement the original three-process campaign without treating seeds as repeated processes.
+
+The retained `data/robustness/` manifest, source snapshot, and raw archive validate against the measured executable. Independent raw aggregation reproduces the reported totals and ratios. The library source hash matches the original campaigns. Later CLI overflow guards and build configuration corrections are outside the archived measured harness.
+
+Adoption changes include C++20, toolkit discovery, an exported CMake package, an installed consumer with full CPU output comparison, and the author-selected MIT license. `pyproject.toml` and `uv.lock` define the Python environment. A fresh environment passes the evidence tests and reproduces a retained native input's geometry and binary checksum.
+
 ## Validation
 
-- Release build and CTest pass with full-output reference checks.
+- Release build and CTest pass with full-output reference checks on CUDA 13.4. A separate CUDA 13.1 library build also passes CTest on the same GPU. The installed consumer builds and passes its runtime CPU comparison.
 - Compute Sanitizer memcheck reports zero errors. Racecheck filtered to project row-owned and pointer-refresh kernels reports zero errors and warnings. Logs are in `data/product-evaluation/validation/`.
 - Four Python evidence regression tests pass. Both current campaign analyzers and the separate historical appendix analyzer pass.
 - Independent archive enumeration confirms the process and trial totals and common kernel hash.
-- The paper compiles in two passes. The final pass has no unresolved references or box warnings. All sixteen rendered pages were inspected for layout after replacing forced table placement with normal floats and preventing isolated paragraph lines at page breaks.
+- An eight-product queued audit passes all ten methods and Compute Sanitizer memcheck reports zero errors. Invalid batch sizes and repetition overflow are rejected before allocation.
+- The paper compiles in two passes. The final pass has no unresolved references or box warnings. All seventeen rendered pages were inspected for layout after the follow-up results were added. Tables and figures fit without large interior blank spaces.
 - The paper source, generated TeX tables, and extracted PDF text contain no en dashes, em dashes, or semicolons. The paper build enforces this restriction.
 
 The superseded validated-revision campaign and its companion archives are preserved locally under `build/local-evidence-archive/data/`, including their snapshot-completion notes. The current collector selects compiled source extensions explicitly, and the `data/product-evaluation/` snapshots passed validation without that repair.

@@ -12,12 +12,13 @@ struct Arguments {
   unsigned order_seed;
   bool irregular;
   int repetitions;
+  int batch_size = 1;
 };
 
 Arguments parse_arguments(int count, char** values) {
-  if (count != 10) {
+  if (count != 10 && count != 11) {
     throw std::invalid_argument(
-        "usage: audit rows degree rhs distribution locality seed order_seed irregular reps");
+        "usage: audit rows degree rhs distribution locality seed order_seed irregular reps [batch_size]");
   }
   Arguments args;
   args.generator.block_rows = args.generator.block_cols =
@@ -34,6 +35,13 @@ Arguments parse_arguments(int count, char** values) {
   }
   args.irregular = irregular != 0;
   args.repetitions = bench::parse_integer<int>(values[9], "repetitions");
+  if (count == 11) {
+    args.batch_size = bench::parse_integer<int>(values[10], "batch size");
+    if (args.batch_size < 1 || args.batch_size > 1024)
+      throw std::invalid_argument("batch size must be between 1 and 1024");
+  }
+  if (args.repetitions > std::numeric_limits<int>::max() / args.batch_size)
+    throw std::invalid_argument("repetition and batch-size combination exceeds index range");
   bench::validate_panel_width(args.rhs_width);
   bench::validate_repetitions(args.repetitions);
   return args;
@@ -164,7 +172,7 @@ private:
           if (changing)
             bench::verify_probes(matrix_, host_input_, alternate_output_.data(), args_.rhs_width);
         },
-        args_.repetitions, position);
+        args_.repetitions, position, args_.batch_size);
   }
 
   void measure_sparse(Method method, int position, int algorithm, bool preprocess,

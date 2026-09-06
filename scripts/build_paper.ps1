@@ -41,6 +41,12 @@ python "$PSScriptRoot/analyze_kernel.py"
 if ($LASTEXITCODE -ne 0) { throw 'Kernel result validation failed' }
 python "$PSScriptRoot/analyze_tuning.py"
 if ($LASTEXITCODE -ne 0) { throw 'Narrow development validation failed' }
+if ($ResultsRoot) {
+  python "$PSScriptRoot/export_robustness.py" --input (Join-Path $ResultsRoot 'robustness')
+} else {
+  python "$PSScriptRoot/export_robustness.py"
+}
+if ($LASTEXITCODE -ne 0) { throw 'Robustness result validation failed' }
 Assert-PaperPunctuation (Join-Path $projectRoot 'research/paper.tex')
 Get-ChildItem -LiteralPath (Join-Path $projectRoot 'research/generated') -Filter '*.tex' |
   ForEach-Object { Assert-PaperPunctuation $_.FullName }

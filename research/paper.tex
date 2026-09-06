@@ -29,6 +29,7 @@
 \input{generated/macros.tex}
 \input{generated/kernel-macros.tex}
 \input{generated/supplement-macros.tex}
+\input{generated/robustness-macros.tex}
 \title{VarBlockSpMM: Shape-Aware CUDA Execution for\\Packed Variable-Block Sparse-Dense Products}
 \author{Cohen Brunner Thomas\\\small Independent Research Project}
 \date{6 September 2026}
@@ -36,25 +37,26 @@
 \maketitle
 
 \begin{abstract}
-VarBlockSpMM is a CUDA implementation for applications that already store
-sparse matrices as packed dense blocks with variable row and column sizes.
-It computes FP32 sparse-dense products without scalar expansion, fixed-block
-retiling, output atomics, or execute-time temporary workspace. The kernel
-shares dense input tiles across output rows and reuses each sparse value
-across multiple RHS accumulators. For widths 8 and 16, a 64-thread CTA
-assigns a complete output row to each active thread. On one RTX 5060 Ti,
-the 128-case synthetic core gives geometric comparator-to-direct time
-ratios of \AuditCsr{} for the best tested CSR algorithm, \AuditGrouped{}
-for cached grouped cuBLAS, and \AuditBsrEight{} for padding-free BSR8.
-Against the fastest measured library method in each process, the ratio is
-\AuditBestLibrary{}, with \AuditBestLibraryWins{} direct wins in 128 cases.
-From prepared host inputs, the native-component startup ratio is
-\NativeStartupRatio{} against the library lower envelope, including one
-completed product. The evaluation covers 168 synthetic configurations,
-three published sparse matrices, and twelve geometry-derived near-field
-matrices, with matched kernel controls and verified build records.
-The results identify where retaining packed blocks improves execution or
-startup, and where compact scalar or dense library products remain preferable.
+VarBlockSpMM is a standalone CUDA implementation of FP32 sparse-dense
+products for matrices stored as packed dense blocks with variable sizes.
+It avoids scalar expansion, fixed-block retiling, output atomics, and
+execution-time temporary workspace. On one RTX 5060 Ti, a full-core
+follow-up on three additional matrix seeds gives geometric
+fastest-tested-library-to-direct time ratios of \RobustLatencyOverall{}
+for individual products and \RobustQueuedOverall{} for batches of eight
+queued products. The core contains 128 configurations spanning four panel
+widths, four shape distributions, two locality patterns, and four degrees.
+The kernel shares dense input tiles across rows and reuses sparse values
+across RHS accumulators. Matched comparisons show that its narrow-panel
+policy gives speedup factors of \RhsEightUpgrade{} at width 8 and
+\RhsSixteenUpgrade{} at width 16 over the previous policy.
+On the generated native component, the prepared-host startup ratio is
+\NativeStartupRatio{} including one completed product, while the
+steady-state BSR8 ratio is \NativeBsrRatio{} and favors BSR8.
+Published-matrix and dense-library controls identify cases better served
+by other representations. Verified build records and raw measurements
+support separate comparisons of execution, startup, and storage, defining
+the conditions under which retaining packed variable blocks is useful.
 \end{abstract}
 
 \section{Introduction}
@@ -85,13 +87,20 @@ runtime block dimensions. One CTA owns each block row, shares the dense
 input tile, and writes the completed output once. This combines a small
 execution plan with direct access to the application's packed values.
 
-We evaluate the complete library alternatives, including padding-free BSR8
-subdivision, and report a width-based comparison that helps users choose an
-implementation. Matched experiments explain the kernel choices. Startup
-and storage measurements test the cost of adopting each representation,
-with raw measurements tied to verified builds. The operating hypothesis
-is that reuse within a retained variable block can outweigh the scheduling
-advantage of subdividing it. Figure~\ref{fig:use-cases} shows where the tested widths and workloads
+The contribution is a standalone execution policy for this packed format,
+with an experimentally measured boundary against conversion-based library
+alternatives. It combines full-panel accumulation for narrow RHS widths
+with shape-dependent staging for wider panels, retaining one writer per
+output and requiring no execution workspace. The matched experiments test
+which choices improve this implementation. The library comparisons test
+when their combined benefit exceeds the benefit of padding-free BSR8
+subdivision or scalar CSR expansion. These are implementation and
+measurement contributions. They do not establish a new sparse storage
+model or an end-to-end application speedup.
+
+Startup and storage measurements separately test the cost of adopting each
+representation, with raw measurements tied to verified builds.
+Figure~\ref{fig:use-cases} shows where the tested widths and workloads
 favor direct execution.
 
 \begin{figure}[tbp]
@@ -608,6 +617,48 @@ and speedups are dimensionless.}\label{tab:regimes}
 \input{generated/regimes.tex}
 \end{table}
 
+\subsection{Additional matrix seeds and queued execution}
+The follow-up repeats all 128 core configurations on matrix seeds 2, 3,
+and 5. Each seed and timing mode uses one fresh process per configuration,
+giving 768 processes. The two modes synchronize after either one product
+or eight queued products. Each process measures twenty samples, with GPU
+and host times divided by the number of products in the sample. The eight
+products use the same prepared plan and buffers. Changing-address controls
+alternate the two buffer pairs on each product. Validation runs outside
+timing, before and after the samples, and outputs are poisoned before each
+method. Jobs and methods are randomized, and GPU processes run serially.
+
+Table~\ref{tab:robustness} uses the same library lower envelope as the
+original core comparison. Each row includes 32 configurations on each of
+three matrix seeds. The seed range contains the smallest and largest
+32-configuration geometric means. These ranges describe matrix variation
+combined with process noise. There is one process for each seed and mode,
+so they do not separate those sources or define confidence intervals.
+The original three-process campaign remains separate. The follow-up uses
+C++20 host compilation and the same library source bytes and CUDA toolkit.
+
+\begin{table}[!htbp]
+\centering\small
+\caption{Additional matrix seeds and synchronization intervals. Ratios divide
+comparator time by direct time, so values above one favor direct execution.
+Batch is the number of products queued before synchronization. Wins compare
+direct execution with the fastest tested library for each of 96 instances.}
+\label{tab:robustness}
+\input{generated/robustness.tex}
+\end{table}
+
+Across all 384 instances per mode, the fastest-library ratios are
+\RobustLatencyOverall{} for individual products and
+\RobustQueuedOverall{} for batches of eight, with
+\RobustLatencyWins{} and \RobustQueuedWins{} direct wins respectively.
+Every width has a geometric-mean advantage on each additional seed in
+both timing modes. RHS 64 gives the largest aggregate advantage, about
+1.39, winning all 96 individual-product instances and 95 of 96 queued
+instances. The narrow-panel gains remain smaller, about three to six
+percent against the fastest tested library. Queueing eight products
+preserves this width-dependent pattern on the measured grid.
+
+
 \subsection{Fixed blocks, scaling, and degree imbalance}
 Both partitions have constant extent in uniform matrices, making fixed-block
 BSR a suitable control. Across the 32 uniform configurations, the BSR ratio is
@@ -781,8 +832,10 @@ and 3. Historical tuning evidence is retained in Appendix~\ref{sec:history}.
 Measurements cover one GPU and one local operating environment. Three
 process observations describe repeatability over this campaign, while
 long-term drift and hardware variation require separate measurements.
-The main synthetic grid uses one matrix seed. The matched and native
-experiments each use three instances with three processes per instance.
+The original synthetic grid uses one matrix seed. The full-core follow-up
+adds three matrix seeds, with one process per instance and timing mode.
+The matched and native experiments each use three instances with three
+processes per instance.
 These chosen workloads do not define a random application population.
 Historical measurements use separate protocols and are excluded from the
 current averages.
@@ -804,6 +857,8 @@ reported comparisons.
 
 \section{Reproducibility}
 The verified Windows reference workflow uses CUDA 13.4 and MSVC 19.44.
+The current build uses C++20 for host and device sources. Archived receipts
+preserve the original compiler settings for earlier measurements.
 From the repository root, run:
 \begin{verbatim}
 python scripts/prepare_application.py
@@ -812,10 +867,11 @@ python scripts/run_final_validation.py --output-root data/rerun
 powershell -File scripts/build_paper.ps1 -ResultsRoot data/rerun
 \end{verbatim}
 The final runner builds and tests the source, runs memcheck and filtered
-racecheck, then collects the four GPU campaigns serially. Individual
+racecheck, then collects the five GPU campaigns serially. Individual
 runners accept fresh output directories for additional campaigns.
-Preparation requires NumPy, SciPy, and Requests. Figure generation uses
-Matplotlib, and paper building uses pdfLaTeX and pdftotext.
+Run \verb|uv sync --locked| to install the Python 3.13 environment from
+\path{pyproject.toml} and \path{uv.lock}, then activate \path{.venv} before
+these commands. Paper building also uses pdfLaTeX and pdftotext.
 
 \path{scripts/build_verified.py} hashes all compiled inputs before a
 clean build, checks them again afterward, runs CTest, and records the
@@ -829,7 +885,8 @@ indices, nonfinite timings, and unsuccessful processes. The hashes verify intern
 
 Final measurements are under \path{data/product-evaluation/}, in the
 \path{synthetic/}, \path{published/}, \path{native/}, and \path{ablation/}
-subdirectories. Generated tables
+subdirectories, with the additional seeds and queued timings under
+\path{data/robustness/}. Generated tables
 and figures come from these campaigns. Native geometry, partition metadata,
 assembly observations, and input checksums are retained under
 \path{data/native/}. Large native binary arrays are regenerated by the
@@ -855,10 +912,11 @@ library ratios or matched mechanism effects.
 VarBlockSpMM lets applications retain packed variable blocks while using a
 small direct CUDA plan. Shared input tiles and multiple accumulators reuse
 block data, and row ownership removes output atomics and execution workspace.
-The core-grid geometric ratios are \AuditCsr{} against the CSR lower
-envelope, \AuditGrouped{} against cached grouped cuBLAS, and \AuditBsrEight{}
-against padding-free BSR8. The width breakdown identifies the workloads
-where these gains justify choosing the direct implementation.
+Across the additional matrix seeds,
+the fastest-tested-library ratios are \RobustLatencyOverall{} for
+individual products and \RobustQueuedOverall{} for batches of eight.
+The width breakdown identifies where these gains justify choosing the
+direct implementation.
 
 The 64-thread narrow kernel gives paired speedups of
 \RhsEightUpgrade{} at RHS 8 and \RhsSixteenUpgrade{} at RHS 16 over

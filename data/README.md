@@ -5,6 +5,7 @@ The current paper uses these retained inputs and measurements:
 | Path | Purpose |
 | --- | --- |
 | `product-evaluation/` | Final synthetic, published-matrix, native-component, and matched-control campaigns, with build receipts, source snapshots, raw trials, and validation records |
+| `robustness/` | Full core grid on seeds 2, 3, and 5 with individual and eight-product queued timing, retaining 768 processes in checksummed archives |
 | `narrow-tuning/`, `narrow-tuning-2/` | Development sweeps on seed 4, kept separate from the final evaluation |
 | `native/*.json`, `native/*-geometry.npz` | Native input descriptions and geometry used to reconstruct the large binary matrices |
 | `application/` | Published-matrix inputs and earlier tracked results |
