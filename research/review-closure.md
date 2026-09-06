@@ -16,7 +16,7 @@ Validated on 6 September 2026 on an RTX 5060 Ti, CUDA 13.4, Windows, and MSVC 19
 | Steady-state timings omitted lifecycle costs | Recorded native-input synchronized startup, explicit device storage, CPU preparation observations, and repeated-product cost models. The paper states the starting representation and excluded allocations. |
 | Legacy CLI could accept malformed arguments or time unchecked output | Added strict numeric parsing, timing preconditions, CUDA checks, full CPU validation, and correct even-sample medians. |
 
-## Kernel improvement and measurement outcome
+## Original kernel improvement and measurement outcome
 
 RHS 8 and 16 now use a 64-thread CTA with full-panel accumulation and shared input staging. Two development sweeps compared staged and warp-reduction candidates on seed 4. The final paired evaluation uses seeds 1, 2, and 3, with three processes per instance. The previous policy remains available as an experimental comparison, and the historical mapping benchmark is fixed to its original policy.
 
@@ -32,7 +32,7 @@ The paper now leads with the execution, startup, and storage benefits and identi
 
 ## Follow-up review resolutions
 
-The standalone scope is explicit. No external solver integration or application speedup is claimed. The contribution is the packed-block execution policy and its measured performance boundary against library conversions.
+The standalone scope is explicit. No external solver integration or complete solver speedup is claimed. The later focused campaign below measures a standalone transport component. The contribution is the packed-block execution policy and its measured performance boundary against library conversions.
 
 The complete 128-configuration core was repeated on independent matrix seeds 2, 3, and 5, with one fresh process per seed, configuration, and timing mode. All 768 processes completed, retaining 639,360 timed products. Individual-product synchronization gives a fastest-library-to-direct geometric mean of 1.139 with 308 wins out of 384. Queuing eight products before synchronization gives 1.132 with 304 wins. RHS 64 reaches about 1.39 in both modes. Every width has an aggregate advantage on each new seed in both modes. These observations complement the original three-process campaign without treating seeds as repeated processes.
 
@@ -40,7 +40,27 @@ The retained `data/robustness/` manifest, source snapshot, and raw archive valid
 
 Adoption changes include C++20, toolkit discovery, an exported CMake package, an installed consumer with full CPU output comparison, and the author-selected MIT license. `pyproject.toml` and `uv.lock` define the Python environment. A fresh environment passes the evidence tests and reproduces a retained native input's geometry and binary checksum.
 
-## Validation
+## Focused resolutions for findings 1, 2, 3, and 5
+
+The approved eight-minute campaign completed in 299.6 seconds. Its 221 processes retain 37,776 timed products under `data/relevance/`, with exact commands, build receipts, input hashes, source snapshots, raw results, and the upstream MAGMA license. No old ablations were rerun.
+
+- **Application relevance:** Added a standalone periodic upwind modal DG transport component with variable polynomial orders and complete dependent 32-step traces. Five of six configurations beat the fastest tested library in all three processes. The largest RHS-64 trace is 1.438 times faster than the best tested library and 1.823 times faster than the better MAGMA composition. Every method is checked against a double-precision reference, and analytic transport error is below 4.2e-7. This is a short component trace, not a full solver or comparison with DG-specific algebraic implementations.
+- **Closest implementation:** Built pinned upstream MAGMA variable-size SGEMM kernels and measured persistent slot and product-plus-reduction compositions. The 128-case core gives a 1.138 fastest-library-to-direct geometric ratio, including MAGMA, with 103 direct wins. The prior work's 64 to 256 leaf range and this project's 8 to 64 block range are explicitly distinguished. No claim reproduces the complete prior hierarchical solver.
+- **Performance boundary:** Added 24 crossed combinations of degree, block shape, row count, and panel width, each in three processes. Nested adjacency isolates degree changes, shape preserves adjacency, and row-count changes are identified as working-set changes too. Main contrasts use the common BSR8 comparator. The complete table is supplementary.
+- **Device inputs and updates:** Added validated plans borrowing existing device allocations and value-only device updates that preserve existing plans. Stream ordering, allocation lifetime, and structural revalidation are documented and tested. Separate measurements report value-update and structural-replan path costs without calling them equal-work kernel speedups.
+
+Native metadata now preserves its original archived CRLF bytes through `.gitattributes`, restoring exact input checksums without changing scientific content. The native fill description also acknowledges the few FP32 underflows instead of claiming every stored value is nonzero.
+
+## Current validation
+
+- Current CUDA 13.4 Release builds and both project and MAGMA CTest suites pass. The installed external consumer builds and passes its CPU reference comparison.
+- Compute Sanitizer memcheck reports zero errors for the device API and both MAGMA compositions.
+- All eight Python evidence regression tests pass. Current and historical analyzers validate, and independent raw aggregation reproduces the focused campaign totals and headline results.
+- Current compiled source and executable hashes match their build receipts. The production kernel is unchanged from the archived main campaigns.
+- The 15-page main paper and six-page supplement compile twice without reference or box warnings. Rendered PNG pages were visually inspected, including the final supplementary layout.
+- Sources, generated TeX, and extracted PDF text pass the enforced prohibition on en dashes, em dashes, and semicolons.
+
+## Earlier validation history
 
 - Release build and CTest pass with full-output reference checks on CUDA 13.4. A separate CUDA 13.1 library build also passes CTest on the same GPU. The installed consumer builds and passes its runtime CPU comparison.
 - Compute Sanitizer memcheck reports zero errors. Racecheck filtered to project row-owned and pointer-refresh kernels reports zero errors and warnings. Logs are in `data/product-evaluation/validation/`.
@@ -56,4 +76,4 @@ The superseded validated-revision campaign and its companion archives are preser
 
 The [README](../README.md) gives fresh-output reproduction commands. The canonical campaigns are under `data/product-evaluation/`, in `synthetic/`, `published/`, `native/`, and `ablation/`. Native binaries are regenerated from retained geometry and checked against archived input hashes.
 
-The evidence covers one GPU and a generated application component. It does not establish performance portability, a complete solver speedup, a new sparse format, or superiority over all research implementations. These are boundaries of the study rather than missing evidence for claims made in the paper.
+The evidence covers one GPU, generated covariance components, and a standalone transport trace. The focused MAGMA comparison is separate from the earlier multi-seed NVIDIA-only comparison. It does not establish performance portability, a complete solver speedup, a new sparse format, or superiority over all research implementations. These are boundaries of the study rather than missing evidence for claims made in the paper.

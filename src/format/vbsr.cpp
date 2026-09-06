@@ -32,6 +32,9 @@ template <class T> T* copy_to_device(const std::vector<T>& source) {
 } // namespace
 
 void HostMatrix::validate() const {
+  validate_structure(values.size());
+}
+void HostMatrix::validate_structure(size_t value_count) const {
   // Validate the structure from coarse dimensions down to individual block
   // payloads.
   if (block_rows <= 0 || block_cols <= 0) {
@@ -52,7 +55,7 @@ void HostMatrix::validate() const {
     throw std::invalid_argument("bad row_ptr");
   }
   if (value_off.size() != block_col.size() + 1 || value_off.front() != 0 ||
-      size_t(value_off.back()) != values.size()) {
+      value_off.back() < 0 || size_t(value_off.back()) != value_count) {
     throw std::invalid_argument("bad value offsets");
   }
 
@@ -104,6 +107,7 @@ Matrix::Matrix(const HostMatrix& host) {
   nnzb_ = int(host.block_col.size());
   rows_ = host.scalar_rows();
   cols_ = host.scalar_cols();
+  value_count_ = host.values.size();
 
   // RHS-32 kernels use a lighter synchronous CTA for rows up to 16 scalars
   // high and double-buffered 256-thread CTAs for rows with more reuse.
@@ -164,6 +168,7 @@ Matrix& Matrix::operator=(Matrix&& other) noexcept {
     large_row_count_ = other.large_row_count_;
     rows_ = other.rows_;
     cols_ = other.cols_;
+    value_count_ = other.value_count_;
     row_ptr_ = other.row_ptr_;
     block_col_ = other.block_col_;
     row_size_ = other.row_size_;
@@ -185,12 +190,19 @@ Matrix& Matrix::operator=(Matrix&& other) noexcept {
     other.row_shape_order_ = nullptr;
     other.small_row_count_ = 0;
     other.large_row_count_ = 0;
+    other.value_count_ = 0;
   }
   return *this;
 }
 DeviceMatrix Matrix::device_view() const {
   return {block_rows_, block_cols_, nnzb_,    rows_,    cols_,      row_ptr_, block_col_,
           row_size_,   col_size_,   row_off_, col_off_, value_off_, values_};
+}
+void Matrix::update_values(const float* source, size_t count, cudaStream_t stream) {
+  if (count != value_count_ || (count && (!source || !values_)))
+    throw std::invalid_argument("value update size or pointer mismatch");
+  if (count && source != values_)
+    check_cuda(cudaMemcpyAsync(values_, source, count * sizeof(float), cudaMemcpyDeviceToDevice, stream));
 }
 size_t Matrix::storage_bytes() const {
   int64_t count = 0;

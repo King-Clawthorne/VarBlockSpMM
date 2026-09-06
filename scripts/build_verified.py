@@ -12,7 +12,7 @@ BUILD = ROOT / 'build/verified'
 
 def compiled_hashes():
     paths = [ROOT / 'CMakeLists.txt', Path(__file__).resolve()]
-    paths += list((ROOT / 'cmake').glob('*.cmake.in'))
+    paths += [p for p in (ROOT / 'cmake').glob('*') if p.is_file() and (p.name.endswith('.cmake') or p.name.endswith('.cmake.in'))]
     paths += [p for folder in ('src', 'include', 'bench', 'tests')
               for p in (ROOT / folder).rglob('*')
               if p.is_file() and p.suffix in ('.cpp', '.cu', '.hpp', '.h', '.cuh', '.c')]

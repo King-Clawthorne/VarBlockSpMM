@@ -6,18 +6,18 @@ VarBlockSpMM executes directly on your packed blocks. It avoids scalar CSR expan
 
 ## When to use it
 
-Across the full 128-case core on three additional matrix seeds, direct execution has a **1.139x geometric-mean speedup over the fastest tested library for individual products** and **1.132x for batches of eight queued products**. It wins 308/384 individual-product comparisons and 304/384 queued comparisons on one RTX 5060 Ti.
+The comparison including **MAGMA variable-size batched GEMM** gives a **1.138x geometric-mean speedup over the fastest tested library**, with 103/128 direct wins on the full core grid. It tests both slot-based MAGMA and batched products followed by reduction. Each configuration uses matrix seed 2, one process, and six timing samples.
 
-| RHS width | Individual speedup | Queued speedup | Individual wins | Queued wins |
+| RHS width | Over BSR8 | Over faster MAGMA | Over fastest library | Direct wins |
 | --- | --- | --- | --- | --- |
-| 8 | 1.056x | 1.050x | 75/96 | 73/96 |
-| 16 | 1.046x | 1.034x | 72/96 | 72/96 |
-| 32 | 1.091x | 1.086x | 65/96 | 64/96 |
-| 64 | 1.395x | 1.392x | 96/96 | 95/96 |
+| 8 | 1.076x | 2.357x | 1.052x | 25/32 |
+| 16 | 1.093x | 2.132x | 1.048x | 24/32 |
+| 32 | 1.127x | 1.598x | 1.087x | 22/32 |
+| 64 | 1.451x | 2.057x | 1.401x | 32/32 |
 
-Each width includes four shape distributions, two locality patterns, four degrees, and matrix seeds 2, 3, and 5 at 4,096 block rows. Each seed and timing mode has one fresh process per configuration. The library comparison includes explicit CSR algorithms, cached grouped cuBLAS, BSR8, and BSR32 on uniform inputs. The geometric-mean speedups over BSR8 alone are 1.178x for individual products and 1.173x for queued products.
+A standalone variable-order discontinuous Galerkin transport program provides a dependent application trace. At 4,096 elements and RHS 64, its 32 steps are **1.438x faster than the fastest tested library** and **1.823x faster than the faster MAGMA composition**. Direct execution wins five of the six tested element-count/width configurations in all three process repetitions. BSR8 wins the smallest RHS-8 case. The program checks every final coefficient against a CPU reference and checks the discretization against the analytic transport solution.
 
-The original seed-1 campaign remains in the paper as a separate three-process comparison. Its best-library ratio is 1.137x with 103/128 wins. The new seed ranges and timing-mode results support the same width-dependent performance pattern.
+The separate three-seed NVIDIA-library campaign retains its 1.139x individual-product and 1.132x queued-product results. Those measurements exclude MAGMA and use twenty timing samples per process. Their protocols and aggregates remain separate from this focused comparison. The [supplement](research/supplement.pdf) retains detailed controls and historical evidence, and [follow-up documentation](docs/relevance.md) gives the MAGMA compatibility boundary and transport equations.
 
 Use the direct plan when your application already produces dense variable blocks and you want to retain that layout. Wider panels benefit from sharing input tiles across rows and reusing each sparse value across RHS columns. Widths 8 and 16 use a 64-thread CTA with full-panel accumulation, selected through measured comparisons with alternative kernels.
 
@@ -72,7 +72,7 @@ python scripts/run_final_validation.py --output-root data/rerun
 powershell -File scripts/build_paper.ps1 -ResultsRoot data/rerun
 ```
 
-The final runner performs a verified build, CTest, memcheck, and filtered racecheck, then runs every GPU campaign serially into the specified fresh root. It can take substantial time. Benchmark runners verify a build receipt tying compiled source hashes to the actual executable bytes, and snapshot the source used for each campaign. Existing records are resumed only with matching provenance and commands. Run `scripts/build_paper.ps1` without `-ResultsRoot` to rebuild the checked-in paper from its canonical campaigns instead.
+The final runner performs a verified build, CTest, memcheck, and filtered racecheck, then runs the five earlier GPU campaigns serially into the specified fresh root. The focused MAGMA/transport comparison is separate, as described in `docs/relevance.md`. A fresh `-ResultsRoot` paper build also requires that comparison under its `relevance/` subdirectory. It can take substantial time. Benchmark runners verify a build receipt tying compiled source hashes to the actual executable bytes, and snapshot the source used for each campaign. Existing records are resumed only with matching provenance and commands. Run `scripts/build_paper.ps1` without `-ResultsRoot` to rebuild the checked-in paper from its canonical campaigns instead.
 
 Use individual runners and fresh output directories for independent repetitions:
 
@@ -92,9 +92,17 @@ The canonical campaigns are under `data/product-evaluation/`, in `synthetic/`, `
 
 ## API contract
 
+Plans can borrow existing GPU allocations through `Plan(DeviceMatrix, PlanOptions, stream)`.
+Construction waits for that stream and validates metadata. Matrix values remain on the GPU.
+Keep the supplied structure and allocations live and unchanged while the plan is in use.
+GPU kernels may update the values in place on the execution stream. For an owning `Matrix`,
+`update_values(device_values, count, stream)` replaces values without invalidating existing
+plans. Structural changes require a new plan. See [device inputs and the focused research
+follow-up](docs/relevance.md) for stream ordering, MAGMA reproduction, and the transport example.
+
 `HostMatrix` requires positive block dimensions, supported block sizes, sorted unique block columns within each row, and consistent packed payloads. Rows may be empty. Scalar and value offsets are 64-bit, while block indices are 32-bit. Scalar CSR expansion and grouped GEMM explicitly reject sizes that exceed their narrower index or leading-dimension limits.
 
-`Matrix` owns immutable GPU storage. `Plan` holds a non-owning view: the allocation must outlive the plan and all queued work, and must not be replaced by move assignment while referenced. Dense input and output buffers must be sufficiently sized, non-overlapping, and on the same CUDA device. Calls enqueue work on the supplied stream.
+`Matrix` owns fixed GPU structure with updateable values. `Plan` borrows matrix allocations: they must outlive the plan and all queued work, and must not be replaced by move assignment while referenced. A plan constructed from `DeviceMatrix` owns its row classification but borrows the supplied matrix buffers. Dense input and output buffers must be sufficiently sized, non-overlapping, and on the same CUDA device. Calls enqueue work on the supplied stream.
 
 Library plans own mutable handles and metadata. Order calls to one plan on one stream, or externally synchronize across streams and host threads. Grouped GEMM refreshes pointers on the execution stream and safely supports queued address changes.
 

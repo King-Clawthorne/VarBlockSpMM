@@ -30,6 +30,7 @@
 \input{generated/kernel-macros.tex}
 \input{generated/supplement-macros.tex}
 \input{generated/robustness-macros.tex}
+\input{generated/relevance-macros.tex}
 \title{VarBlockSpMM: Shape-Aware CUDA Execution for\\Packed Variable-Block Sparse-Dense Products}
 \author{Cohen Brunner Thomas\\\small Independent Research Project}
 \date{6 September 2026}
@@ -37,26 +38,23 @@
 \maketitle
 
 \begin{abstract}
-VarBlockSpMM is a standalone CUDA implementation of FP32 sparse-dense
-products for matrices stored as packed dense blocks with variable sizes.
-It avoids scalar expansion, fixed-block retiling, output atomics, and
-execution-time temporary workspace. On one RTX 5060 Ti, a full-core
-follow-up on three additional matrix seeds gives geometric
-fastest-tested-library-to-direct time ratios of \RobustLatencyOverall{}
-for individual products and \RobustQueuedOverall{} for batches of eight
-queued products. The core contains 128 configurations spanning four panel
-widths, four shape distributions, two locality patterns, and four degrees.
-The kernel shares dense input tiles across rows and reuses sparse values
-across RHS accumulators. Matched comparisons show that its narrow-panel
-policy gives speedup factors of \RhsEightUpgrade{} at width 8 and
-\RhsSixteenUpgrade{} at width 16 over the previous policy.
-On the generated native component, the prepared-host startup ratio is
-\NativeStartupRatio{} including one completed product, while the
-steady-state BSR8 ratio is \NativeBsrRatio{} and favors BSR8.
-Published-matrix and dense-library controls identify cases better served
-by other representations. Verified build records and raw measurements
-support separate comparisons of execution, startup, and storage, defining
-the conditions under which retaining packed variable blocks is useful.
+VarBlockSpMM computes FP32 sparse-dense products directly from packed
+variable-size blocks, avoiding scalar expansion, fixed-block retiling,
+output atomics, and execution workspace. On one RTX 5060 Ti, a 128-case
+comparison including MAGMA variable-size batched GEMM gives a geometric
+speedup of \RelevanceCoreRatio{} over the fastest tested library, with
+\RelevanceCoreWins{} direct wins. Wide panels give the strongest advantage.
+A standalone variable-order discontinuous Galerkin transport program
+provides an application trace: at 4,096 elements and 64 simultaneous fields,
+32 dependent steps run \TransportLargeRatio{} times faster than the fastest
+library and \TransportLargeMagmaRatio{} times faster than the better MAGMA
+composition. Smaller and narrow cases retain losses. On the separate
+covariance component, BSR8 wins steady state with a library-to-direct ratio
+of \NativeBsrRatio{}, while prepared-host startup favors direct by
+\NativeStartupRatio{}. Controlled experiments distinguish degree and block
+size effects. Device-resident inputs and value updates support reuse of
+the packed representation. The evidence supports choosing direct execution
+for the measured favorable regimes, rather than a universal replacement.
 \end{abstract}
 
 \section{Introduction}
@@ -105,14 +103,12 @@ favor direct execution.
 
 \begin{figure}[tbp]
 \centering
-\includegraphics[width=\linewidth]{generated/use-cases.pdf}
-\caption{Direct execution by panel width on the full 128-case synthetic core.
-Each point is one configuration averaged over three processes. Lines show
-geometric means across all 32 configurations at each width. The right panel
-uses the fastest measured library method within each process, including
-BSR32 on uniform blocks. Horizontal offsets separate points and have no
-numerical meaning. The vertical axis is logarithmic. Ratios above one
-favor VarBlockSpMM.}
+\includegraphics[width=\linewidth]{generated/magma-use-cases.pdf}
+\caption{Direct execution by panel width on the 128-case core with MAGMA.
+Each point is one configuration on seed 2, measured in one process with
+six timing samples. Lines show geometric means. The right panel includes
+both MAGMA compositions and every applicable NVIDIA control. Horizontal
+offsets separate points. Ratios above one favor direct execution.}
 \label{fig:use-cases}
 \end{figure}
 
@@ -128,12 +124,13 @@ parallelism, and reuse. Yang, Bulu\c{c}, and Owens describe row-splitting and
 merge-based approaches [1]. GE-SpMM caches sparse rows and merges warps to
 reduce redundant loads [8]. Tensor-core methods such as Okanovic et al. trade
 packing and preprocessing for dense matrix-instruction throughput [2].
-These techniques motivate the present kernel, but this study does not
-establish superiority over compatible research implementations.
+These techniques motivate the present kernel. We compare the relevant
+MAGMA composition below, but do not compare implementations of these
+other research kernels.
 
 The motivating application is adaptive construction of hierarchical
 \(H^2\) matrices. Boukaram et al. describe a non-uniform batched BSR product
-implemented through non-uniform batched GEMM operations [5]. The present
+implemented through slot-wise MAGMA non-uniform batched GEMM operations [5]. The present
 work addresses the underlying packed-block product. We add a generated covariance near-field component whose partitions come
 from a spatial cluster tree. This tests a concrete dense-block component,
 while excluding far-field compression and the complete construction pipeline.
@@ -389,9 +386,9 @@ The resulting near-field component need not itself be positive definite.
 
 An independent scalar-row enumeration recomputes the covariance values
 and provides the compact-CSR CPU reference. Preparation checks every
-packed block against this reference exactly in FP32. All stored values
-are nonzero for these inputs. Thus the experiment has full block fill
-and tests native spatial partitions within this specified model. It is
+packed block against this reference exactly in FP32. Nonzero fill exceeds
+99.99\%, with a few FP32 underflows. This tests native spatial partitions
+within the specified model. It is
 not a production solver trace or an end-to-end hierarchical computation.
 
 Some near-field inputs occupy a large fraction of the scalar matrix.
@@ -432,7 +429,7 @@ the other two RHS-8 factors, and the retained per-variant timings expose
 interactions rather than assuming that speedups multiply.
 
 \subsection{Timing and correctness}
-Each method receives five warmups and 20 measured executions. Methods are
+In the original campaigns, each method receives five warmups and 20 measured executions. Methods are
 randomly ordered within each process. Configuration and process-label jobs
 are shuffled before serial execution, with one GPU benchmark active at a
 time. Synthetic order uses seed 20260905, published-matrix order uses 20260906,
@@ -531,37 +528,39 @@ and hardware variation remain distinct questions.
 
 \section{Results}
 \subsection{Choosing direct execution}
-Table~\ref{tab:use-cases} separates the core grid by panel width. Each row
-includes all four shape distributions, both localities, and all four degrees.
-The best-library column takes the fastest measured fixed-address library
-method within each process, including BSR32 where supported. Its win count
-therefore asks whether direct execution beats every tested library option
-for that configuration. The other columns show which alternatives account
-for the difference.
+Table~\ref{tab:use-cases} compares the complete core grid by panel width,
+including MAGMA. Each width contains four shape distributions, both
+localities, and four degrees. The MAGMA column selects the faster of its
+slot and reduction compositions within each process. The best-library
+column selects the fastest compatible method, including BSR32 on uniform
+blocks. These are comparator-favoring lower envelopes, not deployed tuning
+policies. The focused protocol and application traces are described below.
 
 \begin{table}[!htbp]
 \centering\small
-\caption{Choosing an implementation by RHS width on the 4,096-block-row
-core grid. Ratios divide comparator time by direct time. Direct wins and
-minima use the best-library comparison, averaged over three processes per
-configuration.}\label{tab:use-cases}
-\input{generated/use-cases.tex}
+\caption{Choosing an implementation on the 4,096-block-row core, matrix
+seed 2. Ratios divide comparator time by direct time. Each configuration
+uses one process with six samples per method.}
+\label{tab:use-cases}
+\input{generated/magma-use-cases.tex}
 \end{table}
 
-Every panel width has an aggregate advantage over both BSR8 and the
-best-library envelope. RHS 64 gives the strongest result: \AuditBsrRhsSixtyFour{}
-against BSR8 and wins against every tested library option in all 32 cases.
-At RHS 8 and 16, direct execution beats BSR8 in all 32 cases per width,
-with ratios of \AuditBsrRhsEight{} and \AuditBsrRhsSixteen{}, respectively.
-Uniform blocks remain a useful exception, since BSR32 is preferable in
-several narrow-panel cases. The width table makes that choice explicit.
+Direct execution has a geometric-mean ratio of \RelevanceCoreRatio{}
+against the fastest library and \RelevanceMagmaRatio{} against the faster
+MAGMA composition. It wins \RelevanceCoreWins{} of 128 best-library
+comparisons. All four widths have aggregate advantages, while RHS 64 wins
+all 32 individual comparisons. The narrow-width exceptions remain visible
+in the table. The original three-process NVIDIA-only comparison and its
+width breakdown are retained separately in the supplement.
 
 Retaining packed blocks also avoids scalar metadata expansion and fixed-tile
 conversion. Section~\ref{sec:lifecycle-results} measures the corresponding
 storage and startup costs. These matter when a matrix is replaced before
 many products can amortize a library conversion.
 
-\subsection{Core synthetic grid}
+\subsection{Original NVIDIA-library controls}
+The original seed-1 campaign below uses three processes per configuration
+and predates the MAGMA comparison. Its aggregates remain separate.
 Table~\ref{tab:core} compares execution times on the core grid. The direct path has a
 geometric speedup of \AuditCsr{} against the CSR lower envelope and
 \AuditGrouped{} against cached grouped cuBLAS. The respective win counts
@@ -572,21 +571,11 @@ The subdivided BSR8 ratio is \AuditBsrEight{}, with
 \AuditBsrEightWins{} direct wins out of 128. This comparison retains block
 structure without padding, comparing two ways to execute the same dense
 blocks.
-Figure~\ref{fig:core-distribution} shows the spread behind these averages.
+The supplementary distribution figure shows the spread behind these averages.
 Its sorted curves expose the fastest comparators and the width of the
 performance range across the grid.
 
-\begin{figure}[tbp]
-\centering
-\includegraphics[width=\linewidth]{generated/core-distribution.pdf}
-\caption{GPU time ratios across the 128 core configurations. Each ratio is
-the geometric mean of three paired process ratios, computed from per-process
-timing medians. Each curve sorts configurations independently, so equal ranks
-need not identify the same matrix. The vertical axis is logarithmic. Ratios
-above the dashed parity line favor direct execution. These are empirical
-distributions over the chosen grid, not uncertainty intervals.}
-\label{fig:core-distribution}
-\end{figure}
+
 
 \begin{table}[!htbp]
 \centering\small
@@ -597,27 +586,17 @@ direct execution.}\label{tab:core}
 \input{generated/core.tex}
 \end{table}
 
-\begin{table}[!htbp]
-\centering\small
-\caption{Descriptive process-label ranges on the core grid. The two endpoints
-are observed aggregate ratios, not confidence limits.}\label{tab:process}
-\input{generated/process.tex}
-\end{table}
 
-Table~\ref{tab:regimes} breaks down the results by width and degree. Each row averages the four size distributions and two
+
+The supplementary width and degree table breaks down the results by width and degree. Each row averages the four size distributions and two
 localities. Direct time is the geometric mean of the corresponding process
 medians. Absolute times distinguish small launch-sensitive cases from larger
 products. The CSR column uses the lower envelope, and grouped execution uses
 cached pointers.
 
-\begin{table}[!htbp]
-\centering\small
-\caption{Width and degree breakdown for the core grid. Times are milliseconds
-and speedups are dimensionless.}\label{tab:regimes}
-\input{generated/regimes.tex}
-\end{table}
 
-\subsection{Additional matrix seeds and queued execution}
+
+\subsection{Additional seeds and queued NVIDIA comparisons}
 The follow-up repeats all 128 core configurations on matrix seeds 2, 3,
 and 5. Each seed and timing mode uses one fresh process per configuration,
 giving 768 processes. The two modes synchronize after either one product
@@ -639,7 +618,7 @@ C++20 host compilation and the same library source bytes and CUDA toolkit.
 
 \begin{table}[!htbp]
 \centering\small
-\caption{Additional matrix seeds and synchronization intervals. Ratios divide
+\caption{Additional matrix seeds and synchronization intervals for the NVIDIA controls. Ratios divide
 comparator time by direct time, so values above one favor direct execution.
 Batch is the number of products queued before synchronization. Wins compare
 direct execution with the fastest tested library for each of 96 instances.}
@@ -647,7 +626,7 @@ direct execution with the fastest tested library for each of 96 instances.}
 \input{generated/robustness.tex}
 \end{table}
 
-Across all 384 instances per mode, the fastest-library ratios are
+Across all 384 instances per mode, the fastest-NVIDIA-library ratios are
 \RobustLatencyOverall{} for individual products and
 \RobustQueuedOverall{} for batches of eight, with
 \RobustLatencyWins{} and \RobustQueuedWins{} direct wins respectively.
@@ -673,7 +652,7 @@ Each width contains eight degree and locality configurations.}\label{tab:bsr}
 \input{generated/bsr.tex}
 \end{table}
 
-Table~\ref{tab:scaling} compares constant degree and the imbalanced pattern
+The supplementary scaling table compares constant degree and the imbalanced pattern
 at three sizes. Each row includes both high-variance and bimodal dimensions
 and all four panel widths. The workload changes affect both total work and load balance. These results
 therefore test sensitivity to the combined changes and do not isolate the
@@ -681,12 +660,7 @@ cost of imbalance at a fixed nonzero count.
 The tested maximum row degree remains 16, so heavy-tailed application degrees
 are not covered by this synthetic extension.
 
-\begin{table}[!htbp]
-\centering\small
-\caption{Size and degree-pattern controls with random column locality. Each
-row averages eight configurations and three process observations.}\label{tab:scaling}
-\input{generated/scaling.tex}
-\end{table}
+
 
 \subsection{Application-derived inputs}
 Table~\ref{tab:application} compares direct execution with compact CSR on
@@ -705,13 +679,7 @@ favors compact CSR. Each cell averages three process observations.}\label{tab:ap
 \input{generated/application.tex}
 \end{table}
 
-\begin{table}[!htbp]
-\centering\small
-\caption{All published-matrix controls, averaged across twelve matrix and
-width configurations. Ratios divide comparator GPU time by direct time.}
-\label{tab:application-controls}
-\input{generated/application-controls.tex}
-\end{table}
+
 
 Low block fill makes the direct method perform arithmetic on internal zeros
 that compact CSR omits. These cases test the cost of choosing a packed
@@ -749,13 +717,7 @@ All comparisons compute the identical near-field component.
 \input{generated/native-shapes.tex}
 \end{table}
 
-\begin{table}[!htbp]
-\centering\small
-\caption{Near-field comparator GPU time divided by direct time. Each row
-averages three geometry seeds and three processes per seed. Ratios above
-one favor direct execution.}\label{tab:native}
-\input{generated/native.tex}
-\end{table}
+
 
 The aggregate BSR8 ratio on this component is \NativeBsrRatio{}, so
 BSR8 is faster for steady-state execution here. Direct execution offers
@@ -797,21 +759,13 @@ block storage and have different metadata costs. The host assembly routines
 are reference implementations and have not been optimized against each other.
 
 \subsection{Matched mechanism results}\label{sec:matched-results}
-\begin{table}[!htbp]
-\centering\small
-\caption{Matched control time divided by changed-policy time. RHS-8
-effects are geometric marginal contrasts over the other two factorial
-choices. Minima and maxima first average three process ratios for each
-fixed matrix instance. They are observed ranges, not confidence limits.}
-\label{tab:matched}
-\input{generated/matched-ablation.tex}
-\end{table}
+
 
 The 256-thread factorial controls describe the earlier RHS-8 mapping family.
 The full-panel staging rows compare global and shared input loads with the
 same 64-thread mapping used by the final narrow kernel. These comparisons
 separate the contribution of staging from a change in thread count.
-Per-instance and per-process method medians accompany the tables.
+The full factorial table is in the supplement. Per-instance and per-process method medians accompany the retained evidence.
 
 \begin{table}[!htbp]
 \centering\small
@@ -826,7 +780,9 @@ The paired narrow-policy speedups are \RhsEightUpgrade{} at RHS 8 and
 \RhsSixteenUpgrade{} at RHS 16 across this grid. Both policies use the same
 input, timing protocol, and full-output reference. Development seed 4 was
 used to choose the replacement, while this comparison uses seeds 1, 2,
-and 3. Historical tuning evidence is retained in Appendix~\ref{sec:history}.
+and 3. Historical tuning evidence is retained in the separate supplement.
+
+\input{relevance.tex}
 
 \section{Scope and limitations}
 Measurements cover one GPU and one local operating environment. Three
@@ -848,30 +804,41 @@ complete solver or hierarchical construction pipeline. Total storage and
 setup still include matrix values and classification metadata.
 
 Library lower envelopes favor the comparators by selecting measured medians
-without charging a tuning cost. The grouped baseline is the stated slot
-composition. Compatible research kernels, reordering methods, other block
+without charging a tuning cost. The grouped cuBLAS baseline is the stated slot
+composition. MAGMA is measured with both slots and a separate reduction. Other research kernels, reordering methods, other block
 ensembles, and additional precisions are outside this evaluation. The work
 contributes an implementation and measured execution policy for an established
 variable-block representation, with performance claims confined to the
 reported comparisons.
 
 \section{Reproducibility}
+The public API also accepts a non-owning \texttt{DeviceMatrix} when
+constructing a plan. Construction waits for the supplied stream and
+validates a host copy of metadata. Values remain on the device.
+Callers retain allocation ownership and keep structure fixed while the
+plan is in use. Device kernels may update values in place, ordered before
+execution. An owning matrix can instead enqueue a device-to-device
+value update without invalidating its plans. Structural changes require
+a new validated plan. The follow-up separately measures value updates
+and structure revalidation. It does not extend the original prepared-host
+startup ratios to these new input paths.
+
 The verified Windows reference workflow uses CUDA 13.4 and MSVC 19.44.
 The current build uses C++20 for host and device sources. Archived receipts
 preserve the original compiler settings for earlier measurements.
-From the repository root, run:
+From the repository root, the retained evidence and PDFs are rebuilt with:
 \begin{verbatim}
-python scripts/prepare_application.py
-python scripts/prepare_native.py
-python scripts/run_final_validation.py --output-root data/rerun
-powershell -File scripts/build_paper.ps1 -ResultsRoot data/rerun
+uv sync --locked
+uv run --locked powershell -File scripts/build_paper.ps1
 \end{verbatim}
-The final runner builds and tests the source, runs memcheck and filtered
-racecheck, then collects the five GPU campaigns serially. Individual
-runners accept fresh output directories for additional campaigns.
-Run \verb|uv sync --locked| to install the Python 3.13 environment from
-\path{pyproject.toml} and \path{uv.lock}, then activate \path{.venv} before
-these commands. Paper building also uses pdfLaTeX and pdftotext.
+The build validates the archives and regenerates tables before compiling
+both PDFs. The README gives fresh-output commands for the five earlier
+campaigns. The focused follow-up has a separate builder and capped runner
+in \path{scripts/build_relevance.py} and \path{scripts/run_relevance.py}.
+Its MAGMA revision, transport input recipe, and commands are documented
+in \path{docs/relevance.md}. Python dependencies are pinned in
+\path{pyproject.toml} and \path{uv.lock}. Paper building also uses
+pdfLaTeX and pdftotext.
 
 \path{scripts/build_verified.py} hashes all compiled inputs before a
 clean build, checks them again afterward, runs CTest, and records the
@@ -900,7 +867,7 @@ Both emit full-precision summaries beside the generated tables.
 \path{scripts/build_paper.ps1} requires both analyses to pass before
 compiling the manuscript. Regression tests in \path{tests/test_evidence.py}
 exercise corrupt timing records and stale source or binary receipts.
-The historical RHS-8 archive is validated separately for the appendix.
+The historical RHS-8 archive is validated separately for the supplement.
 The two seed-4 development archives are under \path{data/narrow-tuning/}
 and \path{data/narrow-tuning-2/}. Their 96 processes are validated by
 \path{scripts/analyze_tuning.py} and are excluded from evaluation averages.
@@ -909,132 +876,21 @@ library ratios or matched mechanism effects.
 
 \begin{samepage}
 \section{Conclusion}
-VarBlockSpMM lets applications retain packed variable blocks while using a
-small direct CUDA plan. Shared input tiles and multiple accumulators reuse
-block data, and row ownership removes output atomics and execution workspace.
-Across the additional matrix seeds,
-the fastest-tested-library ratios are \RobustLatencyOverall{} for
-individual products and \RobustQueuedOverall{} for batches of eight.
-The width breakdown identifies where these gains justify choosing the
-direct implementation.
+VarBlockSpMM is a useful alternative when an application has dense variable
+blocks and sufficiently favorable panel widths and shapes. The core
+comparison including MAGMA gives a fastest-library ratio of
+\RelevanceCoreRatio{}. The large RHS-64 transport trace gives
+\TransportLargeRatio{} over the fastest library, establishing a benefit
+for dependent products in a standalone application component.
 
-The 64-thread narrow kernel gives paired speedups of
-\RhsEightUpgrade{} at RHS 8 and \RhsSixteenUpgrade{} at RHS 16 over
-the previous policy. Direct execution also avoids library-format conversion and
-reduces explicit storage relative to scalar CSR on the dense-block component.
-Those benefits matter when packed blocks are already available or only a
-few products reuse each matrix. Compact CSR and dense SGEMM remain useful
-alternatives for scalar sparsity and high overall density, respectively.
+The implementation shares input tiles, reuses sparse values across
+accumulators, and retains one writer per output without execution workspace.
+Its device-input and value-update paths let callers retain their packed
+allocations. Controlled results show why degree and shape belong in the
+choice of implementation. BSR8 remains preferable on the measured covariance
+component, and scalar CSR remains preferable for the published sparse inputs.
+The reported regimes guide the choice without claiming universal superiority.
 \end{samepage}
-
-\appendix
-\section{Historical development evidence}\label{sec:history}
-This appendix reports archived development measurements. They are separate
-from the verified-build campaigns in the main text and are not combined
-with them as additional repetitions or used to adjust current speedups.
-
-\subsection{RHS-8 mapping ablation}
-\label{sec:rhs8-results}
-The RHS-8 ablation covers 144 configurations at 256, 512, 1,024, and 4,096
-block rows and columns. At each size, 32 configurations combine degrees
-\(2,4,8,16\), the four shape distributions, and both locality patterns.
-Four additional configurations combine high-variance or bimodal shapes with
-both localities and repeating degrees \(0,1,16,16\).
-
-Each configuration uses matrix seeds 1, 2, and 3, with one fresh process per
-seed. These are different instances, not repeated processes of one fixed
-instance. The 432 processes retain 25,920 raw timed calls. Each method receives
-five warmups and 30 measured calls. Method order is randomized within each
-process, and jobs are shuffled before serial execution. Input generation,
-CUDA-event placement, and synchronized host timing use the same definitions
-as the main campaign.
-For each configuration, we average the three paired log ratios of GPU medians,
-then give each configuration equal weight. No significance interval is assigned.
-The comparator is the scalar RHS-8 kernel, and the tiled method executes
-the dispatch archived with that campaign, including its small-grid fallback.
-
-\begin{table}[!htbp]
-\centering\small
-\caption{Scalar baseline time divided by optimized direct time for RHS 8.
-Each size contains 36 configurations and three matrix seeds. The 256-row
-paths execute the same scalar kernel, so their deviation from parity reflects
-measurement variation.}\label{tab:rhs8}
-\input{generated/kernel.tex}
-\end{table}
-
-Table~\ref{tab:rhs8} shows increasing benefit with grid size. All 108
-configurations using the tiled path improve after averaging across seeds,
-with geometric speedup \KernelSpeedup{} and minimum \KernelMinimum{}.
-Across all 144 configurations, including the unchanged fallback, the ratio
-is \KernelOverall{}. The 4,096-row bimodal/random/degree-16 case improves
-from 2.245 to 1.086 ms, a ratio of 2.067. These absolute times are geometric
-means of the three seed medians. The minimum is a descriptive observation,
-not a statistical guarantee against regression.
-
-Every process passes 64 CPU output probes per method on its timed matrix.
-A deterministic full-output test exercises all 64 supported block shapes in
-the tiled path, with empty rows, a non-default stream, and output initialized
-to NaNs to detect missing writes. That campaign's updated suite passed memcheck with zero
-errors and racecheck filtered to the new kernel with zero errors or warnings.
-
-For the representative 4,096-row bimodal/random/degree-16 case, Nsight Compute
-reports 4,096 CTAs instead of 8,192 and 47 registers per thread instead of 40.
-Eligible warps per scheduler increase from 0.40 to 0.55, and issued warps per
-scheduler increase from 0.26 to 0.32. These workload-specific counters support
-improved scheduling. Instrumented durations do not enter the speedup estimates.
-The combined experiment does not isolate the contributions of tiling,
-accumulator reuse, and CTA count. Its paired direct-kernel measurements are
-separate from the main library comparisons and use three different seeds.
-
-\subsection{Earlier width specialization and profiling}
-
-The original five-seed dataset remains available under
-\path{data/publication/}. It contains 128 configurations per seed, one
-benchmark process per configuration and seed, five warmups, and 20 measured
-executions. Its saved summaries reproduce geometric ratios of 4.988 over
-default CSR and 4.222 over the original grouped composition. That composition
-rebuilt pointers and cleared all outputs on every call. The original harness
-also used constant dense input and fixed method order.
-
-These historical values are separate from the main comparison with the
-cached baseline. Differences between the experiments cannot isolate the
-effect of one optimization because the software environment, input values,
-timing protocol, and comparator configuration also changed. The old per-seed standard errors describe variation in five
-whole-grid averages. They do not quantify process noise or establish which
-source accounts for most uncertainty. The original configuration bootstrap
-is a resampling-sensitivity analysis of a chosen grid, not evidence about a
-randomly sampled application population.
-
-The kernel policy was developed using separate single-seed sweeps with
-1,024 block rows, three warmups, and seven measured executions. Table~\ref{tab:ablation}
-reports those exploratory comparisons. Each ratio compares the named
-successive variants on the stated slice, with equal configuration weights.
-
-\begin{table}[!htbp]
-\centering\small
-\caption{Exploratory development ablations, separate from the main evaluation.}
-\label{tab:ablation}
-\begin{tabular}{p{0.35\linewidth}p{0.30\linewidth}rr}
-\toprule
-Change & Comparator & Cases & Ratio\\
-\midrule
-Wider accumulation & Four-accumulator direct & 128 & 1.24\\
-Cooperative staging & Wider accumulation & 128 & 1.18\\
-Wider accumulation and staging & Four-accumulator direct & 128 & 1.46\\
-RHS-32 buffering and dispatch & Single-buffer staging & 32 & 1.11\\
-\bottomrule
-\end{tabular}
-\end{table}
-
-Historical Nsight Compute measurements support the optimization mechanism.
-An early difficult RHS-64 case had 99.54\% achieved occupancy but only 0.48
-eligible warps per scheduler. Long-scoreboard waiting accounted for 90.1\%
-of its issue interval. A subsequent staging comparison reduced the reported
-long-scoreboard share from 78.0\% to 37.1\%, while barrier waiting reached
-36.4\%. The tall RHS-32 profile confirmed native asynchronous copies.
-These observations support reduced redundant loading and a shift toward
-synchronization costs. They are workload-specific counters, and
-replay-instrumented durations are excluded from speedup calculations.
 
 {\small
 \setlength{\parskip}{0pt}
@@ -1073,6 +929,13 @@ BCSSTK13, BCSSTK14, and BCSSTK15 problem descriptions.
 \url{https://math.nist.gov/MatrixMarket/data/Harwell-Boeing/bcsstruc1/bcsstk13.html}
 \url{https://math.nist.gov/MatrixMarket/data/Harwell-Boeing/bcsstruc2/bcsstk14.html}
 \url{https://math.nist.gov/MatrixMarket/data/Harwell-Boeing/bcsstruc2/bcsstk15.html}
+\bibitem{magma} MAGMA developers. Variable-size batched FP32 GEMM.
+Revision \texttt{c3de65f855dd}, accessed 6 September 2026.
+\url{https://github.com/icl-utk-edu/magma}
+\bibitem{dg} B. Cockburn and C.-W. Shu. Runge-Kutta Discontinuous Galerkin
+Methods for Convection-Dominated Problems. \emph{Journal of Scientific
+Computing}, 16, 2001, pages 173 to 261.
+\url{https://www.dam.brown.edu/people/shu/pub.html}
 \end{thebibliography}
 }
 \end{document}

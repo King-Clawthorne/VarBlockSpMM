@@ -361,6 +361,50 @@ void run_parameter_matrix() {
   }
 }
 
+void run_device_api_test(int rhs) {
+  auto host = vbsr::generate({8, 8, 2, rhs, vbsr::Distribution::Bimodal, false, 17});
+  auto input = make_random_input(host.scalar_cols() * rhs, 13);
+  vbsr::Matrix owner(host), replacement(host);
+  cudaStream_t stream{};
+  float *b = nullptr, *c = nullptr;
+  check_cuda(cudaStreamCreate(&stream));
+  check_cuda(cudaMalloc(&b, input.size() * sizeof(float)));
+  check_cuda(cudaMalloc(&c, host.scalar_rows() * rhs * sizeof(float)));
+  try {
+    check_cuda(cudaMemcpyAsync(b, input.data(), input.size() * sizeof(float), cudaMemcpyHostToDevice, stream));
+    vbsr::Plan borrowed(owner.device_view(), {rhs}, stream);
+    vbsr::Plan owned(owner, {rhs});
+    auto reference = vbsr::cpu_reference(host, input, rhs);
+    execute_and_compare([&] { borrowed.execute(b, c, stream); }, stream, reference, c, "borrowed device matrix");
+    // A queued update must be visible to both existing plans, without reconstruction.
+    check_cuda(cudaMemsetAsync(const_cast<float*>(replacement.device_view().values), 0,
+                              host.values.size() * sizeof(float), stream));
+    owner.update_values(replacement.device_view().values, host.values.size(), stream);
+    owned.execute(b, c, stream);
+    check_cuda(cudaStreamSynchronize(stream));
+    std::fill(reference.begin(), reference.end(), 0.0f);
+    compare_device_result(reference, c, "owned value update");
+    execute_and_compare([&] { borrowed.execute(b, c, stream); }, stream, reference, c, "borrowed value update");
+    bool rejected = false;
+    try { owner.update_values(nullptr, host.values.size(), stream); }
+    catch (const std::invalid_argument&) { rejected = true; }
+    if (!rejected) throw std::runtime_error("null update accepted");
+    rejected = false;
+    try { owner.update_values(replacement.device_view().values, host.values.size() - 1, stream); }
+    catch (const std::invalid_argument&) { rejected = true; }
+    if (!rejected) throw std::runtime_error("wrong update count accepted");
+    auto bad = owner.device_view();
+    bad.scalar_rows++;
+    rejected = false;
+    try { vbsr::Plan invalid(bad, {rhs}); }
+    catch (const std::invalid_argument&) { rejected = true; }
+    if (!rejected) throw std::runtime_error("inconsistent device metadata accepted");
+  } catch (...) {
+    cudaFree(b); cudaFree(c); cudaStreamDestroy(stream); throw;
+  }
+  check_cuda(cudaFree(b)); check_cuda(cudaFree(c)); check_cuda(cudaStreamDestroy(stream));
+}
+
 } // namespace
 
 int main() {
@@ -368,6 +412,7 @@ int main() {
     run_negative_tests();
     run_reference_cancellation_test();
     for (int rhs : {8, 16, 32, 64}) {
+      run_device_api_test(rhs);
       run_shape_test(rhs);
       run_shape_test(rhs, true);
     }

@@ -47,7 +47,15 @@ if ($ResultsRoot) {
   python "$PSScriptRoot/export_robustness.py"
 }
 if ($LASTEXITCODE -ne 0) { throw 'Robustness result validation failed' }
+if ($ResultsRoot) {
+  python "$PSScriptRoot/export_relevance.py" --input (Join-Path $ResultsRoot 'relevance')
+} else {
+  python "$PSScriptRoot/export_relevance.py"
+}
+if ($LASTEXITCODE -ne 0) { throw 'Focused follow-up validation failed' }
 Assert-PaperPunctuation (Join-Path $projectRoot 'research/paper.tex')
+Assert-PaperPunctuation (Join-Path $projectRoot 'research/relevance.tex')
+Assert-PaperPunctuation (Join-Path $projectRoot 'research/supplement.tex')
 Get-ChildItem -LiteralPath (Join-Path $projectRoot 'research/generated') -Filter '*.tex' |
   ForEach-Object { Assert-PaperPunctuation $_.FullName }
 Push-Location (Join-Path $projectRoot 'research')
@@ -61,6 +69,14 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'PDF text extraction failed' }
   Assert-PaperPunctuation (Join-Path $output 'paper-text.txt')
   Copy-Item -LiteralPath (Join-Path $output 'paper.pdf') -Destination (Join-Path $projectRoot 'research/paper.pdf')
+  foreach ($pass in 1..2) {
+    & pdflatex -interaction=nonstopmode -halt-on-error "-output-directory=$output" supplement.tex
+    if ($LASTEXITCODE -ne 0) { throw 'Supplement build failed' }
+  }
+  & pdftotext -enc UTF-8 (Join-Path $output 'supplement.pdf') (Join-Path $output 'supplement-text.txt')
+  if ($LASTEXITCODE -ne 0) { throw 'Supplement text extraction failed' }
+  Assert-PaperPunctuation (Join-Path $output 'supplement-text.txt')
+  Copy-Item -LiteralPath (Join-Path $output 'supplement.pdf') -Destination (Join-Path $projectRoot 'research/supplement.pdf')
 } finally {
   Pop-Location
 }

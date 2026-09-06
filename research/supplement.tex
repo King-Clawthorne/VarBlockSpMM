@@ -1,0 +1,259 @@
+\documentclass[10pt]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern,microtype,amsmath,amssymb,booktabs,array,graphicx,float}
+\usepackage[margin=0.85in]{geometry}
+\usepackage{fancyhdr}
+\usepackage{placeins}
+\usepackage[colorlinks=true,allcolors=blue]{hyperref}
+\usepackage{url}
+% Let tables flow across page boundaries without leaving large empty areas.
+\renewcommand{\topfraction}{0.9}
+\renewcommand{\bottomfraction}{0.8}
+\renewcommand{\textfraction}{0.1}
+\renewcommand{\floatpagefraction}{0.8}
+\setcounter{topnumber}{3}
+\setcounter{bottomnumber}{2}
+\setcounter{totalnumber}{5}
+\widowpenalty=10000
+\clubpenalty=10000
+\urlstyle{same}
+\setlength{\parskip}{3pt}
+\setlength{\intextsep}{8pt}
+\setlength{\parindent}{0pt}
+\setlength{\emergencystretch}{2em}
+\setlength{\headheight}{14pt}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{VarBlockSpMM}
+\fancyhead[R]{Cohen Brunner Thomas}
+\fancyfoot[C]{\thepage}
+\input{generated/macros.tex}
+\input{generated/kernel-macros.tex}
+\input{generated/supplement-macros.tex}
+\input{generated/robustness-macros.tex}
+\title{VarBlockSpMM: Supplementary Evidence}
+\author{Cohen Brunner Thomas}
+\date{6 September 2026}
+\begin{document}
+\maketitle
+\section{Original NVIDIA controls}
+This table and figure use the original seed-1, three-process campaign.
+The comparator set includes cuSPARSE and grouped cuBLAS, without MAGMA.
+They remain separate from the focused MAGMA follow-up in the main paper.
+\begin{table}[H]
+\centering\small
+\caption{Original width breakdown, with process-averaged ratios.}
+\input{generated/use-cases.tex}
+\end{table}
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{generated/use-cases.pdf}
+\caption{Original core width comparison. Each point averages three
+process ratios. The fastest-library panel uses the original NVIDIA controls.}
+\end{figure}
+
+\begin{table}[H]
+\centering\small
+\caption{Descriptive process-label ranges on the core grid. The two endpoints
+are observed aggregate ratios, not confidence limits.}\label{tab:process}
+\input{generated/process.tex}
+\end{table}
+
+\begin{table}[H]
+\centering\small
+\caption{Width and degree breakdown for the core grid. Times are milliseconds
+and speedups are dimensionless.}\label{tab:regimes}
+\input{generated/regimes.tex}
+\end{table}
+
+\begin{table}[H]
+\centering\small
+\caption{Size and degree-pattern controls with random column locality. Each
+row averages eight configurations and three process observations.}\label{tab:scaling}
+\input{generated/scaling.tex}
+\end{table}
+
+\begin{table}[H]
+\centering\small
+\caption{Matched control time divided by changed-policy time. RHS-8
+effects are geometric marginal contrasts over the other two factorial
+choices. Minima and maxima first average three process ratios for each
+fixed matrix instance. They are observed ranges, not confidence limits.}
+\label{tab:matched}
+\input{generated/matched-ablation.tex}
+\end{table}
+
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{generated/core-distribution.pdf}
+\caption{GPU time ratios across the 128 core configurations. Each ratio is
+the geometric mean of three paired process ratios, computed from per-process
+timing medians. Each curve sorts configurations independently, so equal ranks
+need not identify the same matrix. The vertical axis is logarithmic. Ratios
+above the dashed parity line favor direct execution. These are empirical
+distributions over the chosen grid, not uncertainty intervals.}
+\label{fig:core-distribution}
+\end{figure}
+
+\begin{table}[H]
+\centering\small
+\caption{All published-matrix controls, averaged across twelve matrix and
+width configurations. Ratios divide comparator GPU time by direct time.}
+\label{tab:application-controls}
+\input{generated/application-controls.tex}
+\end{table}
+
+\begin{table}[H]
+\centering\small
+\caption{Near-field comparator GPU time divided by direct time. Each row
+averages three geometry seeds and three processes per seed. Ratios above
+one favor direct execution.}\label{tab:native}
+\input{generated/native.tex}
+\end{table}
+\FloatBarrier
+\section{Transport discretization and follow-up controls}
+For element width \(h\), the modal mass matrix has entries
+\(M_{ii}=h/(2i+1)\). On the reference interval, define
+\(Q_{ij}=\int_{-1}^{1}P_i'(x)P_j(x)\,dx\), which equals two when
+\(i>j\) and \(i-j\) is odd and zero otherwise. The periodic upwind
+transport operator has blocks
+\[
+ L^{\mathrm{self}}_{ij}=\frac{2i+1}{h}(Q_{ij}-1),\qquad
+ L^{\mathrm{upwind}}_{ij}=\frac{2i+1}{h}(-1)^i.
+\]
+The stored matrix is \(I+\Delta t L\), with
+\(\Delta t=0.05h/64^2\). Element polynomial orders repeat
+\(7,15,31,63\). Their unequal modal counts produce the variable block
+sizes directly. All entries in each stored block are nonzero for the
+chosen timestep. Initialization projects \(\sin(2\pi kx)\) for
+\(k=1,\ldots,N\) using 96-point Gauss-Legendre quadrature. The analytic
+comparison projects \(\sin(2\pi k(x-32\Delta t))\) and weights coefficient
+errors by \(h/(2i+1)\). The reported short-trace check is not a long-time
+stability or convergence study.
+
+The trace comparator starts from identical prepared host blocks. Startup
+includes method construction and one complete trace, including the reset
+of its initial device buffer. Common panel allocations and Python assembly
+are excluded. Every method's output is checked against repeated
+FP64 sparse products using the assembled FP32 coefficients. No CPU reference
+work occurs inside timing.
+
+MAGMA slot execution needs no product workspace. The reduction composition
+allocates \(64N\) FP32 entries per stored block. The alternating-buffer
+transport trace retains two pointer plans and thus twice that product
+workspace. The reduction kernel and all repeated slot calls are timed.
+All MAGMA code is pinned in the source archive. This composition comparison
+does not reproduce the full hierarchical solver from the motivating work.
+
+\begin{table}[H]
+\centering\small
+\caption{Controlled combinations. Best-library-to-direct ratios average
+three paired process ratios. Fixed-size 32 cases include BSR32.}
+\input{generated/controlled.tex}
+\end{table}
+
+\input{generated/update-findings.tex}
+\FloatBarrier
+\section{Historical development evidence}\label{sec:history}
+This appendix reports archived development measurements. They are separate
+from the verified-build campaigns in the main text and are not combined
+with them as additional repetitions or used to adjust current speedups.
+
+\subsection{RHS-8 mapping ablation}
+\label{sec:rhs8-results}
+The RHS-8 ablation covers 144 configurations at 256, 512, 1,024, and 4,096
+block rows and columns. At each size, 32 configurations combine degrees
+\(2,4,8,16\), the four shape distributions, and both locality patterns.
+Four additional configurations combine high-variance or bimodal shapes with
+both localities and repeating degrees \(0,1,16,16\).
+
+Each configuration uses matrix seeds 1, 2, and 3, with one fresh process per
+seed. These are different instances, not repeated processes of one fixed
+instance. The 432 processes retain 25,920 raw timed calls. Each method receives
+five warmups and 30 measured calls. Method order is randomized within each
+process, and jobs are shuffled before serial execution. Input generation,
+CUDA-event placement, and synchronized host timing use the same definitions
+as the main campaign.
+For each configuration, we average the three paired log ratios of GPU medians,
+then give each configuration equal weight. No significance interval is assigned.
+The comparator is the scalar RHS-8 kernel, and the tiled method executes
+the dispatch archived with that campaign, including its small-grid fallback.
+
+\begin{table}[H]
+\centering\small
+\caption{Scalar baseline time divided by optimized direct time for RHS 8.
+Each size contains 36 configurations and three matrix seeds. The 256-row
+paths execute the same scalar kernel, so their deviation from parity reflects
+measurement variation.}\label{tab:rhs8}
+\input{generated/kernel.tex}
+\end{table}
+
+Table~\ref{tab:rhs8} shows increasing benefit with grid size. All 108
+configurations using the tiled path improve after averaging across seeds,
+with geometric speedup \KernelSpeedup{} and minimum \KernelMinimum{}.
+Across all 144 configurations, including the unchanged fallback, the ratio
+is \KernelOverall{}. The 4,096-row bimodal/random/degree-16 case improves
+from 2.245 to 1.086 ms, a ratio of 2.067. These absolute times are geometric
+means of the three seed medians. The minimum is a descriptive observation,
+not a statistical guarantee against regression.
+
+Every process passes 64 CPU output probes per method on its timed matrix.
+A deterministic full-output test exercises all 64 supported block shapes in
+the tiled path, with empty rows, a non-default stream, and output initialized
+to NaNs to detect missing writes. That campaign's updated suite passed memcheck with zero
+errors and racecheck filtered to the new kernel with zero errors or warnings.
+
+For the representative 4,096-row bimodal/random/degree-16 case, Nsight Compute
+reports 4,096 CTAs instead of 8,192 and 47 registers per thread instead of 40.
+Eligible warps per scheduler increase from 0.40 to 0.55, and issued warps per
+scheduler increase from 0.26 to 0.32. These workload-specific counters support
+improved scheduling. Instrumented durations do not enter the speedup estimates.
+The combined experiment does not isolate the contributions of tiling,
+accumulator reuse, and CTA count. Its paired direct-kernel measurements are
+separate from the main library comparisons and use three different seeds.
+
+\subsection{Earlier width specialization and profiling}
+
+The original five-seed dataset remains available under
+\path{data/publication/}. It contains 128 configurations per seed, one
+benchmark process per configuration and seed, five warmups, and 20 measured
+executions. Its saved summaries reproduce geometric ratios of 4.988 over
+default CSR and 4.222 over the original grouped composition. That composition
+rebuilt pointers and cleared all outputs on every call. The original harness
+also used constant dense input and fixed method order.
+
+Historical timings remain separate from the current comparison. Software,
+inputs, timing protocol, and comparators changed, so differences cannot isolate
+one optimization. Earlier standard errors describe five whole-grid averages,
+not process noise. The configuration bootstrap measures sensitivity to sampling
+the chosen grid, not uncertainty over an application population.
+The kernel policy was developed using separate single-seed sweeps with
+1,024 block rows, three warmups, and seven measured executions. Table~\ref{tab:ablation}
+reports those exploratory comparisons. Each ratio compares the named
+successive variants on the stated slice, with equal configuration weights.
+
+\begin{table}[H]
+\centering\small
+\caption{Exploratory development ablations, separate from the main evaluation.}
+\label{tab:ablation}
+\begin{tabular}{p{0.35\linewidth}p{0.30\linewidth}rr}
+\toprule
+Change & Comparator & Cases & Ratio\\
+\midrule
+Wider accumulation & Four-accumulator direct & 128 & 1.24\\
+Cooperative staging & Wider accumulation & 128 & 1.18\\
+Wider accumulation and staging & Four-accumulator direct & 128 & 1.46\\
+RHS-32 buffering and dispatch & Single-buffer staging & 32 & 1.11\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Historical Nsight Compute measurements found 99.54\% occupancy but only
+0.48 eligible warps per scheduler on an early RHS-64 case. Staging reduced
+long-scoreboard share from 78.0\% to 37.1\%, while barrier waiting reached
+36.4\%. The tall RHS-32 profile confirmed native asynchronous copies.
+These workload-specific observations support the mechanism. Instrumented
+durations are excluded from speedup calculations.
+\end{document}

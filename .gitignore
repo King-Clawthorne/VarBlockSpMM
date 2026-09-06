@@ -32,3 +32,10 @@ __pycache__/
 !/data/robustness/manifest.json
 !/data/robustness/source_snapshot.zip
 !/data/robustness/runs.zip
+
+# Bounded MAGMA, transport, factor-control, and API-update evidence.
+!/data/relevance/
+!/data/relevance/manifest.json
+!/data/relevance/sources.zip
+!/data/relevance/runs.zip
+!/data/relevance/MAGMA-COPYRIGHT

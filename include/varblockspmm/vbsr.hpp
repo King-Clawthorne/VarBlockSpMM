@@ -27,6 +27,8 @@ struct HostMatrix {
   /** Throws `std::invalid_argument` if metadata or packed values are
    * inconsistent. */
   void validate() const;
+  /** Validates metadata against a payload count without accessing values. */
+  void validate_structure(size_t value_count) const;
 };
 
 /** Non-owning device view of a variable-block sparse matrix. */
@@ -38,7 +40,7 @@ struct DeviceMatrix {
   const float* values{};
 };
 
-/** Owns an immutable copy of a validated matrix in CUDA device memory. */
+/** Owns fixed matrix structure and mutable values in CUDA device memory. */
 class Matrix {
 public:
   /** Copies `host` and all of its metadata to the current CUDA device. */
@@ -53,6 +55,12 @@ public:
   int64_t scalar_rows() const { return rows_; }
   int64_t scalar_cols() const { return cols_; }
   size_t storage_bytes() const;
+  /** Enqueues a value-only device-to-device copy. Existing plans remain valid.
+   * Source has exactly value_count elements and must remain live until the copy
+   * completes. Source and destination must be disjoint or identical.
+   * Order updates and executions on one stream, or use CUDA events.
+   */
+  void update_values(const float* device_values, size_t value_count, cudaStream_t stream = 0);
 
 private:
   friend class Plan;
@@ -62,6 +70,7 @@ private:
   int32_t *row_ptr_{}, *block_col_{}, *row_size_{}, *col_size_{}, *row_shape_order_{};
   int64_t *row_off_{}, *col_off_{}, *value_off_{};
   float* values_{};
+  size_t value_count_{};
   void release();
 };
 
@@ -108,6 +117,14 @@ struct PlanOptions {
 class Plan {
 public:
   Plan(const Matrix&, PlanOptions);
+  /** Borrows existing device allocations. Construction synchronizes stream and
+   * validates a host copy of metadata only. Values stay on the GPU. The caller
+   * guarantees buffer extents, device accessibility, and allocation lifetime.
+   * Structure must remain unchanged until this plan and its queued work finish.
+   * Values may be produced or updated on the execution stream. Rebuild the plan
+   * after structural changes. The plan owns only its row classification array.
+   */
+  Plan(DeviceMatrix, PlanOptions, cudaStream_t stream = 0);
 
   /** Enqueues `C = A * B`; both dense matrices are non-overlapping, sufficiently
    * sized column-major device buffers on the matrix's CUDA device.
@@ -121,6 +138,7 @@ private:
   const int32_t* row_shape_order_{};
   int small_row_count_{}, large_row_count_{};
   PlanOptions options_{};
+  std::shared_ptr<int32_t> owned_row_shape_order_;
 };
 
 /** Persistent cuSPARSE baseline using an expanded scalar CSR representation. */

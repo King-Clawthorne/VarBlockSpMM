@@ -1,0 +1,70 @@
+\subsection{MAGMA, transport traces, and controlled factors}
+The focused comparison adds the FP32 variable-size batched GEMM dispatcher
+from MAGMA revision \texttt{c3de65f855dd} [12]. One composition follows
+Boukaram et al.: each batch contains at most one block per output row,
+and successive slots accumulate sequentially. A second composition batches
+all block products into temporary storage, then reduces them by output row.
+The latter tests whether avoiding sequential slots offsets its workspace
+and reduction costs. Both cache dimensions and pointers, borrow device
+values, and use the upstream GEMM dispatcher without kernel changes.
+Setup validates dimensions before calling the dispatcher used by MAGMA's
+\texttt{max\_nocheck} interface. Its normal launch and attribute-setting
+overhead remains inside timing.
+
+The comparison repeats the 128-case core on matrix seed 2, with one fresh
+process and six timing samples per method. It includes the same explicit
+CSR algorithms, grouped cuBLAS, BSR8, and applicable BSR32 controls, plus
+both MAGMA compositions. This smaller follow-up is separate from the
+three-seed and queued campaigns. The related hierarchical study reports
+leaf sizes of 64 to 256, whereas this implementation supports 8 to 64 in
+steps of eight. The comparison therefore measures the compatible block
+product, not that study's larger leaves or complete construction algorithm.
+
+\paragraph{An application trace.}
+A standalone periodic transport example solves \(u_t+u_x=0\) with an
+upwind discontinuous Galerkin discretization in a Legendre modal basis [13].
+Prescribed element orders repeat 7, 15, 31, and 63. The resulting blocks
+have sizes 8, 16, 32, and 64, with dense self and upwind-neighbor couplings.
+Their block structure comes from the discretization, not a partition of
+scattered scalar entries. The program advances ensembles of sine waves
+through 32 forward-Euler steps using alternating device buffers. Each
+timing sample includes the complete dependent trace and a device copy
+that resets the initial state. All methods use the same FP32 operator.
+Every final coefficient is checked against double-precision sparse
+products. A separate physical \(L^2\) check compares with the analytically
+translated waves. The largest relative error among the six prepared
+cases is below \(4.2\times10^{-7}\).
+
+Element counts are 256, 1,024, and 4,096, and ensemble widths are 8 and 64.
+Each case has three fresh processes, with six trace samples per method.
+The timestep is \(0.05h/64^2\), where \(h\) is the element width.
+This tests a short transport component, not production time-to-solution
+or an adaptive-order solver. The full discretization and retained startup
+observations are described in the supplement.
+The comparison replaces the generic block-product backend. It does not
+compare DG-specific kernels that exploit the modal operator's algebra.
+
+\begin{table}[!htbp]
+\centering\small
+\caption{Complete 32-step transport traces. Ratios divide comparator time
+by direct time and first average paired process ratios in log space.
+The best-library column includes both MAGMA compositions and all tested
+NVIDIA controls. Times are direct GPU milliseconds per trace.}
+\label{tab:transport}
+\input{generated/transport.tex}
+\end{table}
+
+\input{generated/relevance-findings.tex}
+
+\paragraph{Separating workload factors.}
+A crossed control varies block rows over \(128,512\), degree over
+\(4,16,128\), block size over \(8,32\), and panel width over \(8,64\).
+Each of the 24 configurations uses seed 11 and three fresh processes.
+Degrees select nested prefixes of the same per-row column permutation,
+and shape changes preserve that adjacency. The same library controls
+are retained, with BSR32 added where compatible. Row-count changes also
+change the working set, so they are not interpreted as isolated occupancy
+measurements. The supplementary table gives every controlled combination.
+These experiments distinguish the chosen factors without assigning a
+single cause retrospectively to the covariance result.
+\input{generated/controlled-findings.tex}

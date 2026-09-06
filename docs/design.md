@@ -2,7 +2,7 @@
 
 ## Storage and lifetime
 
-`HostMatrix` validates packed VBSR metadata, including sorted unique block columns and offsets checked without signed-overflow subtraction. `Matrix` owns its GPU copy. `Plan` stores a non-owning view, so the allocation must outlive the plan and its queued work and must not be replaced through move assignment. Structure and values are immutable through the public API. Dense blocks, B, and C are column-major. B and C are non-overlapping buffers on the same CUDA device.
+`HostMatrix` validates packed VBSR metadata, including sorted unique block columns and offsets checked without signed-overflow subtraction. `Matrix` owns its GPU copy. `Plan` borrows the matrix allocation, which must outlive the plan and its queued work and must not be replaced through move assignment. Structure is fixed while a plan is in use. `Matrix::update_values` enqueues a device-to-device value replacement without invalidating plans. `Plan(DeviceMatrix, ...)` accepts caller-owned device buffers and validates metadata after waiting for the supplied stream. Device values stay on the GPU and may be updated in place with correct stream ordering. Dense blocks, B, and C are column-major. B and C are non-overlapping buffers on the same CUDA device.
 
 ## Direct kernel
 
@@ -16,7 +16,7 @@ RHS 32 classifies block rows once when `Matrix` is constructed. Rows up to 16 sc
 
 The two-list dispatch is enabled for mixed-height matrices at mean degree 8 or greater. At lower degree its second launch costs more than shape separation saves, so those matrices use the original single-buffer kernel; homogeneous matrices need only their one fitting launch. RHS 64 also retains the original 256-thread single-buffer kernel because two full RHS-64 tiles increase shared memory from 16,640 to roughly 32.5 KiB and lose more occupancy than overlap recovers. The narrow-panel policy was selected separately on development seed 4. The evaluation retains the previous policy as a paired control and tests shared versus global input loads with matching 64-thread CTAs.
 
-The row-order list is immutable metadata owned by `Matrix`; execution still allocates no temporary workspace. Every CTA owns disjoint output elements, so neither path needs atomics.
+The row-order list is immutable metadata owned by `Matrix`, or by a plan constructed from external device buffers. Execution still allocates no temporary workspace. Every CTA owns disjoint output elements, so neither path needs atomics.
 
 `Auto` currently resolves to the hybrid row-owned dispatch. `SplitRow` is rejected with a clear exception: the measured release grid did not justify partial-output workspace and reduction. `GroupedGemmPlan` is an explicit library alternative with the slot composition described below.
 

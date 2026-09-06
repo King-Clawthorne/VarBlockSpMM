@@ -13,6 +13,7 @@ include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 include(CTest)
 option(VARBLOCKSPMM_BUILD_BENCHMARKS "Build research benchmark executables" ON)
+set(VARBLOCKSPMM_MAGMA_SOURCE "" CACHE PATH "Optional pinned MAGMA source checkout for comparison")
 
 add_library(varblockspmm
   src/format/vbsr.cpp
@@ -59,6 +60,9 @@ add_executable(vbsr_kernel_audit bench/kernel.cpp)
 target_link_libraries(vbsr_kernel_audit PRIVATE vbsr_benchmark_support)
 add_executable(vbsr_ablation bench/ablation.cpp)
 target_link_libraries(vbsr_ablation PRIVATE vbsr_benchmark_support)
+if(VARBLOCKSPMM_MAGMA_SOURCE)
+  include(cmake/MagmaComparison.cmake)
+endif()
 endif()
 
 configure_package_config_file(cmake/VarBlockSpMMConfig.cmake.in
