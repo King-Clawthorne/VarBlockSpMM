@@ -79,7 +79,8 @@ enum class Method {
   GroupedCached,
   GroupedChanging,
   DirectChanging,
-  FixedBsr
+  FixedBsr,
+  BsrEight
 };
 std::string_view method_name(Method method) {
   switch (method) {
@@ -101,6 +102,8 @@ std::string_view method_name(Method method) {
     return "direct_changing";
   case Method::FixedBsr:
     return "bsr32";
+  case Method::BsrEight:
+    return "bsr8";
   }
   throw std::invalid_argument("unknown audit method");
 }
@@ -124,7 +127,8 @@ public:
     // still selects the same sequence of methods.
     std::vector<Method> methods = {
         Method::Direct,   Method::CsrDefault,    Method::CsrOne,          Method::CsrTwo,
-        Method::CsrThree, Method::GroupedCached, Method::GroupedChanging, Method::DirectChanging};
+        Method::CsrThree, Method::GroupedCached, Method::GroupedChanging, Method::DirectChanging,
+        Method::BsrEight};
     if (args_.generator.distribution == vbsr::Distribution::Uniform)
       methods.push_back(Method::FixedBsr);
     std::mt19937 random_engine(args_.order_seed);
@@ -146,6 +150,8 @@ private:
   }
 
   template <class Plan> void measure_plan(Method method, Plan& plan, int position, bool changing) {
+    bench::check_cuda(cudaMemset(output_.data(), 0xff, output_.size() * sizeof(float)));
+    bench::check_cuda(cudaMemset(alternate_output_.data(), 0xff, alternate_output_.size() * sizeof(float)));
     bench::measure(
         method_name(method),
         [&](int iteration) {
@@ -162,8 +168,8 @@ private:
   }
 
   void measure_sparse(Method method, int position, int algorithm, bool preprocess,
-                      bool fixed_bsr = false) {
-    vbsr::ScalarCsrPlan plan(matrix_, args_.rhs_width, algorithm, preprocess, fixed_bsr);
+                      bool fixed_bsr = false, int block_size = 32) {
+    vbsr::ScalarCsrPlan plan(matrix_, args_.rhs_width, algorithm, preprocess, fixed_bsr, block_size);
     measure_plan(method, plan, position, false);
   }
 
@@ -195,6 +201,9 @@ private:
       break;
     case Method::FixedBsr:
       measure_sparse(method, position, 0, false, true);
+      break;
+    case Method::BsrEight:
+      measure_sparse(method, position, 0, false, true, 8);
       break;
     }
   }

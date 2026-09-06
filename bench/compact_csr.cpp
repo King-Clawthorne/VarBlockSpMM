@@ -26,6 +26,7 @@ struct CompactCsrPlan::Impl {
   DeviceBuffer<int32_t> column_indices;
   DeviceBuffer<float> sparse_values;
   void* workspace{};
+  size_t workspace_size{};
   cusparseHandle_t handle{};
   cusparseSpMatDescr_t sparse_matrix{};
   cusparseDnMatDescr_t input_matrix{}, output_matrix{};
@@ -67,6 +68,7 @@ struct CompactCsrPlan::Impl {
         sparse_matrix, input_matrix, &zero, output_matrix, CUDA_R_32F, algorithm, &bytes));
     if (bytes)
       check_cuda(cudaMalloc(&workspace, bytes));
+    workspace_size = bytes;
     if (selected_algorithm != CsrAlgorithm::Two)
       sparse_check(cusparseSpMM_preprocess(
           handle, CUSPARSE_OPERATION_NON_TRANSPOSE, CUSPARSE_OPERATION_NON_TRANSPOSE, &one,
@@ -88,4 +90,8 @@ CompactCsrPlan::CompactCsrPlan(const CompactCsrData& data, int64_t rows, int64_t
 }
 CompactCsrPlan::~CompactCsrPlan() = default;
 void CompactCsrPlan::execute() { impl_->execute(); }
+size_t CompactCsrPlan::storage_bytes() const {
+  return impl_->workspace_size + impl_->row_offsets.size() * sizeof(int32_t) +
+         impl_->column_indices.size() * sizeof(int32_t) + impl_->sparse_values.size() * sizeof(float);
+}
 } // namespace vbsr::bench

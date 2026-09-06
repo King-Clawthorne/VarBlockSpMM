@@ -10,6 +10,15 @@
 #include "varblockspmm/vbsr.hpp"
 
 namespace vbsr {
+__global__ void refresh_grouped_pointers(const float* input, float* output,
+                                         const int64_t* input_offsets, const int64_t* output_offsets,
+                                         const float** inputs, float** outputs, size_t count) {
+  const size_t index = size_t(blockIdx.x) * blockDim.x + threadIdx.x;
+  if (index < count) {
+    inputs[index] = input + input_offsets[index];
+    outputs[index] = output + output_offsets[index];
+  }
+}
 static void cuda_check(cudaError_t e) {
   if (e != cudaSuccess)
     throw std::runtime_error(cudaGetErrorString(e));
@@ -38,6 +47,8 @@ struct GroupedGemmPlan::Impl {
     const float** device_matrix_a_pointers{};
     const float** device_matrix_b_pointers{};
     float** device_output_pointers{};
+    int64_t* device_input_offsets{};
+    int64_t* device_output_offsets{};
   };
   int rhs{};
   bool cache_pointers = false;
@@ -46,6 +57,7 @@ struct GroupedGemmPlan::Impl {
   float* cached_output = nullptr;
   int64_t rows{}, cols{};
   float* values{};
+  size_t value_count{};
   cublasHandle_t handle{};
   std::vector<Slot> slots;
   ~Impl() {
@@ -53,6 +65,8 @@ struct GroupedGemmPlan::Impl {
       cudaFree(slot.device_matrix_a_pointers);
       cudaFree(slot.device_matrix_b_pointers);
       cudaFree(slot.device_output_pointers);
+      cudaFree(slot.device_input_offsets);
+      cudaFree(slot.device_output_offsets);
     }
     if (handle)
       cublasDestroy(handle);
@@ -64,11 +78,14 @@ GroupedGemmPlan::GroupedGemmPlan(const HostMatrix& a, int rhs, bool cache_pointe
     : impl_(new Impl) {
   impl_->cache_pointers = cache_pointers;
   a.validate();
+  if (a.scalar_rows() > INT32_MAX || a.scalar_cols() > INT32_MAX)
+    throw std::invalid_argument("grouped GEMM leading dimensions must fit INT32_MAX");
   if (rhs != 8 && rhs != 16 && rhs != 32 && rhs != 64)
     throw std::invalid_argument("invalid rhs width");
   impl_->rhs = rhs;
   impl_->rows = a.scalar_rows();
   impl_->cols = a.scalar_cols();
+  impl_->value_count = a.values.size();
   cuda_check(cudaMalloc(&impl_->values, a.values.size() * sizeof(float)));
   cuda_check(cudaMemcpy(impl_->values, a.values.data(), a.values.size() * sizeof(float),
                         cudaMemcpyHostToDevice));
@@ -118,6 +135,11 @@ GroupedGemmPlan::GroupedGemmPlan(const HostMatrix& a, int rhs, bool cache_pointe
     cuda_check(cudaMalloc(&slot_data.device_matrix_a_pointers, pointer_bytes));
     cuda_check(cudaMalloc(&slot_data.device_matrix_b_pointers, pointer_bytes));
     cuda_check(cudaMalloc(&slot_data.device_output_pointers, pointer_bytes));
+    const size_t offset_bytes = slot_data.input_offsets.size() * sizeof(int64_t);
+    cuda_check(cudaMalloc(&slot_data.device_input_offsets, offset_bytes));
+    cuda_check(cudaMalloc(&slot_data.device_output_offsets, offset_bytes));
+    cuda_check(cudaMemcpy(slot_data.device_input_offsets, slot_data.input_offsets.data(), offset_bytes, cudaMemcpyHostToDevice));
+    cuda_check(cudaMemcpy(slot_data.device_output_offsets, slot_data.output_offsets.data(), offset_bytes, cudaMemcpyHostToDevice));
     cuda_check(cudaMemcpy(slot_data.device_matrix_a_pointers, slot_data.matrix_a_pointers.data(),
                           pointer_bytes, cudaMemcpyHostToDevice));
   }
@@ -125,6 +147,12 @@ GroupedGemmPlan::GroupedGemmPlan(const HostMatrix& a, int rhs, bool cache_pointe
 
 GroupedGemmPlan::~GroupedGemmPlan() = default;
 int GroupedGemmPlan::launch_count() const { return int(impl_->slots.size()); }
+size_t GroupedGemmPlan::storage_bytes() const {
+  size_t bytes = impl_->value_count * sizeof(float);
+  for (const auto& slot : impl_->slots)
+    bytes += slot.matrix_a_pointers.size() * (3 * sizeof(float*) + 2 * sizeof(int64_t));
+  return bytes;
+}
 void GroupedGemmPlan::execute(const float* B, float* C, cudaStream_t stream) {
   blas_check(cublasSetStream(impl_->handle, stream));
   if (!impl_->cache_pointers || impl_->has_empty_rows) {
@@ -136,17 +164,11 @@ void GroupedGemmPlan::execute(const float* B, float* C, cudaStream_t stream) {
     // A pointers are persistent. B and C pointers depend on this call's base
     // addresses.
     if (refresh) {
-      std::vector<const float*> input_pointers(slot.matrix_a_pointers.size());
-      std::vector<float*> output_pointers(slot.matrix_a_pointers.size());
-      for (size_t index = 0; index < input_pointers.size(); ++index) {
-        input_pointers[index] = B + slot.input_offsets[index];
-        output_pointers[index] = C + slot.output_offsets[index];
-      }
-      const size_t pointer_bytes = input_pointers.size() * sizeof(float*);
-      cuda_check(cudaMemcpyAsync(slot.device_matrix_b_pointers, input_pointers.data(),
-                                 pointer_bytes, cudaMemcpyHostToDevice, stream));
-      cuda_check(cudaMemcpyAsync(slot.device_output_pointers, output_pointers.data(), pointer_bytes,
-                                 cudaMemcpyHostToDevice, stream));
+      const size_t count = slot.matrix_a_pointers.size();
+      refresh_grouped_pointers<<<unsigned((count + 255) / 256), 256, 0, stream>>>(
+          B, C, slot.device_input_offsets, slot.device_output_offsets,
+          slot.device_matrix_b_pointers, slot.device_output_pointers, count);
+      cuda_check(cudaGetLastError());
     }
     blas_check(cublasSgemmGroupedBatched(
         impl_->handle, slot.matrix_a_operations.data(), slot.matrix_b_operations.data(),

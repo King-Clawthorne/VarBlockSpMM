@@ -147,5 +147,6 @@ void measure(std::string_view name, const std::function<void(int)>& operation,
       throw std::runtime_error("invalid timing");
     std::cout << name << ',' << position << ',' << i << ',' << gpu << ',' << host << '\n';
   }
+  validate();
 }
 } // namespace vbsr::bench

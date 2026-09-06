@@ -1,0 +1,32 @@
+{
+  "name": "covariance_2048_clustered_s3",
+  "count": 2048,
+  "geometry": "clustered",
+  "seed": 3,
+  "eta": 0.5,
+  "leaf_diameter": 0.18,
+  "leaf_quantum": 8,
+  "max_leaf": 64,
+  "length_scale": 0.1,
+  "amplitude": 0.022097086912079608,
+  "block_rows": 159,
+  "block_count": 21729,
+  "shape_counts": {
+    "8": 110,
+    "16": 29,
+    "32": 18,
+    "64": 2
+  },
+  "mean_degree": 136.66037735849056,
+  "max_degree": 159,
+  "packed_values": 3766144,
+  "scalar_nonzeros": 3766136,
+  "fill_fraction": 0.9999978758114401,
+  "generation_and_packing_ms": 244.11959999997634,
+  "geometry_ms": 4.630199999155593,
+  "scalar_assembly_ms": 114.88899999858404,
+  "binary_sha256": "7a6c683586fb49d3009fe1eb6223b24c851efe813b848df9163454cbc052f1a6",
+  "numpy_version": "2.1.3",
+  "source": "https://arxiv.org/html/2506.16759v1#S2.SS1",
+  "scope": "Generated covariance near-field component, excluding far-field and solver work"
+}

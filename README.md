@@ -1,120 +1,96 @@
 # VarBlockSpMM
 
-CUDA FP32 non-transpose `C = A B` for a column-major variable-block sparse matrix `A` and dense column-major panels `B/C`. Block heights and widths independently vary over `{8,16,...,64}`; blocks are packed without global-size padding.
+CUDA FP32 non-transpose `C = A B` for packed variable-block sparse `A` and column-major dense `B/C`. Block heights and widths independently vary over `{8,16,...,64}`, and RHS widths are `{8,16,32,64}`.
 
-## Situation
+VarBlockSpMM executes directly on your packed blocks. It avoids scalar CSR expansion and fixed-block retiling, uses no output atomics, and allocates no temporary workspace during execution. The [paper](research/paper.pdf) measures execution speed, startup, and storage on an RTX 5060 Ti.
 
-Variable-block sparse matrix multiplication is difficult to map efficiently to a GPU. Irregular block dimensions create uneven work, global padding wastes storage and bandwidth, and generic sparse or dense library paths do not consistently fit every workload regime. The original scalar row-owned kernel was memory-latency-bound, especially for wide right-hand-side panels and high-degree rows.
+## When to use it
 
-## Task
+On the 128-case synthetic core grid, direct execution is **1.175 times faster than BSR8 overall**, winning **124 of 128 cases**. It is **1.137 times faster than the fastest tested library option overall**, winning **103 of 128 cases**. These are geometric means of paired process ratios on one RTX 5060 Ti.
 
-The project set out to provide a reusable and verifiable CUDA implementation that:
+| RHS width | Speedup over BSR8 | Speedup over fastest tested library | Wins over all tested libraries |
+| --- | --- | --- | --- |
+| 8 | 1.078x | 1.057x | 26/32 |
+| 16 | 1.086x | 1.042x | 24/32 |
+| 32 | 1.128x | 1.087x | 21/32 |
+| 64 | 1.444x | 1.397x | 32/32 |
 
-- Supports independently variable block heights and widths from 8 through 64.
-- Keeps blocks tightly packed without global-size padding.
-- Avoids atomics and temporary workspace in the direct kernel.
-- Handles right-hand-side widths of 8, 16, 32, and 64.
-- Compares the direct path with persistent cuSPARSE and grouped-cuBLAS baselines.
-- Measures correctness and performance across representative size, degree, and locality regimes.
+The library comparison includes explicit CSR algorithms, cached grouped cuBLAS, BSR8, and BSR32 on uniform blocks. Each width includes all four shape distributions, two locality patterns, and four degrees at 4,096 block rows, with three processes per configuration.
 
-## Action
+Use the direct plan when your application already produces dense variable blocks and you want to retain that layout. Wider panels benefit from sharing input tiles across rows and reusing each sparse value across RHS columns. Widths 8 and 16 use a 64-thread CTA with full-panel accumulation, selected through measured comparisons with alternative kernels.
 
-The implementation includes:
+Direct execution can also be useful for matrices that change frequently or are used for only a few products, since converting to a library format has a setup cost. On the generated native component, startup from prepared host formats is 3.953 times faster than the best tested library alternative, including one completed product. Compact scalar CSR uses 1.948 times the explicit device storage of the direct representation on those inputs. The paper reports those costs separately from steady-state speed and distinguishes already prepared blocks from CPU assembly.
 
-- A validated host format and owning GPU format with 64-bit scalar and value offsets.
-- Deterministic generators for uniform, low-variance, high-variance, and bimodal block sizes with local or random column patterns.
-- A double-accumulating CPU reference for correctness checks.
-- RHS-specialized row-owned CUDA kernels. RHS 16 and 32 reuse each `A` load across eight independent output accumulators, and RHS 64 uses sixteen. RHS 8 uses eight-row tiles and two accumulators per thread for matrices with at least 512 block rows, retaining the scalar mapping for smaller grids.
-- RHS 32 uses a measured row-shape dispatch. Rows up to 16 scalars high use a 128-thread single-buffer CTA; taller rows use 256 threads and asynchronous double buffering so the next `B` slice loads while the current block computes. Mixed-height matrices use the split only from mean degree 8 upward, where two launches amortize.
-- RHS 64 retains one 256-thread, single-buffer CTA per row. Two full RHS-64 buffers reduce occupancy enough to lose performance on the release GPU; RHS 16 likewise retains direct global loads.
-- A persistent scalar-CSR cuSPARSE plan.
-- A persistent slot-split plan using CUDA 13.4 `cublasSgemmGroupedBatched`, grouped by row and column block size.
-- A 128-case correctness matrix covering every supported RHS width, all distributions, degrees `{1,4,8,16}`, both locality modes, and non-default streams, plus 16 empty-row cases and cached-pointer address changes.
-- A reproducible 128-case regime sweep reporting GPU-event and synchronized host median/p95 timing.
+The paper's width table compares direct execution with both BSR8 and the fastest tested library method per case. Compact CSR remains the appropriate control for scattered scalar nonzeros, and dense SGEMM is included for high overall density. These comparisons help identify whether your input fits the direct kernel's strengths.
 
-Nsight Compute identified memory latency as the scalar kernel's primary constraint. The direct kernel was tuned by panel width to reuse each matrix value across eight or sixteen RHS accumulators, then changed to load reusable `B` slices cooperatively for wide panels. Neither optimization introduces atomics or external workspace.
-
-## Revised paper and evidence
-
-The [paper](research/paper.pdf) evaluates the optimized direct dispatch against
-persistent library controls. Its main tables and both graphs are generated from
-`data/optimized-revision/` and `data/application/optimized-results/`.
-The [optimization report](docs/optimization-report.md) documents the RHS-8 mapping
-and its comparison against the scalar baseline. The paper build validates the
-library campaigns and the separate kernel ablation.
-
-Compare the current RHS-8 dispatch with its retained release baseline using:
-
-```powershell
-python scripts/benchmark_kernel.py --output data/kernel-rhs8-rerun
+```cpp
+vbsr::Matrix matrix(host);
+vbsr::Plan plan(matrix, {32, vbsr::Kernel::Auto});
+plan.execute(device_B, device_C, stream);
 ```
 
-The [revised paper](research/paper.pdf) reports stronger library controls, raw GPU and host timings, and three fresh process observations for each of 168 synthetic configurations. It adds explicit CSR algorithms with preprocessing, cached grouped cuBLAS, fixed-block BSR on uniform inputs, size scaling, and variable degrees with empty rows. Three published structural matrices are evaluated with documented artificial partitions and compact-CSR controls.
+Here `host` contains your validated packed matrix, and the dense buffers use column-major layout. The matrix and buffers must remain alive until queued work completes.
 
-The revised results and evidence limits are recorded in [the validation report](research/optimized-validation.md). The original five-seed summaries remain historical evidence and are not measurements of the revised baseline configurations.
+## Comparisons and evidence
 
-To reproduce in fresh directories, run GPU campaigns serially:
+The final evaluation includes:
+
+- 168 synthetic configurations, each repeated in three fresh processes.
+- Explicit cuSPARSE CSR algorithms with persistent setup and preprocessing, cached grouped cuBLAS, and changing-address controls with stream-ordered device pointer generation.
+- Padding-free BSR8 subdivision on every variable-block input, plus BSR32 on uniform inputs.
+- Three published scalar sparse matrices with artificial partitions and compact-CSR controls.
+- Persistent dense SGEMM on published and native inputs, including zero-fill expansion in startup costs.
+- Twelve generated covariance near-field matrices with geometry-derived partitions, three geometry seeds, all four RHS widths, and three processes per instance. This benchmarks a dense-block application component, not a full hierarchical solver.
+- Matched kernel controls at two sizes and degrees, with three matrix seeds and three processes per seed. RHS 8 uses a complete mapping/accumulator/CTA factorial design. Wider panels have matched accumulation, staging, and buffering controls.
+- Native-input startup times, explicit device-array storage, and serial repeated-product cost models.
+
+The tables report each panel width and the full comparison grid. Numerical results come directly from validated raw records, with historical tuning results archived separately. Performance measurements cover one GPU.
+
+## Build and correctness
+
+The Windows reference workflow requires CUDA 13.4, Visual Studio 2022 Build Tools, and CMake 3.25 or newer. Host translation units use the compiler's C++26 draft mode, and CUDA translation units use C++20.
+
+```powershell
+scripts/build.ps1
+```
+
+The full-output tests poison output before each comparison, reject a deliberately empty operation, check CUDA errors, cover all 64 block shapes at every RHS width, and include mixed and completely empty rows. They check BSR8 conversion, explicit CSR algorithms, queued input/output address changes, and non-default streams.
+
+## Reproduce the paper
+
+Python preparation dependencies are NumPy, SciPy, Requests, and Matplotlib. PDF building additionally requires pdfLaTeX and pdftotext.
+
+```powershell
+python scripts/prepare_application.py
+python scripts/prepare_native.py
+python scripts/run_final_validation.py --output-root data/rerun
+powershell -File scripts/build_paper.ps1 -ResultsRoot data/rerun
+```
+
+The final runner performs a verified build, CTest, memcheck, and filtered racecheck, then runs every GPU campaign serially into the specified fresh root. It can take substantial time. Benchmark runners verify a build receipt tying compiled source hashes to the actual executable bytes, and snapshot the source used for each campaign. Existing records are resumed only with matching provenance and commands. Run `scripts/build_paper.ps1` without `-ResultsRoot` to rebuild the checked-in paper from its canonical campaigns instead.
+
+Use individual runners and fresh output directories for independent repetitions:
 
 ```powershell
 python scripts/run_revision.py --output data/revision-rerun
-python scripts/prepare_application.py
 python scripts/run_application.py --output data/application/rerun
+python scripts/run_supplement.py native --output data/native-rerun
+python scripts/run_supplement.py ablation --output data/ablation-rerun
 python scripts/analyze_revision.py --revision data/revision-rerun --application data/application/rerun --output build/rerun-tables
+python scripts/analyze_supplement.py --native data/native-rerun --ablation data/ablation-rerun --output build/rerun-tables
+python -m unittest discover -s tests -p 'test_*.py'
 ```
 
-The application preparation step requires NumPy, SciPy, and Requests. Run `scripts/build_paper.ps1` to validate the checked-in datasets, regenerate tables, and rebuild the manuscript PDF.
+Native binary arrays are large and excluded from Git. Their generator, geometry, partition metadata, assembly observations, and checksums are retained. `prepare_native.py` reconstructs identical binaries while preserving the archived CPU assembly observations. `--output` with a fresh directory remeasures preparation.
 
-## Historical development results
+The canonical campaigns are under `data/product-evaluation/`, in `synthetic/`, `published/`, `native/`, and `ablation/`. Sanitizer records are in its `validation/` subdirectory. The analyzers reject checksum, build receipt, design, command, process, method, and timing inconsistencies before emitting tables.
 
-The optimized hybrid direct kernel won all 128 workloads in the 1,024-row regime grid, including the former RHS-64/high-degree grouped-GEMM regime. The measured release therefore does not include split-row partial buffers.
+## API contract
 
-The asynchronous RHS-32 follow-up improves geometric-mean median time by 1.11x over the single-buffer staged release across its 32-case slice. It wins all degree-8 and degree-16 RHS-32 cases, reaching 1.17x on the 1,024-row bimodal/random/degree-16 case (0.468 ms versus 0.549 ms). Low-degree mixed shapes retain the original single-buffer launch, while RHS 64 is deliberately unchanged. The updated direct path still beats both persistent library baselines in all 128 cases.
+`HostMatrix` requires positive block dimensions, supported block sizes, sorted unique block columns within each row, and consistent packed payloads. Rows may be empty. Scalar and value offsets are 64-bit, while block indices are 32-bit. Scalar CSR expansion and grouped GEMM explicitly reject sizes that exceed their narrower index or leading-dimension limits.
 
-For the representative degree-16/RHS-64 workload, the staged hybrid:
+`Matrix` owns immutable GPU storage. `Plan` holds a non-owning view: the allocation must outlive the plan and all queued work, and must not be replaced by move assignment while referenced. Dense input and output buffers must be sufficiently sized, non-overlapping, and on the same CUDA device. Calls enqueue work on the supplied stream.
 
-- Reduced median time from 4.887 ms for the unstaged wide-ILP kernel to 2.895 ms (1.69x), and from 8.430 ms for the four-accumulator intermediate (2.91x).
-- Improved the complete 128-case release grid by a cumulative 1.46x geometric-mean speedup over the checked-in four-accumulator release.
-- Won every grid case against the persistent cuSPARSE and grouped-cuBLAS baselines.
-- Compiled with 56 and 64 registers per thread plus 8,320 and 16,640 bytes of shared memory per CTA for RHS 32 and 64 respectively, with no local-memory spills.
+Library plans own mutable handles and metadata. Order calls to one plan on one stream, or externally synchronize across streams and host threads. Grouped GEMM refreshes pointers on the execution stream and safely supports queued address changes.
 
-Unprofiled benchmark timings provide the speedups. Nsight Compute independently confirms that staging cuts long-scoreboard stalls, but its replay-instrumented durations are not mixed into the benchmark results.
-
-## Build and verify on Windows
-
-The project requires CMake 3.25 or newer, CUDA 13.4, a host compiler with C++26 draft support, and a CUDA architecture supported by the installed toolkit. Host `.cpp` files compile with `/std:c++latest` on MSVC or `-std=c++2c` on other compilers. Because CUDA 13.4 does not provide a CUDA C++26 mode, `.cu` files use its newest supported dialect, CUDA C++20.
-
-Use the build script to configure, compile, and run the tests:
-
-```powershell
-scripts\build.ps1
-```
-
-Equivalent commands are:
-
-```powershell
-cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_CUDA_ARCHITECTURES=native
-cmake --build build --config Release --parallel
-ctest --test-dir build -C Release --output-on-failure
-```
-
-For deeper CUDA validation:
-
-```powershell
-& "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.4\compute-sanitizer\compute-sanitizer.exe" --tool memcheck --error-exitcode 9 build\Release\vbsr_tests.exe
-& "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.4\compute-sanitizer\compute-sanitizer.exe" --tool racecheck --error-exitcode 9 build\Release\vbsr_tests.exe
-```
-
-## Benchmark
-
-```powershell
-build\Release\vbsr_benchmark.exe --rows 4096 --degree 8 --rhs 32 --distribution high --locality random --warmup 10 --reps 50 --seed 1
-scripts\run_grid.ps1 -Rows 4096 -Reps 20 -Warmup 5
-```
-
-WSL users can run `ROWS=4096 REPS=20 WARMUP=5 bash scripts/run_grid.sh`. Results are written to `data/regime_map.csv`. This is the historical harness. It excludes construction and input transfer and includes per-call grouped pointer refreshes. Use the revision runner above for the stronger controls.
-
-## API lifetime
-
-`Matrix` owns immutable GPU structure and values. `Plan` holds a non-owning view, so the matrix must outlive the plan. `execute` is asynchronous on the supplied stream. The baseline plan types own their expanded or copied formats and may be reused, but one instance must not be executed concurrently from multiple host threads because each owns a library handle and mutable descriptors.
-
-See [the design](docs/design.md), [the optimization report](docs/optimization-report.md), and [the prior-art review](docs/prior-art.md).
+See the [design](docs/design.md), [prior-art discussion](docs/prior-art.md), and [review closure record](research/review-closure.md).

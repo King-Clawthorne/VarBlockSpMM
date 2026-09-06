@@ -3,8 +3,12 @@
 #include <iostream>
 #include <random>
 
-// Focused RHS-8 comparison against the scalar implementation used by the
-// September 5 release. Both paths receive identical data and execution timing.
+namespace vbsr {
+void launch_ablation(DeviceMatrix, const int32_t*, const float*, float*, int, int, cudaStream_t);
+}
+
+// Historical eight-row mapping versus scalar. Keep this comparison fixed even
+// when the production dispatch changes. Current controls use vbsr_ablation.
 int main(int argc, char** argv) {
   try {
     namespace bench = vbsr::bench;
@@ -44,7 +48,6 @@ int main(int argc, char** argv) {
       host.validate();
     }
     vbsr::Matrix matrix(host);
-    vbsr::Plan plan(matrix, {8, vbsr::Kernel::RowOwned});
     auto input = bench::make_input(bench::panel_elements(host.scalar_cols(), 8));
     bench::DeviceBuffer<float> device_input(input.size());
     bench::DeviceBuffer<float> output(bench::panel_elements(host.scalar_rows(), 8));
@@ -56,10 +59,12 @@ int main(int argc, char** argv) {
     std::shuffle(methods.begin(), methods.end(), random_engine);
     int position = 0;
     for (int method : methods) {
+      bench::check_cuda(cudaMemset(output.data(), 0xff, output.size() * sizeof(float)));
       bench::measure(method ? "tiled" : "legacy",
                      [&](int) {
                        if (method)
-                         plan.execute(device_input.data(), output.data());
+                         vbsr::launch_ablation(matrix.device_view(), nullptr, device_input.data(),
+                                               output.data(), 8, 200, 0);
                        else
                          vbsr::launch_row_owned_scalar(matrix.device_view(), device_input.data(),
                                                        output.data(), 8, 0);

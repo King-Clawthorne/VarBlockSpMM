@@ -8,3 +8,20 @@
 /research/*.toc
 __pycache__/
 *.py[cod]
+/data/native/*.bin
+
+# Keep new experiments local. Explicitly retain the evidence used by the paper.
+# Files already tracked by Git remain tracked, including historical archives.
+/data/**
+!/data/README.md
+!/data/product-evaluation/
+!/data/product-evaluation/**
+!/data/narrow-tuning/
+!/data/narrow-tuning/*.json
+!/data/narrow-tuning/*.zip
+!/data/narrow-tuning-2/
+!/data/narrow-tuning-2/*.json
+!/data/narrow-tuning-2/*.zip
+!/data/native/
+!/data/native/*.json
+!/data/native/*-geometry.npz

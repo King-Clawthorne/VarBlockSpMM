@@ -1,4 +1,4 @@
-> The current paper uses the optimized-kernel campaign described in [optimized-validation.md](optimized-validation.md). This document retains the earlier validation history.
+> Archived validation history. For the current paper and measurements, see [review-closure.md](review-closure.md). Claims below describe the archived campaign.
 
 # Paper revision validation
 

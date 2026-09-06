@@ -41,16 +41,38 @@ def render_figures(output: Path, data: dict):
     plt.rcParams.update({'font.family': 'DejaVu Sans', 'font.size': 9,
                          'axes.titlesize': 10, 'axes.labelsize': 9,
                          'legend.fontsize': 8, 'pdf.fonttype': 42})
+    if all('library_best' in row for row in data['core']):
+        figure, axes = plt.subplots(1, 2, figsize=(6.7, 2.9), sharey=True, layout='constrained')
+        values = [r[m] for r in data['core'] for m in ('bsr8', 'library_best')]
+        low = min(0.5, min(values) / 1.08)
+        high = max(2, max(values) * 1.08)
+        for axis, method, title in zip(axes, ('bsr8', 'library_best'),
+                                       ('(a) Padding-free BSR8', '(b) Fastest tested library')):
+            ratio_axis(axis, (low, high), [0.5, 0.75, 1, 1.25, 1.5, 2])
+            means = []
+            for index, width in enumerate((8, 16, 32, 64)):
+                ratios = sorted(r[method] for r in data['core'] if r['configuration'][2] == width)
+                means.append(math.exp(sum(map(math.log, ratios)) / len(ratios)))
+                axis.scatter([index + (i - 15.5) * 0.012 for i in range(len(ratios))], ratios,
+                             s=11, color='#225ea8', alpha=0.35, linewidths=0)
+            axis.plot(range(4), means, color='#123c61', marker='D', markersize=4, linewidth=1.5,
+                      label='Geometric mean')
+            axis.set(xticks=range(4), xticklabels=[8, 16, 32, 64], xlabel='Dense panel width (RHS)',
+                     title=title, xlim=(-0.4, 3.4))
+            axis.legend(loc='upper left', frameon=False)
+        axes[0].set_ylabel('Comparator / direct GPU time\nAbove 1: direct faster')
+        save(figure, output, 'use-cases')
     figure, axis = plt.subplots(figsize=(6.7, 2.9), layout='constrained')
     for name, label, color, style in [
             ('csr_default', 'Default CSR', '#737373', ':'),
             ('csr_best', 'CSR lower envelope', '#225ea8', '-'),
-            ('grouped_cached', 'Cached grouped cuBLAS', '#7651a8', '-.')]:
+            ('grouped_cached', 'Cached grouped cuBLAS', '#7651a8', '-.'),
+            ('bsr8', 'Subdivided BSR8', '#13806a', '--')]:
         values = sorted(row[name] for row in data['core'])
         axis.plot(range(1, len(values) + 1), values, label=label,
                   color=color, linestyle=style, linewidth=1.6)
     core_values = [row[name] for row in data['core']
-                   for name in ('csr_default', 'csr_best', 'grouped_cached')]
+                   for name in ('csr_default', 'csr_best', 'grouped_cached', 'bsr8')]
     core_top = max(16, 2 ** math.ceil(math.log2(max(core_values) * 1.05)))
     core_bottom = min(0.75, min(core_values) / 1.05)
     ratio_axis(axis, (core_bottom, core_top),

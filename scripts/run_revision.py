@@ -7,6 +7,7 @@ from pathlib import Path
 import random
 import time
 from typing import NamedTuple
+from build_verified import verified_build
 
 from benchmark_runs import (ROOT, archive_runs, read_runs, run_process, save_manifest,
                             source_hashes, source_paths, validate_run)
@@ -14,7 +15,7 @@ from benchmark_runs import (ROOT, archive_runs, read_runs, run_process, save_man
 ORDER_SEED = 20260905
 PANEL_WIDTHS = (8, 16, 32, 64)
 SYNTHETIC_METHODS = ["direct", "csr_default", "csr_alg1_pre", "csr_alg2", "csr_alg3_pre",
-                     "grouped_cached", "grouped_changing", "direct_changing"]
+                     "grouped_cached", "grouped_changing", "direct_changing", "bsr8"]
 
 
 class SyntheticCase(NamedTuple):
@@ -60,7 +61,7 @@ def parse_arguments():
 def main():
     args = parse_arguments()
     args.output.mkdir(parents=True, exist_ok=True)
-    executable = ROOT / "build/Release/vbsr_audit.exe"
+    executable, receipt = verified_build('vbsr_audit')
     cases = build_cases()
     rng = random.Random(ORDER_SEED)
     jobs = [(case, process) for case in cases for process in range(args.processes)]
@@ -70,7 +71,7 @@ def main():
                     cases=len(cases), processes=args.processes, reps=args.reps, warmup=5,
                     randomization_seed=ORDER_SEED, matrix_seed=1, jobs=jobs,
                     executable_sha256=hashlib.sha256(executable.read_bytes()).hexdigest(),
-                    sources=source_hashes(sources))
+                    sources=source_hashes(sources), build_receipt=receipt)
     save_manifest(args.output, manifest, sources)
     existing = {record.stem: record for record in read_runs(args.output)}
     start = time.monotonic()

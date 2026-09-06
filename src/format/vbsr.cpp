@@ -37,12 +37,12 @@ void HostMatrix::validate() const {
   if (block_rows <= 0 || block_cols <= 0) {
     throw std::invalid_argument("positive block dimensions required");
   }
-  if (row_ptr.size() != size_t(block_rows + 1) || row_size.size() != size_t(block_rows) ||
+  if (row_ptr.size() != size_t(block_rows) + 1 || row_size.size() != size_t(block_rows) ||
       col_size.size() != size_t(block_cols)) {
     throw std::invalid_argument("metadata size mismatch");
   }
-  if (row_scalar_off.size() != size_t(block_rows + 1) ||
-      col_scalar_off.size() != size_t(block_cols + 1)) {
+  if (row_scalar_off.size() != size_t(block_rows) + 1 ||
+      col_scalar_off.size() != size_t(block_cols) + 1) {
     throw std::invalid_argument("scalar offsets size mismatch");
   }
   if (row_scalar_off.front() != 0 || col_scalar_off.front() != 0) {
@@ -56,17 +56,21 @@ void HostMatrix::validate() const {
     throw std::invalid_argument("bad value offsets");
   }
 
+  int64_t expected_row_offset = 0;
   for (int block_row = 0; block_row < block_rows; ++block_row) {
+    expected_row_offset += row_size[block_row];
     if (row_ptr[block_row] > row_ptr[block_row + 1] || row_size[block_row] < 8 ||
         row_size[block_row] > 64 || row_size[block_row] % 8 != 0 ||
-        row_scalar_off[block_row + 1] - row_scalar_off[block_row] != row_size[block_row]) {
+        row_scalar_off[block_row + 1] != expected_row_offset) {
       throw std::invalid_argument("bad block row");
     }
   }
+  int64_t expected_col_offset = 0;
   for (int block_column = 0; block_column < block_cols; ++block_column) {
+    expected_col_offset += col_size[block_column];
     if (col_size[block_column] < 8 || col_size[block_column] > 64 ||
         col_size[block_column] % 8 != 0 ||
-        col_scalar_off[block_column + 1] - col_scalar_off[block_column] != col_size[block_column]) {
+        col_scalar_off[block_column + 1] != expected_col_offset) {
       throw std::invalid_argument("bad block column");
     }
   }
@@ -74,6 +78,7 @@ void HostMatrix::validate() const {
   // row_ptr is monotonic, so one forward cursor identifies the owner of every
   // block.
   int block_row = 0;
+  int64_t expected_value_offset = 0;
   for (size_t block_index = 0; block_index < block_col.size(); ++block_index) {
     while (row_ptr[block_row + 1] <= static_cast<int>(block_index)) {
       ++block_row;
@@ -82,8 +87,11 @@ void HostMatrix::validate() const {
     if (block_column < 0 || block_column >= block_cols) {
       throw std::invalid_argument("block column out of range");
     }
+    if (block_index > size_t(row_ptr[block_row]) && block_col[block_index - 1] >= block_column)
+      throw std::invalid_argument("block columns must be sorted and unique in each row");
     const int64_t expected_value_count = int64_t(row_size[block_row]) * col_size[block_column];
-    if (value_off[block_index + 1] - value_off[block_index] != expected_value_count) {
+    expected_value_offset += expected_value_count;
+    if (value_off[block_index + 1] != expected_value_offset) {
       throw std::invalid_argument("block payload mismatch");
     }
   }
@@ -183,6 +191,13 @@ Matrix& Matrix::operator=(Matrix&& other) noexcept {
 DeviceMatrix Matrix::device_view() const {
   return {block_rows_, block_cols_, nnzb_,    rows_,    cols_,      row_ptr_, block_col_,
           row_size_,   col_size_,   row_off_, col_off_, value_off_, values_};
+}
+size_t Matrix::storage_bytes() const {
+  int64_t count = 0;
+  check_cuda(cudaMemcpy(&count, value_off_ + nnzb_, sizeof(count), cudaMemcpyDeviceToHost));
+  return size_t(count) * sizeof(float) +
+         (size_t(block_rows_) * 3 + 1 + block_cols_ + nnzb_) * sizeof(int32_t) +
+         (size_t(block_rows_) + block_cols_ + nnzb_ + 3) * sizeof(int64_t);
 }
 std::vector<float> cpu_reference(const HostMatrix& matrix, const std::vector<float>& input,
                                  int rhs_width) {

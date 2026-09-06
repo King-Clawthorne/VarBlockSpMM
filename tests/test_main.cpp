@@ -11,10 +11,14 @@
 
 namespace {
 
+void check_cuda(cudaError_t status) {
+  if (status != cudaSuccess) throw std::runtime_error(cudaGetErrorString(status));
+}
+
 void compare_device_result(const std::vector<float>& reference, const float* device_result,
                            const char* implementation_name) {
   std::vector<float> result(reference.size());
-  cudaMemcpy(result.data(), device_result, result.size() * sizeof(float), cudaMemcpyDeviceToHost);
+  check_cuda(cudaMemcpy(result.data(), device_result, result.size() * sizeof(float), cudaMemcpyDeviceToHost));
 
   double maximum_error = 0.0;
   double squared_error = 0.0;
@@ -53,8 +57,9 @@ std::vector<float> make_random_input(int64_t element_count, uint64_t seed) {
 void execute_and_compare(const std::function<void()>& execute, cudaStream_t stream,
                          const std::vector<float>& reference, float* device_output,
                          const char* implementation_name) {
+  check_cuda(cudaMemsetAsync(device_output, 0xff, reference.size() * sizeof(float), stream));
   execute();
-  cudaStreamSynchronize(stream);
+  check_cuda(cudaStreamSynchronize(stream));
   compare_device_result(reference, device_output, implementation_name);
 }
 
@@ -90,12 +95,12 @@ void run_case(vbsr::Distribution distribution, int degree, int rhs_width, bool l
   vbsr::Matrix device_matrix(host_matrix);
   float* device_input = nullptr;
   float* device_output = nullptr;
-  cudaMalloc(&device_input, input.size() * sizeof(float));
-  cudaMalloc(&device_output, reference.size() * sizeof(float));
-  cudaMemcpy(device_input, input.data(), input.size() * sizeof(float), cudaMemcpyHostToDevice);
+  check_cuda(cudaMalloc(&device_input, input.size() * sizeof(float)));
+  check_cuda(cudaMalloc(&device_output, reference.size() * sizeof(float)));
+  check_cuda(cudaMemcpy(device_input, input.data(), input.size() * sizeof(float), cudaMemcpyHostToDevice));
 
   cudaStream_t stream;
-  cudaStreamCreate(&stream);
+  check_cuda(cudaStreamCreate(&stream));
 
   vbsr::Plan direct_plan(device_matrix, {rhs_width, vbsr::Kernel::RowOwned});
   vbsr::ScalarCsrPlan scalar_csr_plan(host_matrix, rhs_width);
@@ -120,18 +125,34 @@ void run_case(vbsr::Distribution distribution, int degree, int rhs_width, bool l
   execute_and_compare([&] { cached_plan.execute(device_input, device_output, stream); }, stream,
                       reference, device_output, "cached grouped reuse");
   float* alternate_input = nullptr;
-  cudaMalloc(&alternate_input, input.size() * sizeof(float));
+  check_cuda(cudaMalloc(&alternate_input, input.size() * sizeof(float)));
   auto alternate_host = input;
   for (float& x : alternate_host)
     x *= 0.5f;
-  cudaMemcpy(alternate_input, alternate_host.data(), alternate_host.size() * sizeof(float),
-             cudaMemcpyHostToDevice);
+  check_cuda(cudaMemcpy(alternate_input, alternate_host.data(), alternate_host.size() * sizeof(float),
+             cudaMemcpyHostToDevice));
   const auto alternate_reference = vbsr::cpu_reference(host_matrix, alternate_host, rhs_width);
   execute_and_compare([&] { cached_plan.execute(alternate_input, device_output, stream); }, stream,
                       alternate_reference, device_output, "cached grouped changed address");
   execute_and_compare([&] { cached_plan.execute(device_input, device_output, stream); }, stream,
                       reference, device_output, "cached grouped restored address");
-  cudaFree(alternate_input);
+  float* alternate_output = nullptr;
+  check_cuda(cudaMalloc(&alternate_output, reference.size() * sizeof(float)));
+  check_cuda(cudaMemsetAsync(device_output, 0xff, reference.size() * sizeof(float), stream));
+  check_cuda(cudaMemsetAsync(alternate_output, 0xff, reference.size() * sizeof(float), stream));
+  // Queue refreshes without host synchronization. Every pointer update must be
+  // ordered after previous GEMMs and before the GEMMs consuming the new bases.
+  cached_plan.execute(device_input, device_output, stream);
+  cached_plan.execute(alternate_input, alternate_output, stream);
+  cached_plan.execute(device_input, device_output, stream);
+  check_cuda(cudaStreamSynchronize(stream));
+  compare_device_result(reference, device_output, "queued grouped original output");
+  compare_device_result(alternate_reference, alternate_output, "queued grouped alternate output");
+  check_cuda(cudaFree(alternate_output));
+  check_cuda(cudaFree(alternate_input));
+  vbsr::ScalarCsrPlan bsr8_plan(host_matrix, rhs_width, 0, false, true, 8);
+  execute_and_compare([&] { bsr8_plan.execute(device_input, device_output, stream); }, stream,
+                      reference, device_output, "subdivided BSR8");
   for (int algorithm = 1; algorithm <= 3; ++algorithm) {
     vbsr::ScalarCsrPlan explicit_plan(host_matrix, rhs_width, algorithm, algorithm != 2);
     execute_and_compare([&] { explicit_plan.execute(device_input, device_output, stream); }, stream,
@@ -143,9 +164,9 @@ void run_case(vbsr::Distribution distribution, int degree, int rhs_width, bool l
                         reference, device_output, "fixed BSR");
   }
 
-  cudaStreamDestroy(stream);
-  cudaFree(device_input);
-  cudaFree(device_output);
+  check_cuda(cudaStreamDestroy(stream));
+  check_cuda(cudaFree(device_input));
+  check_cuda(cudaFree(device_output));
 }
 
 void expect_invalid_argument(const std::function<void()>& operation, const char* failure_message) {
@@ -172,6 +193,15 @@ void run_negative_tests() {
   malformed_matrix = valid_matrix;
   malformed_matrix.row_size[0] = 7;
   expect_invalid_argument([&] { malformed_matrix.validate(); }, "unsupported block size accepted");
+  malformed_matrix = valid_matrix;
+  malformed_matrix.block_col[1] = malformed_matrix.block_col[0];
+  expect_invalid_argument([&] { malformed_matrix.validate(); }, "duplicate block column accepted");
+  malformed_matrix = valid_matrix;
+  malformed_matrix.value_off[1] = INT64_MIN;
+  expect_invalid_argument([&] { malformed_matrix.validate(); }, "overflowing value offset accepted");
+  malformed_matrix = valid_matrix;
+  malformed_matrix.row_scalar_off[1] = INT64_MIN;
+  expect_invalid_argument([&] { malformed_matrix.validate(); }, "overflowing scalar offset accepted");
 
   for (int shift : {-1, 1}) {
     malformed_matrix = valid_matrix;
@@ -233,14 +263,15 @@ void run_reference_cancellation_test() {
   }
 }
 
-void run_rhs8_shape_test() {
+void run_shape_test(int rhs, bool all_empty = false) {
   vbsr::HostMatrix matrix;
   matrix.block_rows = 512;
-  matrix.block_cols = 8;
+  matrix.block_cols = 16;
   matrix.row_ptr = {0};
   matrix.row_scalar_off = matrix.col_scalar_off = {0};
   matrix.value_off = {0};
-  for (int size = 8; size <= 64; size += 8) {
+  for (int column = 0; column < 16; ++column) {
+    const int size = (column % 8 + 1) * 8;
     matrix.col_size.push_back(size);
     matrix.col_scalar_off.push_back(matrix.col_scalar_off.back() + size);
   }
@@ -249,7 +280,7 @@ void run_rhs8_shape_test() {
     matrix.row_size.push_back(size);
     matrix.row_scalar_off.push_back(matrix.row_scalar_off.back() + size);
     // Alternate eight populated shapes with eight empty shapes.
-    for (int column = 0; column < (row % 16 < 8 ? 8 : 0); ++column) {
+    for (int column = 0; column < (!all_empty && row % 16 < 8 ? 16 : 0); ++column) {
       matrix.block_col.push_back(column);
       matrix.value_off.push_back(matrix.value_off.back() +
                                  matrix.row_size[row] * matrix.col_size[column]);
@@ -258,8 +289,8 @@ void run_rhs8_shape_test() {
   }
   matrix.values = make_random_input(matrix.value_off.back(), 731);
   matrix.validate();
-  const auto input = make_random_input(matrix.scalar_cols() * 8, 732);
-  const auto reference = vbsr::cpu_reference(matrix, input, 8);
+  const auto input = make_random_input(matrix.scalar_cols() * rhs, 732);
+  const auto reference = vbsr::cpu_reference(matrix, input, rhs);
   vbsr::Matrix device(matrix);
   float* device_input = nullptr;
   float* device_output = nullptr;
@@ -274,19 +305,36 @@ void run_rhs8_shape_test() {
     check(cudaMalloc(&device_output, reference.size() * sizeof(float)));
     check(cudaMemcpy(device_input, input.data(), input.size() * sizeof(float), cudaMemcpyHostToDevice));
     check(cudaMemset(device_output, 0xff, reference.size() * sizeof(float)));
-    vbsr::Plan plan(device, {8, vbsr::Kernel::RowOwned});
-    plan.execute(device_input, device_output, stream);
-    check(cudaStreamSynchronize(stream));
-    compare_device_result(reference, device_output, "RHS-8 all 64 block shapes");
+    // A no-op must fail even when a previous method left the right result.
+    check(cudaMemcpy(device_output, reference.data(), reference.size() * sizeof(float), cudaMemcpyHostToDevice));
+    bool rejected = false;
+    try {
+      execute_and_compare([] {}, stream, reference, device_output, "no-op regression");
+    } catch (const std::runtime_error&) { rejected = true; }
+    if (!rejected) throw std::runtime_error("test harness accepted missing writes");
+    vbsr::Plan plan(device, {rhs, vbsr::Kernel::RowOwned});
+    execute_and_compare([&] { plan.execute(device_input, device_output, stream); }, stream,
+                        reference, device_output, "all shapes direct");
+    vbsr::GroupedGemmPlan grouped(matrix, rhs, true);
+    execute_and_compare([&] { grouped.execute(device_input, device_output, stream); }, stream,
+                        reference, device_output, "all shapes grouped");
+    vbsr::ScalarCsrPlan bsr(matrix, rhs, 0, false, true, 8);
+    execute_and_compare([&] { bsr.execute(device_input, device_output, stream); }, stream,
+                        reference, device_output, "all shapes BSR8");
+    for (int algorithm : {0, 1, 2, 3}) {
+      vbsr::ScalarCsrPlan csr(matrix, rhs, algorithm, algorithm == 1 || algorithm == 3);
+      execute_and_compare([&] { csr.execute(device_input, device_output, stream); }, stream,
+                          reference, device_output, "all shapes scalar CSR");
+    }
   } catch (...) {
     cudaStreamDestroy(stream);
     cudaFree(device_input);
     cudaFree(device_output);
     throw;
   }
-  cudaStreamDestroy(stream);
-  cudaFree(device_input);
-  cudaFree(device_output);
+  check_cuda(cudaStreamDestroy(stream));
+  check_cuda(cudaFree(device_input));
+  check_cuda(cudaFree(device_output));
 }
 
 void run_parameter_matrix() {
@@ -319,7 +367,10 @@ int main() {
   try {
     run_negative_tests();
     run_reference_cancellation_test();
-    run_rhs8_shape_test();
+    for (int rhs : {8, 16, 32, 64}) {
+      run_shape_test(rhs);
+      run_shape_test(rhs, true);
+    }
     run_parameter_matrix();
     std::cout << "PASS: 128 parameter cases and 16 empty-row cases, explicit CSR algorithms, "
                  "uniform BSR, cached and changing grouped pointers, non-default streams\n";

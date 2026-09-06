@@ -9,6 +9,7 @@ import math
 from pathlib import Path
 import statistics
 import zipfile
+from build_verified import validate_build_receipt
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -23,6 +24,8 @@ def main():
     parser.add_argument('--output', type=Path, default=ROOT / 'research/generated')
     args = parser.parse_args()
     manifest = json.loads((args.input / 'manifest.json').read_text())
+    if 'build_receipt' in manifest:
+        validate_build_receipt(manifest)
     with zipfile.ZipFile(args.input / 'source_snapshot.zip') as snapshot:
         for name, digest in manifest['sources'].items():
             if hashlib.sha256(snapshot.read(name.replace('\\', '/'))).hexdigest() != digest:
@@ -51,6 +54,8 @@ def main():
             stem = f'{size}_{degree}_{distribution}_{locality}_i{irregular}_s{seed}'
             expected_names.update((stem + '.csv', stem + '.json'))
             metadata = json.loads(archive.read(stem + '.json'))
+            if 'build_receipt' in manifest and metadata.get('executable_sha256') != manifest['executable_sha256']:
+                raise ValueError('Kernel executable checksum mismatch')
             command = metadata['command']
             if (metadata['returncode'] != 0 or len(command) != 9 or
                 command[1:6] != [str(size), str(degree), distribution, locality, str(seed)] or

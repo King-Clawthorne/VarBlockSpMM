@@ -46,6 +46,12 @@ void CompactCsrData::validate(int64_t rows, int64_t columns) const {
       throw std::invalid_argument("compact CSR row offsets must be monotonic");
     }
   }
+  for (size_t row = 0; row + 1 < row_offsets.size(); ++row) {
+    for (int64_t index = int64_t(row_offsets[row]) + 1; index < row_offsets[row + 1]; ++index) {
+      if (column_indices[index - 1] >= column_indices[index])
+        throw std::invalid_argument("compact CSR columns must be sorted and unique within each row");
+    }
+  }
   for (size_t index = 0; index < values.size(); ++index) {
     if (column_indices[index] < 0 || column_indices[index] >= columns ||
         !std::isfinite(values[index])) {

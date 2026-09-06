@@ -1,6 +1,8 @@
 #include <cuda_runtime.h>
 
 #include <algorithm>
+#include <charconv>
+#include <cmath>
 #include <chrono>
 #include <functional>
 #include <iomanip>
@@ -13,6 +15,17 @@
 #include "varblockspmm/vbsr.hpp"
 
 namespace {
+
+void check_cuda(cudaError_t status) {
+  if (status != cudaSuccess) throw std::runtime_error(cudaGetErrorString(status));
+}
+template <class T> T parse_number(const std::string& text) {
+  T value{};
+  const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value);
+  if (error != std::errc{} || end != text.data() + text.size())
+    throw std::invalid_argument("invalid number: " + text);
+  return value;
+}
 
 struct Arguments {
   int rows = 1024;
@@ -111,37 +124,44 @@ Arguments parse_arguments(int argument_count, char** argument_values) {
 
     switch (parse_option(option)) {
     case Option::Rows:
-      arguments.rows = std::stoi(value());
+      arguments.rows = parse_number<int>(value());
       break;
     case Option::Degree:
-      arguments.degree = std::stoi(value());
+      arguments.degree = parse_number<int>(value());
       break;
     case Option::RhsWidth:
-      arguments.rhs_width = std::stoi(value());
+      arguments.rhs_width = parse_number<int>(value());
       break;
     case Option::Repetitions:
-      arguments.repetitions = std::stoi(value());
+      arguments.repetitions = parse_number<int>(value());
       break;
     case Option::WarmupRepetitions:
-      arguments.warmup_repetitions = std::stoi(value());
+      arguments.warmup_repetitions = parse_number<int>(value());
       break;
     case Option::Seed:
-      arguments.seed = std::stoull(value());
+      arguments.seed = parse_number<uint64_t>(value());
       break;
-    case Option::Locality:
-      arguments.local_columns = value() == "local";
+    case Option::Locality: {
+      const auto locality = value();
+      if (locality != "local" && locality != "random") throw std::invalid_argument("invalid locality");
+      arguments.local_columns = locality == "local";
       break;
+    }
     case Option::Distribution:
       arguments.distribution = parse_distribution(value());
       break;
     }
   }
 
+  if (arguments.repetitions < 2 || arguments.warmup_repetitions < 0)
+    throw std::invalid_argument("reps must be at least two and warmup nonnegative");
+  if (arguments.rhs_width != 8 && arguments.rhs_width != 16 && arguments.rhs_width != 32 && arguments.rhs_width != 64)
+    throw std::invalid_argument("invalid RHS width");
   return arguments;
 }
 
 double percentile_95(const std::vector<double>& sorted_values) {
-  const size_t index = std::min(sorted_values.size() - 1, size_t(sorted_values.size() * 0.95));
+  const size_t index = size_t(std::ceil(sorted_values.size() * 0.95)) - 1;
   return sorted_values[index];
 }
 
@@ -150,36 +170,40 @@ TimingResult time_operation(const std::function<void()>& operation, int warmup_r
   for (int index = 0; index < warmup_repetitions; ++index) {
     operation();
   }
-  cudaDeviceSynchronize();
+  check_cuda(cudaDeviceSynchronize());
 
   std::vector<double> gpu_times;
   std::vector<double> host_times;
   cudaEvent_t begin;
   cudaEvent_t end;
-  cudaEventCreate(&begin);
-  cudaEventCreate(&end);
+  check_cuda(cudaEventCreate(&begin));
+  check_cuda(cudaEventCreate(&end));
 
   for (int index = 0; index < repetitions; ++index) {
     const auto host_begin = std::chrono::steady_clock::now();
-    cudaEventRecord(begin);
+    check_cuda(cudaEventRecord(begin));
     operation();
-    cudaEventRecord(end);
-    cudaEventSynchronize(end);
+    check_cuda(cudaEventRecord(end));
+    check_cuda(cudaEventSynchronize(end));
     const auto host_end = std::chrono::steady_clock::now();
 
     float gpu_milliseconds;
-    cudaEventElapsedTime(&gpu_milliseconds, begin, end);
+    check_cuda(cudaEventElapsedTime(&gpu_milliseconds, begin, end));
+    if (!(gpu_milliseconds > 0) || !std::isfinite(gpu_milliseconds))
+      throw std::runtime_error("invalid GPU timing");
     gpu_times.push_back(gpu_milliseconds);
     host_times.push_back(std::chrono::duration<double, std::milli>(host_end - host_begin).count());
   }
 
-  cudaEventDestroy(begin);
-  cudaEventDestroy(end);
+  check_cuda(cudaEventDestroy(begin));
+  check_cuda(cudaEventDestroy(end));
   std::sort(gpu_times.begin(), gpu_times.end());
   std::sort(host_times.begin(), host_times.end());
 
-  return {gpu_times[gpu_times.size() / 2], percentile_95(gpu_times),
-          host_times[host_times.size() / 2], percentile_95(host_times)};
+  auto median = [](const std::vector<double>& times) {
+    return (times[(times.size() - 1) / 2] + times[times.size() / 2]) * 0.5;
+  };
+  return {median(gpu_times), percentile_95(gpu_times), median(host_times), percentile_95(host_times)};
 }
 
 vbsr::GeneratorOptions make_generator_options(const Arguments& arguments) {
@@ -226,9 +250,29 @@ void print_result(const char* method, const Arguments& arguments, const TimingRe
 
 void benchmark_method(const char* method, const Arguments& arguments, double useful_flops,
                       const std::function<void()>& operation, int launch_count,
-                      const std::function<size_t()>& workspace_bytes) {
+                      const std::function<size_t()>& workspace_bytes,
+                      const std::vector<float>& reference, float* output) {
+  const auto validate = [&] {
+    std::vector<float> actual(reference.size());
+    check_cuda(cudaMemcpy(actual.data(), output, actual.size() * sizeof(float), cudaMemcpyDeviceToHost));
+    double error_norm = 0, reference_norm = 0;
+    for (size_t i = 0; i < actual.size(); ++i) {
+      const double error = double(actual[i]) - reference[i];
+      if (!std::isfinite(actual[i]) || std::abs(error) > 5e-4)
+        throw std::runtime_error("benchmark correctness failure");
+      error_norm += error * error;
+      reference_norm += double(reference[i]) * reference[i];
+    }
+    if (std::sqrt(error_norm / (reference_norm + 1e-30)) > 5e-5)
+      throw std::runtime_error("benchmark relative error failure");
+  };
+  check_cuda(cudaMemset(output, 0xff, reference.size() * sizeof(float)));
+  operation();
+  check_cuda(cudaDeviceSynchronize());
+  validate();
   const TimingResult timing =
       time_operation(operation, arguments.warmup_repetitions, arguments.repetitions);
+  validate();
   // Queried after timing so plans that allocate workspace lazily on their
   // first execute() (e.g. ScalarCsrPlan) report the size they actually used.
   print_result(method, arguments, timing, useful_flops, launch_count, workspace_bytes());
@@ -239,11 +283,12 @@ int run_benchmark(const Arguments& arguments) {
   vbsr::Matrix device_matrix(host_matrix);
 
   std::vector<float> input(host_matrix.scalar_cols() * arguments.rhs_width, 0.01f);
+  const auto reference = vbsr::cpu_reference(host_matrix, input, arguments.rhs_width);
   float* device_input = nullptr;
   float* device_output = nullptr;
-  cudaMalloc(&device_input, input.size() * sizeof(float));
-  cudaMalloc(&device_output, host_matrix.scalar_rows() * arguments.rhs_width * sizeof(float));
-  cudaMemcpy(device_input, input.data(), input.size() * sizeof(float), cudaMemcpyHostToDevice);
+  check_cuda(cudaMalloc(&device_input, input.size() * sizeof(float)));
+  check_cuda(cudaMalloc(&device_output, host_matrix.scalar_rows() * arguments.rhs_width * sizeof(float)));
+  check_cuda(cudaMemcpy(device_input, input.data(), input.size() * sizeof(float), cudaMemcpyHostToDevice));
 
   vbsr::Plan direct_plan(device_matrix, {arguments.rhs_width, vbsr::Kernel::RowOwned});
   vbsr::ScalarCsrPlan scalar_csr_plan(host_matrix, arguments.rhs_width);
@@ -254,25 +299,25 @@ int run_benchmark(const Arguments& arguments) {
   benchmark_method(
       "row_owned_hybrid", arguments, useful_flops,
       [&] { direct_plan.execute(device_input, device_output); }, direct_plan.launch_count(),
-      [] { return size_t(0); });
+      [] { return size_t(0); }, reference, device_output);
   benchmark_method(
       "row_owned_scalar", arguments, useful_flops,
       [&] {
         vbsr::launch_row_owned_scalar(device_matrix.device_view(), device_input, device_output,
                                       arguments.rhs_width, 0);
       },
-      1, [] { return size_t(0); });
+      1, [] { return size_t(0); }, reference, device_output);
   benchmark_method(
       "scalar_csr_cusparse", arguments, useful_flops,
       [&] { scalar_csr_plan.execute(device_input, device_output); }, 1,
-      [&] { return scalar_csr_plan.workspace_bytes(); });
+      [&] { return scalar_csr_plan.workspace_bytes(); }, reference, device_output);
   benchmark_method(
       "slot_grouped_cublas", arguments, useful_flops,
       [&] { grouped_gemm_plan.execute(device_input, device_output); },
-      grouped_gemm_plan.launch_count(), [&] { return grouped_gemm_plan.workspace_bytes(); });
+      grouped_gemm_plan.launch_count(), [&] { return grouped_gemm_plan.workspace_bytes(); }, reference, device_output);
 
-  cudaFree(device_input);
-  cudaFree(device_output);
+  check_cuda(cudaFree(device_input));
+  check_cuda(cudaFree(device_output));
   return 0;
 }
 

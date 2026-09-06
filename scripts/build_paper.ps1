@@ -1,3 +1,4 @@
+param([string]$ResultsRoot = '')
 $ErrorActionPreference = 'Stop'
 function Assert-PaperPunctuation([string]$Path) {
   $text = [IO.File]::ReadAllText($Path)
@@ -10,10 +11,36 @@ function Assert-PaperPunctuation([string]$Path) {
 $projectRoot = [IO.Path]::GetFullPath("$PSScriptRoot/..")
 $output = Join-Path $projectRoot 'build/paper'
 New-Item -ItemType Directory -Force $output | Out-Null
-python "$PSScriptRoot/analyze_revision.py"
+if ($ResultsRoot) {
+  python "$PSScriptRoot/analyze_revision.py" --revision (Join-Path $ResultsRoot 'synthetic') --application (Join-Path $ResultsRoot 'published')
+} else {
+  python "$PSScriptRoot/analyze_revision.py"
+}
 if ($LASTEXITCODE -ne 0) { throw 'Result validation failed' }
+$missingNative = Get-ChildItem -LiteralPath (Join-Path $projectRoot 'data/native') -Filter 'covariance_*.json' |
+  Where-Object { -not (Test-Path -LiteralPath ([IO.Path]::ChangeExtension($_.FullName, '.bin'))) }
+if ($missingNative) {
+  python "$PSScriptRoot/prepare_native.py"
+  if ($LASTEXITCODE -ne 0) { throw 'Native input reconstruction failed' }
+}
+if ($ResultsRoot) {
+  python "$PSScriptRoot/analyze_supplement.py" --native (Join-Path $ResultsRoot 'native') --ablation (Join-Path $ResultsRoot 'ablation')
+} else {
+  python "$PSScriptRoot/analyze_supplement.py"
+}
+if ($LASTEXITCODE -ne 0) { throw 'Supplementary result validation failed' }
+$mainSummary = Get-Content -Raw -LiteralPath (Join-Path $projectRoot 'research/generated/summary.json') | ConvertFrom-Json
+$supplementSummary = Get-Content -Raw -LiteralPath (Join-Path $projectRoot 'research/generated/supplement-summary.json') | ConvertFrom-Json
+if ($mainSummary.provenance.kernel_sha256 -ne $supplementSummary.kernel_sha256) {
+  throw 'Main and supplementary campaigns use different direct kernels'
+}
+if ($mainSummary.provenance.library_sha256 -ne $supplementSummary.library_sha256) {
+  throw 'Main and supplementary campaigns use different library sources'
+}
 python "$PSScriptRoot/analyze_kernel.py"
 if ($LASTEXITCODE -ne 0) { throw 'Kernel result validation failed' }
+python "$PSScriptRoot/analyze_tuning.py"
+if ($LASTEXITCODE -ne 0) { throw 'Narrow development validation failed' }
 Assert-PaperPunctuation (Join-Path $projectRoot 'research/paper.tex')
 Get-ChildItem -LiteralPath (Join-Path $projectRoot 'research/generated') -Filter '*.tex' |
   ForEach-Object { Assert-PaperPunctuation $_.FullName }

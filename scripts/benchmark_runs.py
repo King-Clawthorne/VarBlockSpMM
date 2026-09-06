@@ -40,8 +40,14 @@ def read_runs(directory: Path):
             if set(archive.namelist()) != set(checksums) | {"checksums.json"}:
                 raise ValueError("Archive checksum coverage mismatch")
             for name, digest in checksums.items():
+                if Path(name).name != name or Path(name).suffix not in ('.csv', '.json'):
+                    raise ValueError('Unexpected run archive member: ' + name)
                 if hashlib.sha256(archive.read(name)).hexdigest() != digest:
                     raise ValueError(f"Archive checksum mismatch: {name}")
+            csv_stems = {Path(n).stem for n in checksums if n.endswith('.csv')}
+            json_stems = {Path(n).stem for n in checksums if n.endswith('.json')}
+            if csv_stems != json_stems:
+                raise ValueError('Run metadata and CSV coverage differ')
             for name in sorted(checksums):
                 if not name.endswith(".csv"):
                     continue
@@ -122,6 +128,7 @@ def run_process(output: Path, stem: str, command: list[str], methods: list[str],
                 repetitions: int, metadata_field: str) -> None:
     result = subprocess.run(command, capture_output=True, text=True, timeout=180)
     metadata = dict(command=command, returncode=result.returncode,
+                    executable_sha256=hashlib.sha256(Path(command[0]).read_bytes()).hexdigest(),
                     recorded_utc=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
     metadata[metadata_field] = result.stderr
     (output / (stem + ".json")).write_text(json.dumps(metadata, indent=2), encoding="utf-8")
@@ -135,7 +142,8 @@ def run_process(output: Path, stem: str, command: list[str], methods: list[str],
 
 def source_paths(runner: str) -> list[Path]:
     """Include shared headers and helpers as well as executable entry points."""
-    patterns = ("src/**/*.cu", "src/**/*.cpp", "include/**/*.hpp", "bench/*.cpp", "bench/*.hpp")
+    patterns = ("src/**/*.cu", "src/**/*.cpp", "include/**/*.hpp", "bench/*.cpp", "bench/*.hpp",
+                "tests/*.cpp", "scripts/*.py", "scripts/*.ps1")
     paths = {path for pattern in patterns for path in ROOT.glob(pattern)}
     paths.update((ROOT / "CMakeLists.txt", ROOT / "scripts" / runner,
                   ROOT / "scripts/benchmark_runs.py", ROOT / "scripts/prepare_application.py"))

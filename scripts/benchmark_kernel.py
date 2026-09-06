@@ -11,6 +11,8 @@ import random
 import statistics
 import subprocess
 import zipfile
+from build_verified import verified_build
+from benchmark_runs import source_paths, source_hashes
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -42,7 +44,7 @@ def main():
     if args.reps < 2:
         parser.error('at least two repetitions required')
     args.output.mkdir(parents=True, exist_ok=False)
-    executable = ROOT / 'build/Release/vbsr_kernel_audit.exe'
+    executable, receipt = verified_build('vbsr_kernel_audit')
     cases = [(n, d, s, loc, 0) for n, d, s, loc in itertools.product(
         (256, 512, 1024, 4096), (2, 4, 8, 16), ('uniform', 'low', 'high', 'bimodal'), ('local', 'random'))]
     cases += [(n, 16, s, loc, 1) for n, s, loc in itertools.product(
@@ -50,11 +52,10 @@ def main():
     jobs = [(case, seed) for case in cases for seed in (1, 2, 3)]
     rng = random.Random(20260906)
     rng.shuffle(jobs)
-    sources = [p for folder in ('src', 'include', 'bench', 'tests') for p in (ROOT / folder).rglob('*') if p.is_file()]
-    sources += [ROOT / 'CMakeLists.txt', Path(__file__).resolve()]
+    sources = source_paths('benchmark_kernel.py')
     manifest = dict(reps=args.reps, jobs=jobs,
                     executable_sha256=hashlib.sha256(executable.read_bytes()).hexdigest(),
-                    sources={str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sources})
+                    sources=source_hashes(sources), build_receipt=receipt)
     (args.output / 'manifest.json').write_text(json.dumps(manifest, indent=2))
     with zipfile.ZipFile(args.output / 'source_snapshot.zip', 'x', zipfile.ZIP_DEFLATED) as snapshot:
         for path in sources:
@@ -68,7 +69,8 @@ def main():
         stem = f'{size}_{degree}_{distribution}_{locality}_i{irregular}_s{seed}'
         (args.output / f'{stem}.csv').write_text(run.stdout)
         (args.output / f'{stem}.json').write_text(json.dumps(
-            dict(command=command, returncode=run.returncode, environment=run.stderr), indent=2))
+            dict(command=command, returncode=run.returncode, environment=run.stderr,
+                 executable_sha256=hashlib.sha256(executable.read_bytes()).hexdigest()), indent=2))
         run.check_returncode()
         rows = list(csv.DictReader(io.StringIO(run.stdout)))
         if len(rows) != 2 * args.reps or {r['method'] for r in rows} != {'legacy', 'tiled'}:

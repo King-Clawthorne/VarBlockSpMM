@@ -1,3 +1,5 @@
+> Archived validation history. For the current paper and measurements, see [review-closure.md](review-closure.md). Claims below describe the archived campaign.
+
 # Optimized-kernel paper validation
 
 The current paper evaluates the optimized direct dispatch, including eight-row

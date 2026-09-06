@@ -15,6 +15,7 @@ public:
   CompactCsrPlan(const CompactCsrPlan&) = delete;
   CompactCsrPlan& operator=(const CompactCsrPlan&) = delete;
   void execute();
+  size_t storage_bytes() const;
 
 private:
   struct Impl;

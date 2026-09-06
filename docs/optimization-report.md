@@ -1,3 +1,5 @@
+> Historical optimization measurements. The current RHS-8 and RHS-16 policy uses 64-thread CTAs with full-panel accumulation and shared input staging. See [design.md](design.md) and the [current validation record](../research/review-closure.md).
+
 # Optimization report
 
 ## 6 September 2026: RHS-8 tiling

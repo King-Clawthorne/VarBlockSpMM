@@ -1,0 +1,35 @@
+{
+  "counts": {
+    "synthetic": {
+      "processes": 504,
+      "trials": 92640
+    },
+    "published": {
+      "processes": 36,
+      "trials": 5040
+    },
+    "native": {
+      "processes": 144,
+      "trials": 20160
+    },
+    "ablation": {
+      "processes": 288,
+      "trials": 47520
+    }
+  },
+  "independent_core": {
+    "bsr8": {
+      "ratio": 1.1750988470251191,
+      "wins": 124
+    },
+    "library_best": {
+      "ratio": 1.137015166225316,
+      "wins": 103
+    }
+  },
+  "paired_upgrade": {
+    "8": 1.7774212334743433,
+    "16": 1.7708950436272561
+  },
+  "paper_punctuation": "passed"
+}

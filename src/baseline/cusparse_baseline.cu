@@ -2,6 +2,7 @@
 #include <cusparse.h>
 
 #include <algorithm>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -34,6 +35,9 @@ struct ScalarCsrData {
 };
 
 ScalarCsrData expand_to_scalar_csr(const HostMatrix& matrix) {
+  if (matrix.values.size() > size_t(INT32_MAX) || matrix.scalar_cols() > INT32_MAX) {
+    throw std::invalid_argument("scalar CSR requires at most INT32_MAX entries and columns");
+  }
   ScalarCsrData csr;
   csr.row_offsets.resize(matrix.scalar_rows() + 1);
 
@@ -79,21 +83,34 @@ cusparseSpMMAlg_t select_csr_algorithm(int algorithm) {
   }
 }
 
-ScalarCsrData pack_fixed_bsr(const HostMatrix& matrix) {
+ScalarCsrData pack_fixed_bsr(const HostMatrix& matrix, int size) {
   ScalarCsrData csr;
-  if (!std::all_of(matrix.row_size.begin(), matrix.row_size.end(), [](int x) { return x == 32; }) ||
-      !std::all_of(matrix.col_size.begin(), matrix.col_size.end(), [](int x) { return x == 32; })) {
-    throw std::invalid_argument("fixed BSR baseline requires uniform 32 blocks");
+  if (size != 8 && size != 32) {
+    throw std::invalid_argument("BSR block size must be 8 or 32");
   }
-  csr.row_offsets = matrix.row_ptr;
-  csr.column_indices = matrix.block_col;
-  csr.values.resize(matrix.values.size());
-  for (size_t block_index = 0; block_index < matrix.block_col.size(); ++block_index) {
-    for (int local_row = 0; local_row < 32; ++local_row) {
-      for (int local_column = 0; local_column < 32; ++local_column) {
-        csr.values[matrix.value_off[block_index] + local_row * 32 + local_column] =
-            matrix.values[matrix.value_off[block_index] + local_row + local_column * 32];
+  for (int extent : matrix.row_size)
+    if (extent % size) throw std::invalid_argument("row partition cannot be subdivided into BSR");
+  for (int extent : matrix.col_size)
+    if (extent % size) throw std::invalid_argument("column partition cannot be subdivided into BSR");
+  if (matrix.values.size() / (size * size) > size_t(INT32_MAX) ||
+      matrix.scalar_cols() / size > INT32_MAX) {
+    throw std::invalid_argument("BSR index range exceeds INT32_MAX");
+  }
+  csr.row_offsets.push_back(0);
+  csr.values.reserve(matrix.values.size());
+  for (int row = 0; row < matrix.block_rows; ++row) {
+    const int height = matrix.row_size[row];
+    for (int r = 0; r < height; r += size) {
+      for (int block = matrix.row_ptr[row]; block < matrix.row_ptr[row + 1]; ++block) {
+        const int column = matrix.block_col[block];
+        for (int c = 0; c < matrix.col_size[column]; c += size) {
+          csr.column_indices.push_back(int32_t((matrix.col_scalar_off[column] + c) / size));
+          for (int i = 0; i < size; ++i)
+            for (int j = 0; j < size; ++j)
+              csr.values.push_back(matrix.values[matrix.value_off[block] + r + i + (c + j) * height]);
+        }
       }
+      csr.row_offsets.push_back(int32_t(csr.column_indices.size()));
     }
   }
   return csr;
@@ -127,6 +144,7 @@ struct ScalarCsrPlan::Impl {
   float* values{};
   void* workspace{};
   size_t workspace_size{};
+  size_t format_bytes{};
 
   cusparseHandle_t handle{};
   cusparseSpMatDescr_t sparse_matrix{};
@@ -179,7 +197,7 @@ struct ScalarCsrPlan::Impl {
 };
 
 ScalarCsrPlan::ScalarCsrPlan(const HostMatrix& matrix, int rhs_width, int algorithm,
-                             bool preprocess, bool fixed_bsr)
+                             bool preprocess, bool fixed_bsr, int bsr_block_size)
     : impl_(new Impl) {
   matrix.validate();
   if (!is_supported_rhs_width(rhs_width)) {
@@ -190,7 +208,7 @@ ScalarCsrPlan::ScalarCsrPlan(const HostMatrix& matrix, int rhs_width, int algori
   impl_->preprocess = preprocess;
   ScalarCsrData csr;
   if (fixed_bsr) {
-    csr = pack_fixed_bsr(matrix);
+    csr = pack_fixed_bsr(matrix, bsr_block_size);
     impl_->algorithm = CUSPARSE_SPMM_BSR_ALG1;
     impl_->preprocess = false;
   } else {
@@ -203,12 +221,15 @@ ScalarCsrPlan::ScalarCsrPlan(const HostMatrix& matrix, int rhs_width, int algori
   impl_->row_offsets = copy_to_device(csr.row_offsets);
   impl_->column_indices = copy_to_device(csr.column_indices);
   impl_->values = copy_to_device(csr.values);
+  impl_->format_bytes = csr.values.size() * sizeof(float) +
+                        (csr.row_offsets.size() + csr.column_indices.size()) * sizeof(int32_t);
 
   check_cusparse(cusparseCreate(&impl_->handle));
   if (fixed_bsr) {
     check_cusparse(cusparseCreateBsr(
-        &impl_->sparse_matrix, matrix.block_rows, matrix.block_cols, matrix.block_col.size(), 32,
-        32, impl_->row_offsets, impl_->column_indices, impl_->values, CUSPARSE_INDEX_32I,
+        &impl_->sparse_matrix, matrix.scalar_rows() / bsr_block_size,
+        matrix.scalar_cols() / bsr_block_size, csr.column_indices.size(), bsr_block_size,
+        bsr_block_size, impl_->row_offsets, impl_->column_indices, impl_->values, CUSPARSE_INDEX_32I,
         CUSPARSE_INDEX_32I, CUSPARSE_INDEX_BASE_ZERO, CUDA_R_32F, CUSPARSE_ORDER_ROW));
     return;
   }
@@ -221,6 +242,7 @@ ScalarCsrPlan::ScalarCsrPlan(const HostMatrix& matrix, int rhs_width, int algori
 ScalarCsrPlan::~ScalarCsrPlan() = default;
 
 size_t ScalarCsrPlan::workspace_bytes() const { return impl_->workspace_size; }
+size_t ScalarCsrPlan::storage_bytes() const { return impl_->format_bytes + impl_->workspace_size; }
 
 void ScalarCsrPlan::execute(const float* input, float* output, cudaStream_t stream) {
   check_cusparse(cusparseSetStream(impl_->handle, stream));

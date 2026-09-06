@@ -8,13 +8,63 @@
 namespace vbsr {
 namespace {
 
+// A warp covers RowsPerWarp adjacent rows and splits each dot product across
+// the remaining lanes. The final warp reduction keeps complete row ownership.
+template <int RHS, int RowsPerWarp, int Threads>
+__global__ void row_owned_warp_reduced(DeviceMatrix matrix, const float* __restrict__ input,
+                                       float* __restrict__ output) {
+  constexpr int stripe_count = 32 / RowsPerWarp;
+  constexpr int rows_per_cta = Threads / 32 * RowsPerWarp;
+  constexpr int stride = 65;
+  __shared__ float tile[RHS * stride];
+  const int row = blockIdx.x;
+  const int height = matrix.row_size[row];
+  const int lane = threadIdx.x % 32;
+  const int stripe = lane / RowsPerWarp;
+  for (int base = 0; base < height; base += rows_per_cta) {
+    const int local_row = base + (threadIdx.x / 32) * RowsPerWarp + lane % RowsPerWarp;
+    const bool active = local_row < height;
+    float sums[RHS] = {};
+    for (int block = matrix.row_ptr[row]; block < matrix.row_ptr[row + 1]; ++block) {
+      const int col = matrix.block_col[block];
+      const int width = matrix.col_size[col];
+      for (int i = threadIdx.x; i < RHS * 64; i += Threads) {
+        const int k = i % 64;
+        const int q = i / 64;
+        if (k < width)
+          tile[q * stride + k] = input[matrix.col_scalar_off[col] + k + int64_t(q) * matrix.scalar_cols];
+      }
+      __syncthreads();
+      if (active) {
+        const float* values = matrix.values + matrix.value_off[block] + local_row;
+#pragma unroll 2
+        for (int k = stripe; k < width; k += stripe_count) {
+          const float a = values[k * height];
+#pragma unroll
+          for (int q = 0; q < RHS; ++q) sums[q] = fmaf(a, tile[q * stride + k], sums[q]);
+        }
+      }
+      __syncthreads();
+    }
+#pragma unroll
+    for (int q = 0; q < RHS; ++q) {
+#pragma unroll
+      for (int delta = RowsPerWarp; delta < 32; delta *= 2)
+        sums[q] += __shfl_xor_sync(0xffffffffu, sums[q], delta);
+      if (active && stripe == 0)
+        output[matrix.row_scalar_off[row] + local_row + int64_t(q) * matrix.scalar_rows] = sums[q];
+    }
+  }
+}
+
 template <int VectorWidth, int Threads>
 __global__ void row_owned_rhs8_tiled(DeviceMatrix matrix, const float* __restrict__ input,
                                      float* __restrict__ output) {
   const int row = blockIdx.x;
   const int height = matrix.row_size[row];
   // Groups of eight contiguous lanes follow the format's minimum row extent.
-  for (int tile = threadIdx.x; tile < height * (8 / VectorWidth); tile += Threads) {
+  for (int tile = blockIdx.y * Threads + threadIdx.x; tile < height * (8 / VectorWidth);
+       tile += Threads * gridDim.y) {
     const int local_row = (tile / (64 / VectorWidth)) * 8 + tile % 8;
     const int first_rhs = ((tile / 8) % (8 / VectorWidth)) * VectorWidth;
     float sums[VectorWidth] = {};
@@ -369,7 +419,7 @@ void launch_shape_dispatched(DeviceMatrix matrix, const int32_t* row_shape_order
   // At low mean degree the second launch costs more than shape separation
   // saves for mixed-height matrices. Use the original one-CTA-per-row path in
   // that regime; homogeneous matrices still get the fitting one-launch path.
-  if (small_row_count != 0 && large_row_count != 0 && matrix.nnzb < 8 * matrix.block_rows) {
+  if (small_row_count != 0 && large_row_count != 0 && matrix.nnzb < int64_t(8) * matrix.block_rows) {
     launch_single_buffered<RHS, VectorWidth>(matrix, input, output, stream);
     return;
   }
@@ -400,6 +450,83 @@ void check_kernel_launch() {
 
 } // namespace
 
+// Experimental controls keep execution policies explicit. They are never selected
+// by the public Plan dispatch. RHS-8 variants form a 2x2x2 factorial design.
+void launch_ablation(DeviceMatrix matrix, const int32_t* order, const float* input,
+                     float* output, int rhs, int variant, cudaStream_t stream) {
+  if ((rhs == 8 && (variant == 8 || variant == 9)) ||
+      (rhs == 16 && (variant == 5 || variant == 6)) ||
+      ((rhs == 8 || rhs == 16) && variant == 200)) {
+    if (variant == 200) {
+      if (rhs == 16) launch_ilp<16, 8>(matrix, input, output, stream);
+      else if (matrix.block_rows < 512) launch_scalar<8>(matrix, input, output, stream);
+      else row_owned_rhs8_tiled<2, 256><<<matrix.block_rows, 256, 0, stream>>>(matrix, input, output);
+    } else if (rhs == 8) {
+      if (variant == 8) row_owned_ilp<8, 8><<<matrix.block_rows, 64, 0, stream>>>(matrix, input, output);
+      else row_owned_single_buffered<8, 8, 64, false><<<matrix.block_rows, 64, 0, stream>>>(matrix, nullptr, input, output);
+    } else {
+      if (variant == 5) row_owned_ilp<16, 16><<<matrix.block_rows, 64, 0, stream>>>(matrix, input, output);
+      else row_owned_single_buffered<16, 16, 64, false><<<matrix.block_rows, 64, 0, stream>>>(matrix, nullptr, input, output);
+    }
+    check_kernel_launch();
+    return;
+  }
+  if (variant >= 100 && (rhs == 8 || rhs == 16)) {
+#define NARROW_CASE(N) \
+    case N: \
+      switch (variant) { \
+      case 100: launch_single_buffered<N, N / 2>(matrix, input, output, stream); break; \
+      case 101: row_owned_warp_reduced<N, 8, 256><<<matrix.block_rows, 256, 0, stream>>>(matrix, input, output); break; \
+      case 102: row_owned_warp_reduced<N, 16, 128><<<matrix.block_rows, 128, 0, stream>>>(matrix, input, output); break; \
+      case 103: row_owned_warp_reduced<N, 8, 128><<<matrix.block_rows, 128, 0, stream>>>(matrix, input, output); break; \
+      case 104: row_owned_warp_reduced<N, 4, 256><<<matrix.block_rows, 256, 0, stream>>>(matrix, input, output); break; \
+      case 105: row_owned_single_buffered<N, N / 2, 128, false><<<matrix.block_rows, 128, 0, stream>>>(matrix, nullptr, input, output); break; \
+      case 106: row_owned_single_buffered<N, N / 4, 256, false><<<matrix.block_rows, 256, 0, stream>>>(matrix, nullptr, input, output); break; \
+      case 107: row_owned_single_buffered<N, N, 64, false><<<matrix.block_rows, 64, 0, stream>>>(matrix, nullptr, input, output); break; \
+      default: throw std::invalid_argument("invalid tuning variant"); \
+      } break
+    switch (rhs) { NARROW_CASE(8); NARROW_CASE(16); }
+#undef NARROW_CASE
+    check_kernel_launch();
+    return;
+  }
+  if (rhs == 8 && variant >= 0 && variant < 8) {
+    const int ctas = (variant & 1) + 1;
+    const bool reuse = variant & 2;
+    const bool tiled = variant & 4;
+    const dim3 grid(matrix.block_rows, ctas);
+    if (tiled) {
+      if (reuse) row_owned_rhs8_tiled<2, 256><<<grid, 256, 0, stream>>>(matrix, input, output);
+      else row_owned_rhs8_tiled<1, 256><<<grid, 256, 0, stream>>>(matrix, input, output);
+    } else {
+      if (reuse) row_owned_ilp<8, 2><<<grid, 256, 0, stream>>>(matrix, input, output);
+      else row_owned_ilp<8, 1><<<grid, 256, 0, stream>>>(matrix, input, output);
+    }
+  } else {
+    // v0/v1 isolate accumulator width within the global-load family.
+    // v1/v2 isolate staging with the same CTA size, output mapping, and width.
+    // v3/v4 isolate the buffer schedule with the same indirect row order.
+#define WIDE_CASE(N, V) \
+    case N: \
+      switch (variant) { \
+      case 0: row_owned_ilp<N, 4><<<matrix.block_rows, 256, 0, stream>>>(matrix, input, output); break; \
+      case 1: launch_ilp<N, V>(matrix, input, output, stream); break; \
+      case 2: launch_single_buffered<N, V>(matrix, input, output, stream); break; \
+      case 3: row_owned_single_buffered<N, V, 256, true><<<matrix.block_rows, 256, 0, stream>>>(matrix, order, input, output); break; \
+      case 4: row_owned_double_buffered<N, V, 256><<<matrix.block_rows, 256, 0, stream>>>(matrix, order, input, output); break; \
+      default: throw std::invalid_argument("invalid ablation variant"); \
+      } break
+    switch (rhs) {
+      WIDE_CASE(16, 8);
+      WIDE_CASE(32, 8);
+      WIDE_CASE(64, 16);
+    default: throw std::invalid_argument("invalid ablation RHS");
+    }
+#undef WIDE_CASE
+  }
+  check_kernel_launch();
+}
+
 void launch_row_owned_scalar(DeviceMatrix matrix, const float* input, float* output, int rhs_width,
                              cudaStream_t stream) {
   switch (rhs_width) {
@@ -429,15 +556,12 @@ void launch_row_owned(DeviceMatrix matrix, const int32_t* row_shape_order, int s
   // wider than these measured points loses more parallelism than it saves.
   switch (rhs_width) {
   case 8:
-    // Small grids need the extra CTAs of the original mapping to expose enough
-    // parallel work. Keep that path below the measured large-grid regime.
-    if (matrix.block_rows < 512)
-      launch_scalar<8>(matrix, input, output, stream);
-    else
-      row_owned_rhs8_tiled<2, 256><<<matrix.block_rows, 256, 0, stream>>>(matrix, input, output);
+    // One thread owns a complete panel row. Sixty-four threads cover every
+    // supported height while input staging shares B across the active rows.
+    row_owned_single_buffered<8, 8, 64, false><<<matrix.block_rows, 64, 0, stream>>>(matrix, nullptr, input, output);
     break;
   case 16:
-    launch_ilp<16, 8>(matrix, input, output, stream);
+    row_owned_single_buffered<16, 16, 64, false><<<matrix.block_rows, 64, 0, stream>>>(matrix, nullptr, input, output);
     break;
   case 32:
     launch_shape_dispatched<32, 8>(matrix, row_shape_order, small_row_count, large_row_count, input,

@@ -10,7 +10,8 @@ namespace vbsr {
  *
  * Blocks and dense matrices use column-major storage. `row_ptr` indexes the
  * nonzero blocks belonging to each block row, while `value_off` indexes each
- * block's packed scalar payload. Scalar offset arrays translate block indices
+ * block's packed scalar payload. Block columns must be sorted and unique within
+ * each row. Scalar offset arrays translate block indices
  * into rows and columns of the unblocked matrix.
  */
 struct HostMatrix {
@@ -47,10 +48,11 @@ public:
   Matrix& operator=(const Matrix&) = delete;
   Matrix(Matrix&&) noexcept;
   Matrix& operator=(Matrix&&) noexcept;
-  /** Returns a non-owning view valid for this object's lifetime. */
+  /** Returns a non-owning view, invalidated by destruction or move assignment. */
   DeviceMatrix device_view() const;
   int64_t scalar_rows() const { return rows_; }
   int64_t scalar_cols() const { return cols_; }
+  size_t storage_bytes() const;
 
 private:
   friend class Plan;
@@ -98,14 +100,17 @@ struct PlanOptions {
 
 /** Lightweight non-owning execution plan for the row-owned CUDA kernel.
  *
- * The source `Matrix` must outlive the plan. Calls enqueue work asynchronously
+ * The source allocation must outlive the plan and its queued work. Do not move
+ * assign the owning Matrix while a plan refers to its old allocation.
+ * Calls enqueue work asynchronously
  * on the supplied stream.
  */
 class Plan {
 public:
   Plan(const Matrix&, PlanOptions);
 
-  /** Enqueues `C = A * B`; both dense matrices are column-major device buffers.
+  /** Enqueues `C = A * B`; both dense matrices are non-overlapping, sufficiently
+   * sized column-major device buffers on the matrix's CUDA device.
    */
   void execute(const float* B, float* C, cudaStream_t stream = 0) const;
   /** Returns the number of kernel launches used by one execution. */
@@ -122,18 +127,22 @@ private:
 class ScalarCsrPlan {
 public:
   /** Algorithm 0 preserves the historical default. Algorithms 1 to 3 select
-   * explicit CSR variants. Fixed BSR requires uniform 32-by-32 blocks.
+   * explicit CSR variants. Fixed BSR subdivides blocks into 8-by-8 or 32-by-32
+   * tiles without padding, and rejects partitions not divisible by that size.
+   * Scalar CSR requires the expanded entry count and columns to fit INT32_MAX.
    * Preprocessing, when requested, happens on the first execute call.
    */
   ScalarCsrPlan(const HostMatrix&, int rhs_width, int algorithm = 0, bool preprocess = false,
-                bool fixed_bsr = false);
+                bool fixed_bsr = false, int bsr_block_size = 32);
   ~ScalarCsrPlan();
   ScalarCsrPlan(const ScalarCsrPlan&) = delete;
-  /** Enqueues the baseline multiplication on `stream`. */
+  /** Enqueues the baseline multiplication on `stream`. One plan must be ordered
+   * on one stream or externally synchronized across streams and host threads. */
   void execute(const float* B, float* C, cudaStream_t stream = 0);
   /** Returns persistent temporary storage allocated after the first execution.
    */
   size_t workspace_bytes() const;
+  size_t storage_bytes() const;
 
 private:
   struct Impl;
@@ -154,9 +163,11 @@ public:
   GroupedGemmPlan(const GroupedGemmPlan&) = delete;
   /** Enqueues all grouped GEMM batches on `stream`. */
   void execute(const float* B, float* C, cudaStream_t stream = 0);
-  /** Returns the number of sequential block slots (and therefore launches). */
+  /** Returns sequential grouped GEMM calls, excluding pointer-refresh kernels
+   * and any internal library launches. Leading dimensions must fit INT32_MAX. */
   int launch_count() const;
   size_t workspace_bytes() const { return 0; }
+  size_t storage_bytes() const;
 
 private:
   struct Impl;

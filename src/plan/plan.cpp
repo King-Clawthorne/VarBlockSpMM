@@ -24,7 +24,7 @@ int Plan::launch_count() const {
   if (options_.rhs_width != 32) {
     return 1;
   }
-  if (small_row_count_ != 0 && large_row_count_ != 0 && a_.nnzb < 8 * a_.block_rows) {
+  if (small_row_count_ != 0 && large_row_count_ != 0 && a_.nnzb < int64_t(8) * a_.block_rows) {
     return 1;
   }
   return int(small_row_count_ != 0) + int(large_row_count_ != 0);
