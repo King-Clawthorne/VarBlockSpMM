@@ -1,5 +1,5 @@
 {
-  "started_utc": "2026-09-07T07:15:14Z",
+  "started_utc": "2026-09-07T07:49:52Z",
   "jobs": [
     [
       256,
@@ -117,7 +117,7 @@
     "grouped",
     "bsr8"
   ],
-  "executable_sha256": "cb6b62a99002315f94e6751df0308add488e07bd5098a0df6f6e9c806c6d8fec",
+  "executable_sha256": "2c8bc2f36dc4adc50db08dd09f0da1e545f6e584af6247ad44d49ff15b1af019",
   "sources": {
     "bench/ablation.cpp": "f39e1843ac7374821b8a05e3b56a70ff7671b924a6221c147b33f72665388bc0",
     "bench/application.cpp": "0a9d0692b2f6cf9d88aa388214e8e796f6b4250f80bf77bcbf1b8132a3bf4f18",
@@ -129,9 +129,9 @@
     "bench/compact_csr.hpp": "d2ad4dc5c134dd11f1fa03744ad21e0fda93e3c6b2826285fb39e9c7936ac845",
     "bench/dense.cpp": "623a34200b3e9826f76dedc181ca01c62886e5bc1a28c82e954ee8da255bccc1",
     "bench/dense.hpp": "6cfcab7a7611c11e25887d5fdfbb350df7b79e522ed1ec9a1eacc0aa76f6311f",
-    "bench/dg.cpp": "ddbf5c3cd017f85eaf5e7e1cbc431cc4b0883a081993426c1189edd5e2b3c177",
-    "bench/dg_specialized.cpp": "53574cd71a4074dbfc70352a106061244c5d04b4bcf3d3a908fe38bc742d7c7a",
-    "bench/dg_specialized.hpp": "a29fdd3d772e6ed80c14bd01db2d2c55c301007e45b1b4a5768b3e508fa682d3",
+    "bench/dg.cpp": "bddf7561f959c55f5e7ae51d6af53141eb6c341f0874c1a121353397db6469ca",
+    "bench/dg_specialized.cpp": "60e53848e3033649aaa1421051edad2b1ee6b2114d52e4c9b1ba29cdffb8621c",
+    "bench/dg_specialized.hpp": "cb920ccc7fe59c0d891e8fa64b18b9649069df86ddbc191b8f33d8becd7b16ec",
     "bench/kernel.cpp": "a781c441fb5930c07a6ef281447ddc4894be1b55b30b45abdceb19e49706810b",
     "bench/magma.cu": "20b078768b2993a085069a9ae03ff5a4dd5ab54ec624fef08494789a1b9d7fbf",
     "bench/magma.hpp": "c7e33591e0267514ff0e534f1b86be65caf481555bbcf985e76132770e3ab565",
@@ -154,11 +154,12 @@
     "scripts/benchmark_kernel.py": "ff6332d1b874d430c476a53ea66b4330ad0213bac730254a090942577e3d8519",
     "scripts/benchmark_runs.py": "027bbaaf3fe6a974967fdbc1cd74e32ae0a0639bdbbff2c564d96780a2aac70c",
     "scripts/build.ps1": "b6f543da590f87e455a93df642c31057d8ee71c2d89b10e255850726cfa70dd3",
-    "scripts/build_paper.ps1": "536f10a42340f910354b5a3a614d16a1a944f7c89a6c7fb2e68d7c0f4826e11f",
+    "scripts/build_paper.ps1": "a9b245ef577a47ed74938e22d33cf4c347a93a7f3c888043c9553a234553e987",
     "scripts/build_relevance.py": "528dbac9565770b0e5dc09a0a7b2bf9d982cbe17f0c3598437afb6cc327c5443",
     "scripts/build_verified.py": "c6c664cedf39125845685b910932e4734eb0d5dddde1413adde300625ca16831",
     "scripts/check_references.py": "582d18b9d8328bc5e72d90e3a52836e8e8207abf8900bded24ae4bb7fefe8f86",
-    "scripts/export_relevance.py": "e59c0c0d8e6e71d49b51deb329bd48da5286d7afb88582697587d6703e33b16b",
+    "scripts/export_dg.py": "3a59a1122b821d7cdbb060e8fa96441f7bc841f0bd4b79b5b84d16bec7acdf06",
+    "scripts/export_relevance.py": "e75c2d65624a42f442b06e0d6bb550e9954f253025ef0db673f2fa4eec8a71b5",
     "scripts/export_robustness.py": "d4b8364475d195d6dd8d188acfdd08a6b72b45b5171195a1b376092e410bfe8b",
     "scripts/plot_revision.py": "4d0ece8d25a1d32452e62e4c0ec39c10dc13fed2a68a881df1138ac3235ac9e5",
     "scripts/prepare_application.py": "c7683069c6b02d184d647316aeffee312771ab4c2b2f57efc0aff9b8d5c1652a",
@@ -166,7 +167,7 @@
     "scripts/prepare_native.py": "c703a9a14e7d1b156d865edf11e0e6a2c275b9d439189f80fd521bae41fcf4e3",
     "scripts/prepare_transport.py": "91a889983e081d2a94738ce418b3133e8ba37043126e207d70e56b037b173d15",
     "scripts/run_application.py": "6487c9ce514ba947783a1da82ad897be08b008cd253dac65c81675a96278d519",
-    "scripts/run_dg.py": "cd9c0c8703fc93dab534c529500da038341a036f2196ab59a872f7d1272ccf7b",
+    "scripts/run_dg.py": "a32d92a17c108e91023e990843704e8f3ed2877d9c79c012cac742d8d0c01f37",
     "scripts/run_final_validation.py": "b73d085f8cb9219cbb8730d3be791580767529b3dd9728a998e3a31a4579ab6c",
     "scripts/run_grid.ps1": "316c7af7fdba13b8995a2bb25858371f58ea82b452336429005592758c121935",
     "scripts/run_relevance.py": "3bda50f8a2a275d6ef417c0e0b39713251dd5be6b8960463be879febdfa9b82d",
@@ -197,9 +198,9 @@
       "bench/compact_csr.hpp": "d2ad4dc5c134dd11f1fa03744ad21e0fda93e3c6b2826285fb39e9c7936ac845",
       "bench/dense.cpp": "623a34200b3e9826f76dedc181ca01c62886e5bc1a28c82e954ee8da255bccc1",
       "bench/dense.hpp": "6cfcab7a7611c11e25887d5fdfbb350df7b79e522ed1ec9a1eacc0aa76f6311f",
-      "bench/dg.cpp": "ddbf5c3cd017f85eaf5e7e1cbc431cc4b0883a081993426c1189edd5e2b3c177",
-      "bench/dg_specialized.cpp": "53574cd71a4074dbfc70352a106061244c5d04b4bcf3d3a908fe38bc742d7c7a",
-      "bench/dg_specialized.hpp": "a29fdd3d772e6ed80c14bd01db2d2c55c301007e45b1b4a5768b3e508fa682d3",
+      "bench/dg.cpp": "bddf7561f959c55f5e7ae51d6af53141eb6c341f0874c1a121353397db6469ca",
+      "bench/dg_specialized.cpp": "60e53848e3033649aaa1421051edad2b1ee6b2114d52e4c9b1ba29cdffb8621c",
+      "bench/dg_specialized.hpp": "cb920ccc7fe59c0d891e8fa64b18b9649069df86ddbc191b8f33d8becd7b16ec",
       "bench/kernel.cpp": "a781c441fb5930c07a6ef281447ddc4894be1b55b30b45abdceb19e49706810b",
       "bench/magma.cu": "20b078768b2993a085069a9ae03ff5a4dd5ab54ec624fef08494789a1b9d7fbf",
       "bench/magma.hpp": "c7e33591e0267514ff0e534f1b86be65caf481555bbcf985e76132770e3ab565",
@@ -264,12 +265,12 @@
     },
     "cmake_cache_sha256": "fa27ceb9373e4c946f5e44a94abbb416a202301e5dd33d5d836aeebe3098bb8f",
     "executables": {
-      "vbsr_tests.exe": "b153818b46c8935edd039c188a326a1d32f8445c25b8a6e699a2cafeeb4a7bea",
-      "vbsr_audit.exe": "82c9c32a740bea52a9b64b8a240163c8df270f77f022b518e4856071f5c7c51c",
-      "vbsr_application_audit.exe": "7220adbcd2e49de8dfa79e34b0b2c643df7e42e51d576118e2c4ff0f464f6335",
-      "vbsr_kernel_audit.exe": "f216911cd1add65816764deeebf45a6cb314a8437898c9f146175b80eb940961",
-      "vbsr_ablation.exe": "0b02c582ffca3060ab5d923d8c8b977acdc00286f2d7fd4d062d2339c2d0fd5d",
-      "vbsr_dg.exe": "cb6b62a99002315f94e6751df0308add488e07bd5098a0df6f6e9c806c6d8fec"
+      "vbsr_tests.exe": "d349ec3f6aa025475e2a498164a82ec9ddbaf2d4f5b43857d734b59c5e2cd2fe",
+      "vbsr_audit.exe": "9c4a96dcef4ac8c4fcaa9ef803f2eaff4774112cc32c6a1d995f34cd6fb8a992",
+      "vbsr_application_audit.exe": "8afd76be19dfc0eb57e9d1575051985a3b3fe5ba898d18cc159bde496f78abb1",
+      "vbsr_kernel_audit.exe": "d47193fdc58622d36b28b3e1edc6d64beb4818e0a397a164eef1f90d49f50bc2",
+      "vbsr_ablation.exe": "e9181b2dfd619b863856635a61cf7fee8c9605e6b66488eebda8fa28caec5b83",
+      "vbsr_dg.exe": "2c8bc2f36dc4adc50db08dd09f0da1e545f6e584af6247ad44d49ff15b1af019"
     }
   }
 }

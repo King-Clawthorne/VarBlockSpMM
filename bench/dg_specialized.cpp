@@ -23,12 +23,14 @@ void blas_check(cublasStatus_t status) {
     throw std::runtime_error("cuBLAS error in the specialized transport comparator");
 }
 
-// One strided batched SGEMM. The operator stride is zero, so every element in
-// the batch multiplies the same cached dense block.
-struct Run {
-  const float* operator_values{};
+// One batched SGEMM over the elements that share a cached operator. The A
+// pointer array repeats that operator, which is ordinary batched usage: only
+// the output matrices have to be distinct, and they are.
+struct Group {
+  const float** matrix_a{};
+  const float** matrix_b{};
+  float** output{};
   int rows{}, inner{}, count{};
-  int64_t input_offset{}, output_offset{}, input_stride{}, output_stride{};
   float beta{};
 };
 
@@ -38,27 +40,34 @@ struct DgSpecializedPlan::Impl {
   int rhs{};
   int64_t rows{}, cols{};
   int distinct{};
-  size_t operator_bytes{}, assembled_bytes{};
+  size_t operator_bytes{}, assembled_bytes{}, pointer_bytes{};
   bool zero_output{};
+  float* output{};
   float* operators{};
+  const float** pointers{};
   cublasHandle_t handle{};
-  std::vector<Run> runs;
+  std::vector<Group> groups;
   ~Impl() {
     if (handle)
       cublasDestroy(handle);
     cudaFree(operators);
+    cudaFree(pointers);
   }
 };
 
-DgSpecializedPlan::DgSpecializedPlan(const HostMatrix& a, int rhs) : impl_(new Impl) {
+DgSpecializedPlan::DgSpecializedPlan(const HostMatrix& a, int rhs, const float* input, float* output)
+    : impl_(new Impl) {
   a.validate();
   if (rhs != 8 && rhs != 16 && rhs != 32 && rhs != 64)
     throw std::invalid_argument("invalid rhs width");
   if (a.scalar_rows() > INT32_MAX || a.scalar_cols() > INT32_MAX)
     throw std::invalid_argument("specialized comparator leading dimensions must fit INT32_MAX");
+  if (input == nullptr || output == nullptr)
+    throw std::invalid_argument("specialized comparator requires both device panels");
   impl_->rhs = rhs;
   impl_->rows = a.scalar_rows();
   impl_->cols = a.scalar_cols();
+  impl_->output = output;
   impl_->assembled_bytes = a.values.size() * sizeof(float);
 
   // Deduplicate the dense blocks by shape and exact payload. A transport
@@ -106,73 +115,80 @@ DgSpecializedPlan::DgSpecializedPlan(const HostMatrix& a, int rhs) : impl_(new I
   impl_->zero_output = has_empty_rows;
   // Slot k holds the kth block of every row, so all slot-0 blocks together
   // cover each nonempty output row exactly once and may overwrite it.
+  struct Plan {
+    int rows, inner;
+    float beta;
+    std::vector<const float*> matrix_a, matrix_b;
+    std::vector<float*> output;
+  };
+  std::vector<Plan> plans;
   for (int slot = 0; slot < max_degree; slot++) {
-    // Each entry is one block of this slot, as (input offset, output offset,
-    // height, width), collected in increasing block-row order.
-    struct Item {
-      int64_t input_offset, output_offset;
-      int height, width;
-    };
-    std::map<int, std::vector<Item>> groups;
+    std::map<int, Plan> groups;
     for (int row = 0; row < a.block_rows; row++) {
       const int p = a.row_ptr[row] + slot;
       if (p >= a.row_ptr[row + 1])
         continue;
-      groups[operator_of_block[p]].push_back(Item{a.col_scalar_off[a.block_col[p]],
-                                                  a.row_scalar_off[row], a.row_size[row],
-                                                  a.col_size[a.block_col[p]]});
+      const int id = operator_of_block[p];
+      auto& group = groups[id];
+      group.rows = a.row_size[row];
+      group.inner = a.col_size[a.block_col[p]];
+      group.beta = slot ? 1.f : 0.f;
+      group.matrix_a.push_back(impl_->operators + operator_offset[id]);
+      group.matrix_b.push_back(input + a.col_scalar_off[a.block_col[p]]);
+      group.output.push_back(output + a.row_scalar_off[row]);
     }
-    for (const auto& [id, items] : groups) {
-      // Split each group into maximal runs of constant input and output stride.
-      // A periodic wrap breaks one arithmetic sequence, which becomes its own run.
-      size_t start = 0;
-      while (start < items.size()) {
-        size_t end = start + 1;
-        int64_t input_stride = 0, output_stride = 0;
-        if (end < items.size()) {
-          input_stride = items[end].input_offset - items[start].input_offset;
-          output_stride = items[end].output_offset - items[start].output_offset;
-          while (end + 1 < items.size() &&
-                 items[end + 1].input_offset - items[end].input_offset == input_stride &&
-                 items[end + 1].output_offset - items[end].output_offset == output_stride)
-            end++;
-          end++;
-        }
-        Run run;
-        run.operator_values = impl_->operators + operator_offset[id];
-        run.rows = items[start].height;
-        run.inner = items[start].width;
-        run.count = int(end - start);
-        run.input_offset = items[start].input_offset;
-        run.output_offset = items[start].output_offset;
-        run.input_stride = input_stride;
-        run.output_stride = output_stride;
-        run.beta = slot ? 1.f : 0.f;
-        impl_->runs.push_back(run);
-        start = end;
-      }
-    }
+    for (auto& [id, group] : groups)
+      plans.push_back(std::move(group));
+  }
+
+  // One device array holds every pointer, so the batch arrays stay contiguous
+  // and are uploaded once. They never change, because the panels are fixed.
+  std::vector<const float*> flat;
+  for (const auto& plan : plans) {
+    flat.insert(flat.end(), plan.matrix_a.begin(), plan.matrix_a.end());
+    flat.insert(flat.end(), plan.matrix_b.begin(), plan.matrix_b.end());
+    for (float* pointer : plan.output)
+      flat.push_back(pointer);
+  }
+  impl_->pointer_bytes = flat.size() * sizeof(const float*);
+  cuda_check(cudaMalloc(&impl_->pointers, impl_->pointer_bytes));
+  cuda_check(cudaMemcpy(impl_->pointers, flat.data(), impl_->pointer_bytes, cudaMemcpyHostToDevice));
+  size_t cursor = 0;
+  for (const auto& plan : plans) {
+    Group group;
+    group.rows = plan.rows;
+    group.inner = plan.inner;
+    group.count = int(plan.matrix_a.size());
+    group.beta = plan.beta;
+    group.matrix_a = impl_->pointers + cursor;
+    group.matrix_b = impl_->pointers + cursor + group.count;
+    group.output = const_cast<float**>(impl_->pointers + cursor + 2 * size_t(group.count));
+    cursor += 3 * size_t(group.count);
+    impl_->groups.push_back(group);
   }
 }
 
 DgSpecializedPlan::~DgSpecializedPlan() = default;
 int DgSpecializedPlan::distinct_operators() const { return impl_->distinct; }
-int DgSpecializedPlan::launch_count() const { return int(impl_->runs.size()); }
-size_t DgSpecializedPlan::storage_bytes() const { return impl_->operator_bytes; }
+int DgSpecializedPlan::launch_count() const { return int(impl_->groups.size()); }
+size_t DgSpecializedPlan::storage_bytes() const {
+  return impl_->operator_bytes + impl_->pointer_bytes;
+}
+size_t DgSpecializedPlan::operator_bytes() const { return impl_->operator_bytes; }
 size_t DgSpecializedPlan::assembled_bytes() const { return impl_->assembled_bytes; }
 
-void DgSpecializedPlan::execute(const float* input, float* output, cudaStream_t stream) {
+void DgSpecializedPlan::execute(cudaStream_t stream) {
   blas_check(cublasSetStream(impl_->handle, stream));
   if (impl_->zero_output)
-    cuda_check(cudaMemsetAsync(output, 0, size_t(impl_->rows) * impl_->rhs * sizeof(float), stream));
+    cuda_check(cudaMemsetAsync(impl_->output, 0,
+                               size_t(impl_->rows) * impl_->rhs * sizeof(float), stream));
   const float alpha = 1.f;
-  for (const auto& run : impl_->runs) {
-    const float beta = impl_->zero_output ? 1.f : run.beta;
-    blas_check(cublasSgemmStridedBatched(
-        impl_->handle, CUBLAS_OP_N, CUBLAS_OP_N, run.rows, impl_->rhs, run.inner, &alpha,
-        run.operator_values, run.rows, 0, input + run.input_offset, int(impl_->cols),
-        run.input_stride, &beta, output + run.output_offset, int(impl_->rows), run.output_stride,
-        run.count));
+  for (const auto& group : impl_->groups) {
+    const float beta = group.beta;
+    blas_check(cublasSgemmBatched(impl_->handle, CUBLAS_OP_N, CUBLAS_OP_N, group.rows, impl_->rhs,
+                                  group.inner, &alpha, group.matrix_a, group.rows, group.matrix_b,
+                                  int(impl_->cols), &beta, group.output, int(impl_->rows),
+                                  group.count));
   }
 }
 

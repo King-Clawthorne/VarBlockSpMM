@@ -79,10 +79,10 @@ int main(int argc, char** argv) {
     {
       // Report the structure the specialized comparator exploits, once, before
       // any timing. A campaign record without this line is incomplete.
-      vbsr::bench::DgSpecializedPlan probe(host, rhs);
+      vbsr::bench::DgSpecializedPlan probe(host, rhs, x.data(), y.data());
       std::cerr << "specialized_structure," << probe.distinct_operators() << ','
-                << probe.launch_count() << ',' << probe.storage_bytes() << ','
-                << probe.assembled_bytes() << '\n';
+                << probe.launch_count() << ',' << probe.operator_bytes() << ','
+                << probe.assembled_bytes() << ',' << probe.storage_bytes() << '\n';
     }
     std::vector<std::string> methods = {"direct", "dg_specialized", "grouped", "bsr8"};
     std::shuffle(methods.begin(), methods.end(), std::mt19937(seed));
@@ -111,8 +111,11 @@ int main(int argc, char** argv) {
         vbsr::Plan plan(matrix.device_view(), {rhs});
         run([&](int, const float* a, float* c) { plan.execute(a, c); });
       } else if (name == "dg_specialized") {
-        vbsr::bench::DgSpecializedPlan plan(host, rhs);
-        run([&](int, const float* a, float* c) { plan.execute(a, c); });
+        // The trace alternates buffers, so bind one plan per direction and
+        // keep every pointer array cached, as the MAGMA comparator does.
+        vbsr::bench::DgSpecializedPlan even(host, rhs, x.data(), y.data());
+        vbsr::bench::DgSpecializedPlan odd(host, rhs, y.data(), x.data());
+        run([&](int step, const float*, float*) { (step % 2 ? odd : even).execute(); });
       } else if (name == "grouped") {
         vbsr::GroupedGemmPlan plan(host, rhs, true);
         run([&](int, const float* a, float* c) { plan.execute(a, c); });

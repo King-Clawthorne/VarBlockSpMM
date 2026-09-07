@@ -261,6 +261,17 @@ This appendix reports archived development measurements. They are separate
 from the verified-build campaigns in the main text and are not combined
 with them as additional repetitions or used to adjust current speedups.
 
+\paragraph{Superseded archives.} Three archives are retained for review and
+generate no current result. \path{data/relevance/} holds the bounded first
+follow-up, which measured a near-identity forward-Euler transport trace and
+predates the characteristic projection described above. The seed-1 core
+campaign reported in Section~1 predates the MAGMA comparator. The two seed-4
+development archives under \path{data/narrow-tuning/} and
+\path{data/narrow-tuning-2/} chose the narrow policy and predate build-linked
+receipts. \path{scripts/analyze_tuning.py} validates the last of these. The
+current campaigns share one verified build and one timing protocol, and every
+ratio in the main text comes from those.
+
 \subsection{RHS-8 mapping ablation}
 \label{sec:rhs8-results}
 The RHS-8 ablation covers 144 configurations at 256, 512, 1,024, and 4,096

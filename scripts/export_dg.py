@@ -40,10 +40,14 @@ structures = {(r['distinct'], r['launches'], r['operator_bytes']) for r in data[
 if len(structures) != 1:
     raise ValueError('Structure differs across transport cases')
 distinct, launches, operator_bytes = structures.pop()
+# The plan also holds batch pointer arrays, which grow with the element count.
+# Report the factor against everything it keeps on the device, not the
+# operators alone.
 macros = dict(DgDistinctOperators=distinct, DgLaunches=launches,
               DgOperatorKiB=f'{operator_bytes / 1024:.1f}',
+              DgPlanKiB=f'{large["storage_bytes"] / 1024:.1f}',
               DgAssembledMiB=f'{large["assembled_bytes"] / 1024 ** 2:.1f}',
-              DgStorageFactor=f'{large["assembled_bytes"] / operator_bytes:.0f}',
+              DgStorageFactor=f'{large["assembled_bytes"] / large["storage_bytes"]:.0f}',
               DgSpecializedLarge=f'{large["specialized"]:.3f}',
               DgSpecializedRatio=f'{gm(ratios):.3f}',
               DgSpecializedMin=f'{min(ratios):.3f}',

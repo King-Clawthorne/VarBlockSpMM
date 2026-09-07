@@ -39,6 +39,7 @@ def main():
         ('prepare_transport.py', ['--all']),
         ('build_relevance.py', []),
         ('run_relevance.py', ['--output', str(root / 'relevance')]),
+        ('run_dg.py', ['--output', str(root / 'dg')]),
     ]:
         print('Running ' + script + ' ' + ' '.join(args), flush=True)
         subprocess.run([sys.executable, str(ROOT / 'scripts' / script), *args], cwd=ROOT, check=True)

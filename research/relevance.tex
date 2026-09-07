@@ -11,15 +11,14 @@ Setup validates dimensions before calling the dispatcher used by MAGMA's
 \texttt{max\_nocheck} interface. Its normal launch and attribute-setting
 overhead remains inside timing.
 
-The replacement comparison crosses all 128 core configurations with matrix
+The comparison crosses all 128 core configurations with matrix
 seeds 2, 3, and 5, three fresh processes per seed, and batches of one or
 eight products. Each process records twenty timing samples per method,
 for 2,304 core processes. Eight-product samples divide elapsed time by eight.
 They reuse the same input and output buffers and synchronize once per batch.
 Methods and jobs are randomized, with all GPU processes run serially.
 The comparator set includes the explicit CSR algorithms, grouped cuBLAS,
-BSR8, applicable BSR32, and both MAGMA compositions. This campaign is separate
-from the original NVIDIA-only campaigns. As noted above, only the 64 boundary
+BSR8, applicable BSR32, and both MAGMA compositions. As noted above, only the 64 boundary
 of the related hierarchical study's leaf sizes falls inside the supported
 dimensions, so this comparison measures the compatible block product rather
 than that study's larger leaves or its construction algorithm.
@@ -93,8 +92,6 @@ Preparation requires more than a tenfold rejection margin on both coefficient
 error criteria. A separate FP64 spatial-refinement study at fixed physical
 time checks the discretization without the FP32 arithmetic floor.
 
-This replaces the original near-identity forward-Euler trace. The old trace
-remains historical evidence and does not contribute to current results.
 The full overlap equations, refinement observations, and startup definition
 are in the supplement. This remains a standalone transport component with
 prescribed orders. What it does demonstrate is that the measured advantage survives three
@@ -125,12 +122,16 @@ preparation already caches them. A specialized implementation would exploit
 that. We therefore built one and measured it under the same protocol. It
 recovers the distinct operators from the packed matrix by deduplicating block
 payloads, groups the elements that share an operator, and runs each group as
-one strided batched SGEMM whose stride over the operator is zero, so a single
-cached block serves the whole batch. It issues \DgLaunches{} batched calls per
-product and never assembles the matrix on the device: it holds
-\DgOperatorKiB{} KiB of operators instead of the \DgAssembledMiB{} MiB packed
-matrix at 4,096 elements, a factor of \DgStorageFactor{}. It runs the same
-dependent trace, in FP32, and passes the same coefficient and analytic checks.
+one batched SGEMM whose operator pointer array repeats that single cached
+block. Both panels are bound when the plan is built, so every pointer array is
+uploaded once and none is refreshed during the trace. It issues
+\DgLaunches{} batched calls per product and never assembles the matrix on the
+device. At 4,096 elements it keeps \DgOperatorKiB{} KiB of operator values,
+and \DgPlanKiB{} KiB in total once the batch pointer arrays are counted,
+against the \DgAssembledMiB{} MiB packed matrix, a factor of
+\DgStorageFactor{}. Unlike the operators, those pointer arrays grow with the
+element count. It runs the same dependent trace, in FP32, and passes the same
+coefficient and analytic checks.
 
 \begin{table}[!htbp]
 \centering\small
@@ -144,15 +145,14 @@ three paired process ratios. Times are median GPU milliseconds per trace.}
 
 \input{generated/dg-findings.tex}
 
-The specialized plan wins decisively on storage and loses on time in every
-tested case. Its per-step work is split across \DgLaunches{} batched calls
-whose individual GEMMs are small, while direct execution issues one kernel
-that keeps each block row in one thread array. This is one specialized
-implementation, not the best possible one. A hand-written kernel that fused
-the two contributions per element and kept the cached operators resident could
-close or reverse the gap, and we do not claim otherwise. What the comparison
-establishes is that the obvious specialization, the one the cached operators
-invite, does not by itself beat direct execution here.
+The specialized plan wins on storage and loses on time in every tested case.
+Its per-step work is split across \DgLaunches{} batched calls whose individual
+GEMMs are small, while direct execution issues one kernel that keeps each
+block row in one thread array. This is one specialized implementation. A
+hand-written kernel that fused the two contributions per element and kept the
+cached operators resident is not measured, and it could close or reverse the
+gap. The result is confined to the implementation tested: direct execution
+beats this cached-operator batched-GEMM comparator on these traces.
 
 \paragraph{Separating workload factors.}
 A crossed control varies block rows over \(128,512\), degree over

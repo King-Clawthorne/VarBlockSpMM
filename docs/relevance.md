@@ -75,20 +75,32 @@ distinct dense blocks, which `prepare_transport.py` caches while assembling.
 `bench/dg_specialized.cpp` is an application-specific comparator that exploits
 exactly that. It deduplicates the block payloads to recover the distinct
 operators, groups the elements sharing an operator, and runs each group as one
-`cublasSgemmStridedBatched` call whose stride over the operator is zero. The
-assembled matrix never reaches the device: it holds 33.8 KiB of operators
-rather than the 33.8 MiB packed matrix at 4096 elements. Its constructor
-refuses inputs without repeated operators, so it cannot be misused as a
-general product. Precision stays FP32 with `CUBLAS_DEFAULT_MATH`.
+`cublasSgemmBatched` call whose A pointer array repeats that cached operator.
+Repeated input pointers are ordinary batched usage: only the output matrices
+must be distinct, and they are. An earlier revision passed a zero operator
+stride to `cublasSgemmStridedBatched`, which left the supported behavior of
+that call unresolved, so the pointer-array composition replaced it and every
+recorded number comes from the replacement.
+
+Both panels are bound at construction, so the pointer arrays upload once and
+are never refreshed mid-trace. The alternating buffers therefore need one plan
+per direction, as the MAGMA comparator does. The assembled matrix never
+reaches the device: at 4096 elements the plan holds 33.8 KiB of operators, and
+225.8 KiB once the batch pointer arrays are counted, against a 33.8 MiB packed
+matrix. The operator bytes are constant in the element count and the pointer
+arrays are not. Its constructor refuses inputs without repeated operators, so
+it cannot be misused as a general product. Precision stays FP32 with
+`CUBLAS_DEFAULT_MATH`.
 
 `scripts/run_dg.py` runs the six transport cases with three fresh processes
 each into `data/dg/`, under the same horizon, buffers, and numerical checks as
 the main campaign. Each record must carry the structure line naming the
 discovered operator count, batched call count, and stored bytes.
 `scripts/export_dg.py` validates the archive and writes the paper table.
-Direct execution is faster in all six cases, by 1.200x to 5.504x, winning all
-18 process comparisons, while the specialized plan holds 1024 times less
-matrix storage. A fused hand-written DG kernel is not tested.
+Direct execution is faster in all six cases, by 1.323x to 5.654x, winning all
+18 process comparisons, while the specialized plan holds 153 times less
+matrix storage. A fused hand-written DG kernel is not tested, so the result is
+confined to this cached-operator batched-GEMM implementation.
 
 ## Controlled factors
 

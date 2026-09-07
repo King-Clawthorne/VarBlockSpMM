@@ -39,28 +39,25 @@
 \maketitle
 
 \begin{abstract}
-VarBlockSpMM computes FP32 sparse-dense products directly from packed
-variable-size blocks, avoiding scalar expansion, fixed-block retiling,
-output atomics, and execution workspace. On one RTX 5060 Ti, a 128-case
+A sparse matrix whose blocks have independently chosen row and column
+extents must be expanded, retiled, or split into batched calls before a GPU
+library can multiply it by a dense panel. VarBlockSpMM computes that FP32
+product directly from the packed blocks, giving each block row one thread
+array, one output writer, and no execution workspace, with the staging
+decision specialized per panel width. On one RTX 5060 Ti, a 128-case
 comparison including MAGMA variable-size batched GEMM gives a geometric
 speedup of \RelevanceCoreRatio{} over the fastest tested library, with
-\RelevanceCoreWins{} direct wins. Wide panels give the strongest advantage.
-A standalone variable-order discontinuous Galerkin transport program
-provides an application trace: at 4,096 elements and 64 simultaneous fields,
+\RelevanceCoreWins{} direct wins and the strongest advantage on wide panels.
+A variable-order discontinuous Galerkin transport program supplies a
+dependent application trace: at 4,096 elements and 64 simultaneous fields,
 128 dependent steps run \TransportLargeRatio{} times faster than the fastest
-library and \TransportLargeMagmaRatio{} times faster than the better MAGMA
-composition. A specialized comparator for that problem, which caches the
-\DgDistinctOperators{} distinct block operators and never assembles the
-matrix, is slower than direct execution on all six traces while using
-\DgStorageFactor{} times less storage. Smaller and narrow cases retain
-losses, and per-configuration counts show which narrow wins clear a 5 percent
-margin. On the separate
-covariance component, BSR8 wins steady state with a library-to-direct ratio
-of \NativeBsrRatio{}, while prepared-host startup favors direct by
-\NativeStartupRatio{}. Controlled experiments distinguish degree and block
-size effects. Device-resident inputs and value updates support reuse of
-the packed representation. The evidence supports choosing direct execution
-for the measured favorable regimes, rather than a universal replacement.
+library, and faster than an application-specific comparator that caches the
+\DgDistinctOperators{} distinct block operators the discretization repeats.
+The boundary is reported with the result. Narrow panels win by a few percent
+and not in every configuration, BSR8 is faster on a geometry-derived
+covariance component, and scalar CSR is faster on published matrices given
+artificial partitions. The evidence supports choosing direct execution in the
+measured regimes rather than as a universal replacement.
 \end{abstract}
 
 \section{Introduction}
@@ -485,7 +482,7 @@ the other two RHS-8 factors, and the retained per-variant timings expose
 interactions rather than assuming that speedups multiply.
 
 \subsection{Timing and correctness}
-In the original campaigns, each method receives five warmups and 20 measured executions. Methods are
+Each method receives five warmups and 20 measured executions. Methods are
 randomly ordered within each process. Configuration and process-label jobs
 are shuffled before serial execution, with one GPU benchmark active at a
 time. Synthetic order uses seed 20260905, published-matrix order uses 20260906,
@@ -590,11 +587,10 @@ localities, and four degrees. The MAGMA column selects the faster of its
 slot and reduction compositions within each process. The best-library
 column selects the fastest compatible method, including BSR32 on uniform
 blocks. These are comparator-favoring lower envelopes, not deployed tuning
-policies. This is the current campaign, and it carries the headline result.
-Section~\ref{sec:relevance} gives its protocol, its repeatability, and the
-transport trace immediately after. The earlier NVIDIA-only campaigns, which
-predate the MAGMA comparator and use separate protocols, are reported in the
-supplement and contribute nothing to these aggregates.
+policies. Section~\ref{sec:relevance} gives this campaign's protocol, its
+repeatability, and the transport trace immediately after. Campaigns run under
+earlier protocols are reported in the supplement and are excluded from every
+aggregate here.
 
 \begin{table}[!htbp]
 \centering\small
@@ -747,11 +743,10 @@ are reference implementations and have not been optimized against each other.
 \subsection{Matched mechanism results}\label{sec:matched-results}
 
 
-The 256-thread factorial controls describe the earlier RHS-8 mapping family.
 The full-panel staging rows compare global and shared input loads with the
-same 64-thread mapping used by the final narrow kernel. These comparisons
-separate the contribution of staging from a change in thread count.
-The full factorial table is in the supplement. Per-instance and per-process method medians accompany the retained evidence.
+same 64-thread mapping the narrow kernel uses, so they separate the
+contribution of staging from a change in thread count. The 256-thread
+factorial controls and their full table are in the supplement.
 
 \begin{table}[!htbp]
 \centering\small
@@ -763,24 +758,21 @@ three processes for each matrix instance.}\label{tab:kernel-upgrade}
 \end{table}
 
 The paired narrow-policy speedups are \RhsEightUpgrade{} at RHS 8 and
-\RhsSixteenUpgrade{} at RHS 16 across this grid. Both policies use the same
-input, timing protocol, and full-output reference. Development seed 4 was
-used to choose the replacement, while this comparison uses seeds 1, 2,
-and 3. Historical tuning evidence is retained in the separate supplement.
+\RhsSixteenUpgrade{} at RHS 16 across this grid, on seeds 1, 2, and 3. Both
+policies use the same input, timing protocol, and full-output reference.
+The tuning evidence behind the choice is in the supplement.
 
 
 \section{Scope and limitations}
 Measurements cover one GPU and one local operating environment. Three
 process observations describe repeatability over this campaign, while
 long-term drift and hardware variation require separate measurements.
-The original synthetic grid uses one matrix seed. The full-core follow-up
-adds three matrix seeds, with one process per instance and timing mode.
-The replacement MAGMA-inclusive campaign crosses the three seeds with three
-processes per seed in both timing modes. The matched and native experiments each use three instances with three
-processes per instance.
+The MAGMA-inclusive campaign crosses three matrix seeds with three processes
+per seed in both timing modes. The matched, native, and specialized transport
+experiments each use three instances with three processes per instance.
 These chosen workloads do not define a random application population.
-Historical measurements use separate protocols and are excluded from the
-current averages.
+Campaigns run under earlier protocols are reported separately in the
+supplement and are excluded from these averages.
 
 The synthetic extension tests one degree-imbalance pattern. The published
 matrices have artificial partitions, and the covariance component uses
@@ -830,13 +822,13 @@ Callers retain allocation ownership and keep structure fixed while the
 plan is in use. Device kernels may update values in place, ordered before
 execution. An owning matrix can instead enqueue a device-to-device
 value update without invalidating its plans. Structural changes require
-a new validated plan. The follow-up separately measures value updates
-and structure revalidation. It does not extend the original prepared-host
-startup ratios to these new input paths.
+a new validated plan. Value updates and structure revalidation are measured
+separately, and the prepared-host startup ratios do not extend to these
+input paths.
 
-The verified Windows reference workflow uses CUDA 13.4 and MSVC 19.44.
-The current build uses C++20 for host and device sources. Archived receipts
-preserve the original compiler settings for earlier measurements.
+The verified Windows reference workflow uses CUDA 13.4 and MSVC 19.44,
+building host and device sources as C++20. Each archive carries the compiler
+settings its own measurements used.
 From the repository root, the retained evidence and PDFs are rebuilt with:
 \begin{verbatim}
 uv sync --locked
@@ -861,14 +853,14 @@ report the structure the comparator exploits is rejected. Its comparator
 plan refuses to construct when the input lacks repeated block operators,
 which keeps it from standing in for a general product.
 
-The replacement archive is \path{data/relevance-v2/}. Its checksummed
+The canonical archive is \path{data/relevance-v2/}. Its checksummed
 \path{inputs.zip}, stored in checked 64 MiB parts, retains every transport matrix, initial state, numerical
 and analytic reference, mass-weight vector, metadata file, and refinement
 observation. Validation requires complete input coverage, payload hashes,
 expected panel extents, and agreement between commands and physical metadata.
 It also requires the executable's unchanged-state rejection and all GPU
-analytic checks. The earlier \path{data/relevance/} archive is retained for
-historical review and is excluded from current headline results.
+analytic checks. Superseded archives are listed in the supplement and
+generate no current result.
 
 \path{scripts/build_verified.py} hashes all compiled inputs before a
 clean build, checks them again afterward, runs CTest, and records the
@@ -915,12 +907,11 @@ blocks and sufficiently favorable panel widths and shapes. The transport
 program carries the application argument: its large RHS-64 trace gives
 \TransportLargeRatio{} over the fastest library and
 \TransportLargeMagmaRatio{} over the better MAGMA composition across 128
-dependent products, on an operator the discretization supplies. A specialized
-comparator built for that problem, caching its \DgDistinctOperators{} distinct
-operators and running one strided batched SGEMM per shape group, is slower
-than direct execution on every trace while holding \DgStorageFactor{} times
-less matrix storage, so the obvious specialization does not remove the reason
-to call this kernel. The core comparison including MAGMA gives a
+dependent products, on an operator the discretization supplies. Direct
+execution also beats an application-specific comparator for that problem,
+which caches the \DgDistinctOperators{} distinct block operators and runs one
+batched GEMM per shape group, on all six traces. A fused kernel using those
+cached operators is not measured. The core comparison including MAGMA gives a
 fastest-library ratio of \RelevanceCoreRatio{} over the same widths and
 shapes, and \RelevanceMarginWins{} of 128 configurations clear a 5 percent
 margin on their own repeated observations. Narrow and small traces still

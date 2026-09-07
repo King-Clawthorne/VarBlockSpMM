@@ -59,8 +59,18 @@ class DgEvidenceTests(unittest.TestCase):
             structure({'environment': 'identity_negative_control,rejected\n'})
 
     def test_implausible_structure_record_is_rejected(self):
-        # Operators larger than the assembled matrix would mean no reuse.
-        line = 'specialized_structure,8,10,4096,4096\n'
+        # Operators as large as the assembled matrix would mean no reuse.
+        line = 'specialized_structure,8,10,4096,4096,8192\n'
+        with self.assertRaisesRegex(ValueError, 'Implausible specialized structure'):
+            structure({'environment': line})
+
+    def test_truncated_structure_record_is_rejected(self):
+        line = 'specialized_structure,8,10,4096\n'
+        with self.assertRaisesRegex(ValueError, 'Missing specialized structure'):
+            structure({'environment': line})
+
+    def test_plan_storage_below_operator_bytes_is_rejected(self):
+        line = 'specialized_structure,8,10,34560,35389440,1024\n'
         with self.assertRaisesRegex(ValueError, 'Implausible specialized structure'):
             structure({'environment': line})
 

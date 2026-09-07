@@ -51,11 +51,15 @@ def structure(metadata):
     lines = [l for l in metadata['environment'].splitlines() if l.startswith('specialized_structure,')]
     if len(lines) != 1:
         raise ValueError('Missing specialized structure record')
-    distinct, launches, operator_bytes, assembled_bytes = (int(x) for x in lines[0].split(',')[1:])
-    if not 0 < distinct < launches or operator_bytes <= 0 or assembled_bytes <= operator_bytes:
+    fields = [int(x) for x in lines[0].split(',')[1:]]
+    if len(fields) != 5:
+        raise ValueError('Missing specialized structure record')
+    distinct, launches, operator_bytes, assembled_bytes, storage_bytes = fields
+    if (not 0 < distinct < launches or operator_bytes <= 0
+            or assembled_bytes <= operator_bytes or storage_bytes < operator_bytes):
         raise ValueError('Implausible specialized structure record')
     return dict(distinct=distinct, launches=launches, operator_bytes=operator_bytes,
-                assembled_bytes=assembled_bytes)
+                assembled_bytes=assembled_bytes, storage_bytes=storage_bytes)
 
 
 def analyze(folder):
