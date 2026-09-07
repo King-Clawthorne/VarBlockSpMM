@@ -1,4 +1,4 @@
-\subsection{MAGMA, transport traces, and controlled factors}
+\subsection{MAGMA, transport traces, and controlled factors}\label{sec:relevance}
 The focused comparison adds the FP32 variable-size batched GEMM dispatcher
 from MAGMA revision \texttt{c3de65f855dd} [12]. One composition follows
 Boukaram et al.: each batch contains at most one block per output row,
@@ -19,10 +19,10 @@ They reuse the same input and output buffers and synchronize once per batch.
 Methods and jobs are randomized, with all GPU processes run serially.
 The comparator set includes the explicit CSR algorithms, grouped cuBLAS,
 BSR8, applicable BSR32, and both MAGMA compositions. This campaign is separate
-from the original NVIDIA-only campaigns. The related hierarchical study reports
-leaf sizes of 64 to 256, whereas this implementation supports 8 to 64 in
-steps of eight. The comparison therefore measures the compatible block
-product, not that study's larger leaves or complete construction algorithm.
+from the original NVIDIA-only campaigns. As noted above, only the 64 boundary
+of the related hierarchical study's leaf sizes falls inside the supported
+dimensions, so this comparison measures the compatible block product rather
+than that study's larger leaves or its construction algorithm.
 
 \paragraph{Repeatability.}
 The headline and width plot use single-product timings. A configuration ratio
@@ -75,6 +75,10 @@ remains historical evidence and does not contribute to current results.
 The full overlap equations, refinement observations, and startup definition
 are in the supplement. This remains a standalone transport component with
 prescribed orders. It does not compare optimized DG-specific implementations.
+It is nonetheless the closest thing to an application integration in this
+paper. The operator comes from the discretization rather than from an
+imposed partition, the products are dependent rather than repeated in
+isolation, and the trace is validated against the analytic solution.
 
 \begin{table}[!htbp]
 \centering\small

@@ -129,12 +129,27 @@ These techniques motivate the present kernel. We compare the relevant
 MAGMA composition below, but do not compare implementations of these
 other research kernels.
 
-The motivating application is adaptive construction of hierarchical
-\(H^2\) matrices. Boukaram et al. describe a non-uniform batched BSR product
-implemented through slot-wise MAGMA non-uniform batched GEMM operations [5]. The present
-work addresses the underlying packed-block product. We add a generated covariance near-field component whose partitions come
-from a spatial cluster tree. This tests a concrete dense-block component,
-while excluding far-field compression and the complete construction pipeline.
+Hierarchical matrix construction motivates the packed-block product itself.
+Boukaram et al. describe a non-uniform batched BSR product implemented through
+slot-wise MAGMA non-uniform batched GEMM operations [5]. That work targets a
+much broader construction pipeline, and it reports leaf sizes of 64 to 256,
+whereas this implementation supports dimensions 8 through 64 in steps of eight.
+Only the 64 boundary overlaps those leaves. We therefore treat that study as
+background for the operation rather than as a workload this paper reproduces,
+and we do not claim a result for its pipeline.
+
+The application evidence in this paper comes from a standalone
+variable-order discontinuous Galerkin transport program, described in
+Section~
+ef{sec:relevance}. It is the one integration where a real
+discretization supplies the block structure, an assembled operator drives a
+sequence of dependent products, and the output is checked against an
+analytic solution. Wide dependent traces are where direct execution helps
+most. A separate generated covariance near-field component, whose partitions
+come from a spatial cluster tree, tests a dense-block component drawn from the
+hierarchical setting. It excludes far-field compression and the complete
+construction pipeline, and BSR8 wins its steady-state comparison, so we report
+it as a boundary rather than as support for the method.
 
 NVIDIA provides scalar and fixed-block SpMM through cuSPARSE [3], and
 per-group GEMM dimensions through grouped cuBLAS [4]. These form the
@@ -806,6 +821,18 @@ Its startup and storage results cover a generated component rather than a
 complete solver or hierarchical construction pipeline. Total storage and
 setup still include matrix values and classification metadata.
 
+The application evidence rests on the transport program, and it is a
+standalone program written for this evaluation rather than a captured
+production workload. The covariance component is a boundary case in which
+BSR8 wins steady state. Supported dimensions reach 64, which meets the
+smallest leaf size reported by the motivating hierarchical study, so the
+larger leaves and the surrounding construction pipeline of that study are
+untested here. Two things would settle the application question and neither
+is claimed by these measurements: an integration inside a hierarchical
+construction or solver code that reports end-to-end time, or a trace captured
+from an existing production workload. Supporting dimensions above 64 is a
+prerequisite for the first.
+
 Library lower envelopes favor the comparators by selecting measured medians
 without charging a tuning cost. The grouped cuBLAS baseline is the stated slot
 composition. MAGMA is measured with both slots and a separate reduction. Other research kernels, reordering methods, other block
@@ -890,11 +917,14 @@ library ratios or matched mechanism effects.
 \begin{samepage}
 \section{Conclusion}
 VarBlockSpMM is a useful alternative when an application has dense variable
-blocks and sufficiently favorable panel widths and shapes. The core
+blocks and sufficiently favorable panel widths and shapes. The transport
+program carries the application argument: its large RHS-64 trace gives
+\TransportLargeRatio{} over the fastest library and
+\TransportLargeMagmaRatio{} over the better MAGMA composition across 128
+dependent products, on an operator the discretization supplies. The core
 comparison including MAGMA gives a fastest-library ratio of
-\RelevanceCoreRatio{}. The large RHS-64 transport trace gives
-\TransportLargeRatio{} over the fastest library, establishing a benefit
-for dependent products in a standalone application component.
+\RelevanceCoreRatio{} over the same widths and shapes. Narrow and small
+traces still favor a library.
 
 The implementation shares input tiles, reuses sparse values across
 accumulators, and retains one writer per output without execution workspace.
@@ -903,6 +933,8 @@ allocations. Controlled results show why degree and shape belong in the
 choice of implementation. BSR8 remains preferable on the measured covariance
 component, and scalar CSR remains preferable for the published sparse inputs.
 The reported regimes guide the choice without claiming universal superiority.
+Establishing the hierarchical case would require block dimensions above 64
+and an end-to-end integration, which this evaluation does not provide.
 \end{samepage}
 
 {\small
