@@ -64,9 +64,31 @@ convergence from FP32 arithmetic. The main paper cites the established
 [semi-Lagrangian DG formulation](https://doi.org/10.1051/m2an/2016004).
 
 The order schedule is prescribed. This is a standalone transport component,
-not an adaptive solver or a comparison against DG-specific optimized kernels.
-Startup includes method construction and one completed trace, excluding
-common panel allocation, Python assembly, and reference validation.
+not an adaptive solver. Startup includes method construction and one completed
+trace, excluding common panel allocation, Python assembly, and reference
+validation.
+
+## Specialized transport comparator
+
+The repeating orders and the constant translation give the operator only eight
+distinct dense blocks, which `prepare_transport.py` caches while assembling.
+`bench/dg_specialized.cpp` is an application-specific comparator that exploits
+exactly that. It deduplicates the block payloads to recover the distinct
+operators, groups the elements sharing an operator, and runs each group as one
+`cublasSgemmStridedBatched` call whose stride over the operator is zero. The
+assembled matrix never reaches the device: it holds 33.8 KiB of operators
+rather than the 33.8 MiB packed matrix at 4096 elements. Its constructor
+refuses inputs without repeated operators, so it cannot be misused as a
+general product. Precision stays FP32 with `CUBLAS_DEFAULT_MATH`.
+
+`scripts/run_dg.py` runs the six transport cases with three fresh processes
+each into `data/dg/`, under the same horizon, buffers, and numerical checks as
+the main campaign. Each record must carry the structure line naming the
+discovered operator count, batched call count, and stored bytes.
+`scripts/export_dg.py` validates the archive and writes the paper table.
+Direct execution is faster in all six cases, by 1.200x to 5.504x, winning all
+18 process comparisons, while the specialized plan holds 1024 times less
+matrix storage. A fused hand-written DG kernel is not tested.
 
 ## Controlled factors
 

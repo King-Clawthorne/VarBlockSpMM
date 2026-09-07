@@ -26,7 +26,8 @@ def verified_build(target):
     bin_dir = BUILD / 'Release' if os.name == 'nt' else BUILD
     settings = {k: os.environ.get(k) for k in ('CUDAToolkit_ROOT', 'CUDA_PATH')}
     receipt_path = BUILD / 'build-receipt.json'
-    binaries = ('vbsr_tests', 'vbsr_audit', 'vbsr_application_audit', 'vbsr_kernel_audit', 'vbsr_ablation')
+    binaries = ('vbsr_tests', 'vbsr_audit', 'vbsr_application_audit', 'vbsr_kernel_audit',
+                'vbsr_ablation', 'vbsr_dg')
     if receipt_path.exists():
         receipt = json.loads(receipt_path.read_text())
         if receipt.get('settings') == settings and receipt['sources'] == inputs and set(receipt['executables']) == {n + suffix for n in binaries} and all(

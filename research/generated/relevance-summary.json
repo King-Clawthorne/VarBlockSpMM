@@ -6,7 +6,13 @@
     "RelevanceQueuedWins": 101,
     "RelevanceMagmaRatio": 2.002978319230857,
     "TransportLargeRatio": 1.4385603560597446,
-    "TransportLargeMagmaRatio": 1.833072209694894
+    "TransportLargeMagmaRatio": 1.833072209694894,
+    "RelevanceMarginWins": 97,
+    "RelevanceUnanimous": 100,
+    "RelevanceSplit": 11,
+    "RelevanceNarrowMarginWins": 45,
+    "RelevanceNarrowSplit": 7,
+    "RelevanceWideMarginWins": 52
   },
   "contrasts": {
     "8": {
@@ -149,7 +155,10 @@
         1.0642177402188253,
         1.056953744293188
       ],
-      "instance_wins": 81
+      "instance_wins": 81,
+      "margin_wins": 23,
+      "unanimous": 24,
+      "changes_winner": 7
     },
     {
       "rhs": 16,
@@ -165,7 +174,10 @@
         1.047201237925979,
         1.044785534943297
       ],
-      "instance_wins": 72
+      "instance_wins": 72,
+      "margin_wins": 22,
+      "unanimous": 24,
+      "changes_winner": 0
     },
     {
       "rhs": 32,
@@ -181,7 +193,10 @@
         1.0879284844651318,
         1.087041535243483
       ],
-      "instance_wins": 68
+      "instance_wins": 68,
+      "margin_wins": 20,
+      "unanimous": 20,
+      "changes_winner": 4
     },
     {
       "rhs": 64,
@@ -197,7 +212,10 @@
         1.399099607266047,
         1.3970110776486104
       ],
-      "instance_wins": 96
+      "instance_wins": 96,
+      "margin_wins": 32,
+      "unanimous": 32,
+      "changes_winner": 0
     },
     {
       "rhs": 8,
@@ -213,7 +231,10 @@
         1.0484108910789574,
         1.0490555307515341
       ],
-      "instance_wins": 71
+      "instance_wins": 71,
+      "margin_wins": 21,
+      "unanimous": 21,
+      "changes_winner": 5
     },
     {
       "rhs": 16,
@@ -229,7 +250,10 @@
         1.033256092494265,
         1.032703934839309
       ],
-      "instance_wins": 72
+      "instance_wins": 72,
+      "margin_wins": 21,
+      "unanimous": 24,
+      "changes_winner": 0
     },
     {
       "rhs": 32,
@@ -245,7 +269,10 @@
         1.0794499208945374,
         1.0777256892282872
       ],
-      "instance_wins": 63
+      "instance_wins": 63,
+      "margin_wins": 20,
+      "unanimous": 20,
+      "changes_winner": 3
     },
     {
       "rhs": 64,
@@ -261,7 +288,10 @@
         1.3936559885008242,
         1.39676380623843
       ],
-      "instance_wins": 96
+      "instance_wins": 96,
+      "margin_wins": 32,
+      "unanimous": 32,
+      "changes_winner": 0
     }
   ],
   "processes": 2397

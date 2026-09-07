@@ -1,0 +1,275 @@
+{
+  "started_utc": "2026-09-07T07:15:14Z",
+  "jobs": [
+    [
+      256,
+      8,
+      2,
+      1413196304
+    ],
+    [
+      256,
+      64,
+      1,
+      1271620090
+    ],
+    [
+      4096,
+      64,
+      0,
+      137770407
+    ],
+    [
+      256,
+      64,
+      0,
+      715395541
+    ],
+    [
+      4096,
+      64,
+      1,
+      1738397420
+    ],
+    [
+      256,
+      64,
+      2,
+      1484185401
+    ],
+    [
+      1024,
+      8,
+      2,
+      2125517613
+    ],
+    [
+      4096,
+      8,
+      2,
+      1152861908
+    ],
+    [
+      1024,
+      8,
+      1,
+      1068547777
+    ],
+    [
+      1024,
+      64,
+      1,
+      1682918883
+    ],
+    [
+      4096,
+      8,
+      0,
+      96012255
+    ],
+    [
+      1024,
+      64,
+      2,
+      971152449
+    ],
+    [
+      1024,
+      64,
+      0,
+      2126310888
+    ],
+    [
+      256,
+      8,
+      0,
+      2129010819
+    ],
+    [
+      4096,
+      64,
+      2,
+      1957919394
+    ],
+    [
+      1024,
+      8,
+      0,
+      2016875926
+    ],
+    [
+      4096,
+      8,
+      1,
+      1094652709
+    ],
+    [
+      256,
+      8,
+      1,
+      226684934
+    ]
+  ],
+  "reps": 6,
+  "methods": [
+    "direct",
+    "dg_specialized",
+    "grouped",
+    "bsr8"
+  ],
+  "executable_sha256": "cb6b62a99002315f94e6751df0308add488e07bd5098a0df6f6e9c806c6d8fec",
+  "sources": {
+    "bench/ablation.cpp": "f39e1843ac7374821b8a05e3b56a70ff7671b924a6221c147b33f72665388bc0",
+    "bench/application.cpp": "0a9d0692b2f6cf9d88aa388214e8e796f6b4250f80bf77bcbf1b8132a3bf4f18",
+    "bench/application_data.cpp": "c3ecd3447a04d65056e6419730d0d8fb32b94b9e48148e042762a092603e3dbe",
+    "bench/application_data.hpp": "3a3c239ea83216582c3cae1defdeec41a4db28eec5f3d14b812a02f81ffbc54f",
+    "bench/audit.cpp": "cb55d228843791acb76616ef6d1f396365465c1dcc959324902fd9d6123541a3",
+    "bench/benchmark.cpp": "806a22aecbc2eb75a58cb46c77e855885835bb48af90d4ec097125bfc73041a7",
+    "bench/compact_csr.cpp": "a40d622ada4bcdd713f6be5596fb88a740aefac26c102ed393fdfa1c8e893588",
+    "bench/compact_csr.hpp": "d2ad4dc5c134dd11f1fa03744ad21e0fda93e3c6b2826285fb39e9c7936ac845",
+    "bench/dense.cpp": "623a34200b3e9826f76dedc181ca01c62886e5bc1a28c82e954ee8da255bccc1",
+    "bench/dense.hpp": "6cfcab7a7611c11e25887d5fdfbb350df7b79e522ed1ec9a1eacc0aa76f6311f",
+    "bench/dg.cpp": "ddbf5c3cd017f85eaf5e7e1cbc431cc4b0883a081993426c1189edd5e2b3c177",
+    "bench/dg_specialized.cpp": "53574cd71a4074dbfc70352a106061244c5d04b4bcf3d3a908fe38bc742d7c7a",
+    "bench/dg_specialized.hpp": "a29fdd3d772e6ed80c14bd01db2d2c55c301007e45b1b4a5768b3e508fa682d3",
+    "bench/kernel.cpp": "a781c441fb5930c07a6ef281447ddc4894be1b55b30b45abdceb19e49706810b",
+    "bench/magma.cu": "20b078768b2993a085069a9ae03ff5a4dd5ab54ec624fef08494789a1b9d7fbf",
+    "bench/magma.hpp": "c7e33591e0267514ff0e534f1b86be65caf481555bbcf985e76132770e3ab565",
+    "bench/relevance.cpp": "52d2600c7af9614886b87193e14b943fc4aaf428ca514e9bbd578349205a4020",
+    "bench/support.cpp": "33e030370f3af0b8342c4dd33151023a1a89f62c2eff300fdf9340343d6e4ee9",
+    "bench/support.hpp": "f680bef6c899b7e76f65e961d4c1334f2ddc3379cbfac6478ccb2dfa11ba3658",
+    "bench/transport.cpp": "ede1abaaed3b82b2a6f3843f4aeccabb416c7ddf78ffea045172ebe86e433bf5",
+    "bench/updates.cpp": "95406347bb02c2668cb33dfa0077b9b95322ab35f8b64c05eaa7287472e68250",
+    "cmake/MagmaComparison.cmake": "915c76dfddc69ccee3ea81b8618666da440ca3d7acc2083ea36cf09b37c5da09",
+    "cmake/VarBlockSpMMConfig.cmake.in": "718b6df72306c95f53fd2ce5f6261845c4671a57f9a6d1d046d823c7808000a2",
+    "CMakeLists.txt": "4c843e6100bab90d7d7afe5b603edca12872ae3d159dc15a22c5d8fa333ba3c0",
+    "include/varblockspmm/vbsr.hpp": "fa3eb9dc8c83017f1ea1594161639c2589e264b58efb38787a373e748a723be4",
+    "pyproject.toml": "e7411162ff326acd7e5e6c386cf871f1f5f0016b437c58ba0c33b46e5f011301",
+    "scripts/analyze_kernel.py": "1acd48c7be0b37110afb2fdf686010345b4f31a6c1ff7934633595db9533797b",
+    "scripts/analyze_publication.ps1": "0c2290e299aad4973f54caee75b4a5318c5685200e9d8ea8cc52f783f0138891",
+    "scripts/analyze_revision.py": "f0cca8f601520d7825d368226ac9a3a4316e9df6129c658db6405ba7c426d0e3",
+    "scripts/analyze_supplement.py": "da0b94af4ac707646ee877bda4c427068b09755f20c4e55179f4d10ae9cb112f",
+    "scripts/analyze_tuning.py": "8326aa7f3b301c2c266978b3e854b4834371b5b971114f411f699a2145c6244a",
+    "scripts/archive_inputs.py": "1fc79ffb106f736e4d2c65bd38deda8bec96915ef98b33d20fec908f5481bf1d",
+    "scripts/benchmark_kernel.py": "ff6332d1b874d430c476a53ea66b4330ad0213bac730254a090942577e3d8519",
+    "scripts/benchmark_runs.py": "027bbaaf3fe6a974967fdbc1cd74e32ae0a0639bdbbff2c564d96780a2aac70c",
+    "scripts/build.ps1": "b6f543da590f87e455a93df642c31057d8ee71c2d89b10e255850726cfa70dd3",
+    "scripts/build_paper.ps1": "536f10a42340f910354b5a3a614d16a1a944f7c89a6c7fb2e68d7c0f4826e11f",
+    "scripts/build_relevance.py": "528dbac9565770b0e5dc09a0a7b2bf9d982cbe17f0c3598437afb6cc327c5443",
+    "scripts/build_verified.py": "c6c664cedf39125845685b910932e4734eb0d5dddde1413adde300625ca16831",
+    "scripts/check_references.py": "582d18b9d8328bc5e72d90e3a52836e8e8207abf8900bded24ae4bb7fefe8f86",
+    "scripts/export_relevance.py": "e59c0c0d8e6e71d49b51deb329bd48da5286d7afb88582697587d6703e33b16b",
+    "scripts/export_robustness.py": "d4b8364475d195d6dd8d188acfdd08a6b72b45b5171195a1b376092e410bfe8b",
+    "scripts/plot_revision.py": "4d0ece8d25a1d32452e62e4c0ec39c10dc13fed2a68a881df1138ac3235ac9e5",
+    "scripts/prepare_application.py": "c7683069c6b02d184d647316aeffee312771ab4c2b2f57efc0aff9b8d5c1652a",
+    "scripts/prepare_magma.py": "8799e161d668aba875b4855d1ddbde21bb73b74a0156f7bec2db96a349da1db5",
+    "scripts/prepare_native.py": "c703a9a14e7d1b156d865edf11e0e6a2c275b9d439189f80fd521bae41fcf4e3",
+    "scripts/prepare_transport.py": "91a889983e081d2a94738ce418b3133e8ba37043126e207d70e56b037b173d15",
+    "scripts/run_application.py": "6487c9ce514ba947783a1da82ad897be08b008cd253dac65c81675a96278d519",
+    "scripts/run_dg.py": "cd9c0c8703fc93dab534c529500da038341a036f2196ab59a872f7d1272ccf7b",
+    "scripts/run_final_validation.py": "b73d085f8cb9219cbb8730d3be791580767529b3dd9728a998e3a31a4579ab6c",
+    "scripts/run_grid.ps1": "316c7af7fdba13b8995a2bb25858371f58ea82b452336429005592758c121935",
+    "scripts/run_relevance.py": "3bda50f8a2a275d6ef417c0e0b39713251dd5be6b8960463be879febdfa9b82d",
+    "scripts/run_revision.py": "0eebc33c94b31490453756c04a1b6e69b14370a49296e125c0fbb2cac9993517",
+    "scripts/run_robustness.py": "6c5347626b24c26a3f09b7e321612b5b7dba20f9e2faf8cf1ced2709a9ef651e",
+    "scripts/run_supplement.py": "e791582ac765cd8c0a85641f022a56e33d2781966f687bd495ac41194e582f50",
+    "scripts/run_tuning.py": "37e511e55441efa1a0b1691ddbf0eef7edae714feaf9d5120bd9ef4ce0487c07",
+    "src/baseline/cusparse_baseline.cu": "5d36cfae3d3ce17116bc11c25508ca56e47832983f3070491ebfce84ab27cbe7",
+    "src/baseline/slot_split.cu": "23c72927633640f0d67448557470c6a00a0f1d379f297044f9384d533000bec8",
+    "src/format/generator.cpp": "dbbe644f5202613e421a64680364c1138fa104fe66fc3671f0b13d467b6132cf",
+    "src/format/vbsr.cpp": "704daf752ea3bdbbcc9081a9796b55832396678971dcd953bf809b463bf5f646",
+    "src/kernels/row_owned.cu": "6e737c2061317c580348d67d11b31edb166d65c746bba2029207362b96d546f1",
+    "src/plan/plan.cpp": "a5c0669aadd279eaa03ba2df8e268062625b646fd212803d64f95b175706d778",
+    "tests/test_magma.cpp": "9fa6ba880f3afec1a8a9bb40a2d55f0634faf82d9eec520faf29eeb2b41f4b3c",
+    "tests/test_main.cpp": "077094e20c60832b53cfbaf62c4e372fb38b492bd7f0d913654dd1e359a488b5",
+    "uv.lock": "dd2bebae9f227ad600357d5f94761403d7e36bff5b41d08805cb94ff33d769e1"
+  },
+  "build_receipt": {
+    "schema": 1,
+    "sources": {
+      "bench/ablation.cpp": "f39e1843ac7374821b8a05e3b56a70ff7671b924a6221c147b33f72665388bc0",
+      "bench/application.cpp": "0a9d0692b2f6cf9d88aa388214e8e796f6b4250f80bf77bcbf1b8132a3bf4f18",
+      "bench/application_data.cpp": "c3ecd3447a04d65056e6419730d0d8fb32b94b9e48148e042762a092603e3dbe",
+      "bench/application_data.hpp": "3a3c239ea83216582c3cae1defdeec41a4db28eec5f3d14b812a02f81ffbc54f",
+      "bench/audit.cpp": "cb55d228843791acb76616ef6d1f396365465c1dcc959324902fd9d6123541a3",
+      "bench/benchmark.cpp": "806a22aecbc2eb75a58cb46c77e855885835bb48af90d4ec097125bfc73041a7",
+      "bench/compact_csr.cpp": "a40d622ada4bcdd713f6be5596fb88a740aefac26c102ed393fdfa1c8e893588",
+      "bench/compact_csr.hpp": "d2ad4dc5c134dd11f1fa03744ad21e0fda93e3c6b2826285fb39e9c7936ac845",
+      "bench/dense.cpp": "623a34200b3e9826f76dedc181ca01c62886e5bc1a28c82e954ee8da255bccc1",
+      "bench/dense.hpp": "6cfcab7a7611c11e25887d5fdfbb350df7b79e522ed1ec9a1eacc0aa76f6311f",
+      "bench/dg.cpp": "ddbf5c3cd017f85eaf5e7e1cbc431cc4b0883a081993426c1189edd5e2b3c177",
+      "bench/dg_specialized.cpp": "53574cd71a4074dbfc70352a106061244c5d04b4bcf3d3a908fe38bc742d7c7a",
+      "bench/dg_specialized.hpp": "a29fdd3d772e6ed80c14bd01db2d2c55c301007e45b1b4a5768b3e508fa682d3",
+      "bench/kernel.cpp": "a781c441fb5930c07a6ef281447ddc4894be1b55b30b45abdceb19e49706810b",
+      "bench/magma.cu": "20b078768b2993a085069a9ae03ff5a4dd5ab54ec624fef08494789a1b9d7fbf",
+      "bench/magma.hpp": "c7e33591e0267514ff0e534f1b86be65caf481555bbcf985e76132770e3ab565",
+      "bench/relevance.cpp": "52d2600c7af9614886b87193e14b943fc4aaf428ca514e9bbd578349205a4020",
+      "bench/support.cpp": "33e030370f3af0b8342c4dd33151023a1a89f62c2eff300fdf9340343d6e4ee9",
+      "bench/support.hpp": "f680bef6c899b7e76f65e961d4c1334f2ddc3379cbfac6478ccb2dfa11ba3658",
+      "bench/transport.cpp": "ede1abaaed3b82b2a6f3843f4aeccabb416c7ddf78ffea045172ebe86e433bf5",
+      "bench/updates.cpp": "95406347bb02c2668cb33dfa0077b9b95322ab35f8b64c05eaa7287472e68250",
+      "cmake/MagmaComparison.cmake": "915c76dfddc69ccee3ea81b8618666da440ca3d7acc2083ea36cf09b37c5da09",
+      "cmake/VarBlockSpMMConfig.cmake.in": "718b6df72306c95f53fd2ce5f6261845c4671a57f9a6d1d046d823c7808000a2",
+      "CMakeLists.txt": "4c843e6100bab90d7d7afe5b603edca12872ae3d159dc15a22c5d8fa333ba3c0",
+      "include/varblockspmm/vbsr.hpp": "fa3eb9dc8c83017f1ea1594161639c2589e264b58efb38787a373e748a723be4",
+      "scripts/build_verified.py": "c6c664cedf39125845685b910932e4734eb0d5dddde1413adde300625ca16831",
+      "src/baseline/cusparse_baseline.cu": "5d36cfae3d3ce17116bc11c25508ca56e47832983f3070491ebfce84ab27cbe7",
+      "src/baseline/slot_split.cu": "23c72927633640f0d67448557470c6a00a0f1d379f297044f9384d533000bec8",
+      "src/format/generator.cpp": "dbbe644f5202613e421a64680364c1138fa104fe66fc3671f0b13d467b6132cf",
+      "src/format/vbsr.cpp": "704daf752ea3bdbbcc9081a9796b55832396678971dcd953bf809b463bf5f646",
+      "src/kernels/row_owned.cu": "6e737c2061317c580348d67d11b31edb166d65c746bba2029207362b96d546f1",
+      "src/plan/plan.cpp": "a5c0669aadd279eaa03ba2df8e268062625b646fd212803d64f95b175706d778",
+      "tests/test_magma.cpp": "9fa6ba880f3afec1a8a9bb40a2d55f0634faf82d9eec520faf29eeb2b41f4b3c",
+      "tests/test_main.cpp": "077094e20c60832b53cfbaf62c4e372fb38b492bd7f0d913654dd1e359a488b5"
+    },
+    "commands": [
+      [
+        "cmake",
+        "--fresh",
+        "-S",
+        "C:\\Users\\cohen\\VarBlockSpMM",
+        "-B",
+        "C:\\Users\\cohen\\VarBlockSpMM\\build\\verified",
+        "-DCMAKE_CUDA_ARCHITECTURES=native",
+        "-DCMAKE_BUILD_TYPE=Release",
+        "-DCUDAToolkit_ROOT=C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1",
+        "-G",
+        "Visual Studio 17 2022",
+        "-A",
+        "x64",
+        "-T",
+        "cuda=C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1"
+      ],
+      [
+        "cmake",
+        "--build",
+        "C:\\Users\\cohen\\VarBlockSpMM\\build\\verified",
+        "--config",
+        "Release",
+        "--clean-first",
+        "--parallel"
+      ],
+      [
+        "ctest",
+        "--test-dir",
+        "C:\\Users\\cohen\\VarBlockSpMM\\build\\verified",
+        "-C",
+        "Release",
+        "--output-on-failure"
+      ]
+    ],
+    "settings": {
+      "CUDAToolkit_ROOT": null,
+      "CUDA_PATH": "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.1"
+    },
+    "cmake_cache_sha256": "fa27ceb9373e4c946f5e44a94abbb416a202301e5dd33d5d836aeebe3098bb8f",
+    "executables": {
+      "vbsr_tests.exe": "b153818b46c8935edd039c188a326a1d32f8445c25b8a6e699a2cafeeb4a7bea",
+      "vbsr_audit.exe": "82c9c32a740bea52a9b64b8a240163c8df270f77f022b518e4856071f5c7c51c",
+      "vbsr_application_audit.exe": "7220adbcd2e49de8dfa79e34b0b2c643df7e42e51d576118e2c4ff0f464f6335",
+      "vbsr_kernel_audit.exe": "f216911cd1add65816764deeebf45a6cb314a8437898c9f146175b80eb940961",
+      "vbsr_ablation.exe": "0b02c582ffca3060ab5d923d8c8b977acdc00286f2d7fd4d062d2339c2d0fd5d",
+      "vbsr_dg.exe": "cb6b62a99002315f94e6751df0308add488e07bd5098a0df6f6e9c806c6d8fec"
+    }
+  }
+}

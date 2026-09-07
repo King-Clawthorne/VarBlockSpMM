@@ -113,6 +113,87 @@ one favor direct execution.}\label{tab:native}
 \input{generated/native.tex}
 \end{table}
 \FloatBarrier
+\subsection{Core grid and format controls}
+The original seed-1 campaign below uses three processes per configuration
+and predates the MAGMA comparison. Its aggregates remain separate.
+Table~\ref{tab:core} compares execution times on the core grid. The direct path has a
+geometric speedup of \AuditCsr{} against the CSR lower envelope and
+\AuditGrouped{} against cached grouped cuBLAS. The respective win counts
+are \AuditCsrWins{} and \AuditGroupedWins{} out of 128 configurations.
+Selecting the CSR algorithm reduces the aggregate ratio from
+\AuditDefaultCsr{} for default CSR to \AuditCsr{} for the lower envelope.
+The subdivided BSR8 ratio is \AuditBsrEight{}, with
+\AuditBsrEightWins{} direct wins out of 128. This comparison retains block
+structure without padding, comparing two ways to execute the same dense
+blocks.
+Figure~\ref{fig:core-distribution} shows the spread behind these averages.
+Its sorted curves expose the fastest comparators and the width of the
+performance range across the grid.
+
+
+
+\begin{table}[H]
+\centering\small
+\caption{Core-grid ratios over 128 configurations and three process observations
+per configuration. Minima and wins use GPU ratios averaged in log space across
+processes. Changing-address grouped execution is paired with changing-address
+direct execution.}\label{tab:core}
+\input{generated/core.tex}
+\end{table}
+
+
+
+Table~\ref{tab:regimes} breaks down the same results by width and degree. Each row averages the four size distributions and two
+localities. Direct time is the geometric mean of the corresponding process
+medians. Absolute times distinguish small launch-sensitive cases from larger
+products. The CSR column uses the lower envelope, and grouped execution uses
+cached pointers.
+
+
+
+\subsection{Additional seeds and queued comparisons}
+The follow-up repeats all 128 core configurations on matrix seeds 2, 3,
+and 5. Each seed and timing mode uses one fresh process per configuration,
+giving 768 processes. The two modes synchronize after either one product
+or eight queued products. Each process measures twenty samples, with GPU
+and host times divided by the number of products in the sample. The eight
+products use the same prepared plan and buffers. Changing-address controls
+alternate the two buffer pairs on each product. Validation runs outside
+timing, before and after the samples, and outputs are poisoned before each
+method. Jobs and methods are randomized, and GPU processes run serially.
+
+Table~\ref{tab:robustness} uses the same library lower envelope as the
+original core comparison. Each row includes 32 configurations on each of
+three matrix seeds. The seed range contains the smallest and largest
+32-configuration geometric means. These ranges describe matrix variation
+combined with process noise. There is one process for each seed and mode,
+so they do not separate those sources or define confidence intervals.
+The original three-process campaign remains separate. The follow-up uses
+C++20 host compilation and the same library source bytes and CUDA toolkit.
+
+\begin{table}[H]
+\centering\small
+\caption{Additional matrix seeds and synchronization intervals for the NVIDIA controls. Ratios divide
+comparator time by direct time, so values above one favor direct execution.
+Batch is the number of products queued before synchronization. Wins compare
+direct execution with the fastest tested library for each of 96 instances.}
+\label{tab:robustness}
+\input{generated/robustness.tex}
+\end{table}
+
+Across all 384 instances per mode, the fastest-NVIDIA-library ratios are
+\RobustLatencyOverall{} for individual products and
+\RobustQueuedOverall{} for batches of eight, with
+\RobustLatencyWins{} and \RobustQueuedWins{} direct wins respectively.
+Every width has a geometric-mean advantage on each additional seed in
+both timing modes. RHS 64 gives the largest aggregate advantage, about
+1.39, winning all 96 individual-product instances and 95 of 96 queued
+instances. The narrow-panel gains remain smaller, about three to six
+percent against the fastest tested library. Queueing eight products
+preserves this width-dependent pattern on the measured grid.
+
+
+
 \section{Transport discretization and follow-up controls}
 For element width \(h\), the modal mass matrix has entries
 \(M_{ii}=h/(2i+1)\). Set the characteristic displacement fraction to

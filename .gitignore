@@ -47,3 +47,9 @@ __pycache__/
 !/data/relevance-v2/runs.zip
 !/data/relevance-v2/inputs.zip.[0-9][0-9][0-9]
 !/data/relevance-v2/MAGMA-COPYRIGHT
+
+# Specialized application comparator evidence for the transport traces.
+!/data/dg/
+!/data/dg/manifest.json
+!/data/dg/source_snapshot.zip
+!/data/dg/runs.zip

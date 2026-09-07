@@ -50,6 +50,7 @@ add_library(vbsr_benchmark_support STATIC
   bench/support.cpp
   bench/application_data.cpp
   bench/dense.cpp
+  bench/dg_specialized.cpp
   bench/compact_csr.cpp)
 target_link_libraries(vbsr_benchmark_support PUBLIC varblockspmm)
 add_executable(vbsr_audit bench/audit.cpp)
@@ -60,6 +61,8 @@ add_executable(vbsr_kernel_audit bench/kernel.cpp)
 target_link_libraries(vbsr_kernel_audit PRIVATE vbsr_benchmark_support)
 add_executable(vbsr_ablation bench/ablation.cpp)
 target_link_libraries(vbsr_ablation PRIVATE vbsr_benchmark_support)
+add_executable(vbsr_dg bench/dg.cpp)
+target_link_libraries(vbsr_dg PRIVATE vbsr_benchmark_support)
 if(VARBLOCKSPMM_MAGMA_SOURCE)
   include(cmake/MagmaComparison.cmake)
 endif()

@@ -29,11 +29,25 @@ def table(name,columns,header,rows):
     text='\\begin{tabular}{'+columns+'}\n\\toprule\n'+header+'\\\\\n\\midrule\n'
     text+='\n'.join(' & '.join(map(str,row))+'\\\\' for row in rows)
     (OUT/name).write_text(text+'\n\\bottomrule\n\\end{tabular}\n')
-def configurations(records, metric=best):
+def by_configuration(records, metric=best):
+    """Every paired observation of each configuration, keyed by the design point."""
     grouped=defaultdict(list)
     for r in records:
         grouped[tuple(r['args'][:4])+(r['args'][8],)].append(metric(r))
-    return [gm(values) for _,values in sorted(grouped.items())]
+    return dict(sorted(grouped.items()))
+def configurations(records, metric=best):
+    return [gm(values) for values in by_configuration(records,metric).values()]
+# A practical deployment margin. A configuration counts only when its own
+# repeated observations clear it, not when a width aggregate does.
+MARGIN=1.05
+def margin_wins(records, metric=best):
+    return sum(gm(v)>MARGIN for v in by_configuration(records,metric).values())
+def unanimous(records, metric=best):
+    """Configurations whose every process and seed observation favors direct."""
+    return sum(all(x>1 for x in v) for v in by_configuration(records,metric).values())
+def changes_winner(records, metric=best):
+    return sum(any(x>1 for x in v) and any(x<=1 for x in v)
+               for v in by_configuration(records,metric).values())
 
 rows=[]
 for rhs in (8,16,32,64):
@@ -54,11 +68,16 @@ for batch in (1,8):
         wins=sum(gm(v)>1 for v in instances.values())
         repeat_rows.append([rhs,batch,f'{gm(best(r) for r in part):.3f}',
                             f'{min(seeds):.3f} to {max(seeds):.3f}',
-                            f'{min(processes):.3f} to {max(processes):.3f}',f'{wins}/96'])
+                            f'{min(processes):.3f} to {max(processes):.3f}',f'{wins}/96',
+                            f'{margin_wins(part)}/32',f'{unanimous(part)}/32',
+                            f'{changes_winner(part)}/32'])
         repeat_summary.append(dict(rhs=rhs,batch=batch,ratio=gm(best(r) for r in part),
-                                   seed_ratios=seeds,process_ratios=processes,instance_wins=wins))
-table('magma-repeatability.tex','rrrrrr',
-      'RHS & Batch & Best library & Seed range & Process range & Wins',repeat_rows)
+                                   seed_ratios=seeds,process_ratios=processes,instance_wins=wins,
+                                   margin_wins=margin_wins(part),unanimous=unanimous(part),
+                                   changes_winner=changes_winner(part)))
+table('magma-repeatability.tex','rrrrrrrrr',
+      'RHS & Batch & Best library & Seed range & Process range & Wins & '
+      'Wins \\(>5\\%\\) & Unanimous & Split',repeat_rows)
 
 groups=defaultdict(list)
 for r in transport:
@@ -82,7 +101,12 @@ macros=dict(RelevanceCoreRatio=gm(best(r) for r in core),RelevanceCoreWins=sum(v
             RelevanceQueuedRatio=gm(best(r) for r in queued),
             RelevanceQueuedWins=sum(v>1 for v in configurations(queued)),
             RelevanceMagmaRatio=gm(magma(r) for r in core),TransportLargeRatio=gm(best(r) for r in large),
-            TransportLargeMagmaRatio=gm(magma(r) for r in large))
+            TransportLargeMagmaRatio=gm(magma(r) for r in large),
+            RelevanceMarginWins=margin_wins(core),RelevanceUnanimous=unanimous(core),
+            RelevanceSplit=changes_winner(core),
+            RelevanceNarrowMarginWins=margin_wins([r for r in core if r['args'][2] in (8,16)]),
+            RelevanceNarrowSplit=changes_winner([r for r in core if r['args'][2] in (8,16)]),
+            RelevanceWideMarginWins=margin_wins([r for r in core if r['args'][2] in (32,64)]))
 (OUT/'relevance-macros.tex').write_text(''.join('\\newcommand{\\'+k+'}{'+(str(v) if isinstance(v,int) else f'{v:.3f}')+'}\n' for k,v in macros.items()))
 findings=(f'On the 4,096-element, RHS-64 transport case, the fastest-library-to-direct ratio is '
           f'{macros["TransportLargeRatio"]:.3f}, with {sum(best(r)>1 for r in large)} of three direct wins. '

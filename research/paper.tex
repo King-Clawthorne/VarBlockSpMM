@@ -31,6 +31,7 @@
 \input{generated/supplement-macros.tex}
 \input{generated/robustness-macros.tex}
 \input{generated/relevance-macros.tex}
+\input{generated/dg-macros.tex}
 \title{VarBlockSpMM: Shape-Aware CUDA Execution for\\Packed Variable-Block Sparse-Dense Products}
 \author{Cohen Brunner Thomas\\\small Independent Research Project}
 \date{6 September 2026}
@@ -48,7 +49,12 @@ A standalone variable-order discontinuous Galerkin transport program
 provides an application trace: at 4,096 elements and 64 simultaneous fields,
 128 dependent steps run \TransportLargeRatio{} times faster than the fastest
 library and \TransportLargeMagmaRatio{} times faster than the better MAGMA
-composition. Smaller and narrow cases retain losses. On the separate
+composition. A specialized comparator for that problem, which caches the
+\DgDistinctOperators{} distinct block operators and never assembles the
+matrix, is slower than direct execution on all six traces while using
+\DgStorageFactor{} times less storage. Smaller and narrow cases retain
+losses, and per-configuration counts show which narrow wins clear a 5 percent
+margin. On the separate
 covariance component, BSR8 wins steady state with a library-to-direct ratio
 of \NativeBsrRatio{}, while prepared-host startup favors direct by
 \NativeStartupRatio{}. Controlled experiments distinguish degree and block
@@ -87,14 +93,27 @@ execution plan with direct access to the application's packed values.
 
 The contribution is a standalone execution policy for this packed format,
 with an experimentally measured boundary against conversion-based library
-alternatives. It combines full-panel accumulation for narrow RHS widths
-with shape-dependent staging for wider panels, retaining one writer per
-output and requiring no execution workspace. The matched experiments test
-which choices improve this implementation. The library comparisons test
-when their combined benefit exceeds the benefit of padding-free BSR8
-subdivision or scalar CSR expansion. These are implementation and
-measurement contributions. They do not establish a new sparse storage
-model or an end-to-end application speedup.
+alternatives. The individual mechanisms are established. What distinguishes
+this policy is the combination the packed variable-block format forces, and
+each part of it rules out a strategy the prior kernels rely on. Because block
+heights differ between rows, a fixed tile shape cannot be assigned to a warp,
+so the row splitting and merge-based balancing of Yang et al. [1] and the
+row caching of GE-SpMM [8] have no fixed row extent to work with. Because
+block dimensions are runtime values rather than compile-time constants, the
+staging decision has to be made per width at dispatch instead of being
+specialized into the tile shape. Because several blocks in a row accumulate
+into the same output rows, the one-writer rule replaces both output atomics
+and the reduction that a batched or grouped composition needs, which is what
+removes the execution workspace that the MAGMA reduction composition and the
+grouped slot composition require. And because the blocks are already dense
+and packed, the tensor-core route of Okanovic et al. [2] would have to retile
+them to the shape its matrix instruction fixes, which is the conversion this
+work avoids. The measured boundary is where these choices pay for themselves.
+The matched experiments test which of them improve this implementation. The
+library comparisons test when their combined benefit exceeds the benefit of
+padding-free BSR8 subdivision or scalar CSR expansion. These are
+implementation and measurement contributions. They do not establish a new
+sparse storage model or an end-to-end application speedup.
 
 Startup and storage measurements separately test the cost of adopting each
 representation, with raw measurements tied to verified builds.
@@ -129,6 +148,27 @@ These techniques motivate the present kernel. We compare the relevant
 MAGMA composition below, but do not compare implementations of these
 other research kernels.
 
+The tensor-core work is the closest research comparator, so we state why it
+is not measured here rather than leaving the omission open. SMaT executes
+\texttt{mma.m16n8k16} in half precision and stores blocks in a BCSR whose
+block dimensions match the matrix instruction, which is 16 by 8 for that
+precision. It also applies a similarity-based row and column permutation
+before execution to reduce the number of nonzero blocks. Three things would
+have to be matched for the comparison to mean anything. The precision differs:
+this work measures FP32 inputs and FP32 accumulation, and the transport trace
+is accepted only against an FP64 coefficient reference and an analytic
+tolerance, so a half-precision comparator would be answering a different
+numerical question. The block shape differs: our inputs carry the
+application's own block dimensions, and feeding them to a 16 by 8 instruction
+requires exactly the retiling this work avoids, which the BSR controls already
+price. The preprocessing differs: the permutation would have to be charged
+against the conversion and setup costs measured here, and its reported effect
+on block count varies by matrix and is not always favorable. A matched
+comparison is therefore possible only at equal precision on retiled inputs
+with preprocessing charged, and it is not attempted here. Its published
+results are also measured on a different GPU and are not transferable to this
+device.
+
 Hierarchical matrix construction motivates the packed-block product itself.
 Boukaram et al. describe a non-uniform batched BSR product implemented through
 slot-wise MAGMA non-uniform batched GEMM operations [5]. That work targets a
@@ -140,12 +180,12 @@ and we do not claim a result for its pipeline.
 
 The application evidence in this paper comes from a standalone
 variable-order discontinuous Galerkin transport program, described in
-Section~
-ef{sec:relevance}. It is the one integration where a real
-discretization supplies the block structure, an assembled operator drives a
-sequence of dependent products, and the output is checked against an
-analytic solution. Wide dependent traces are where direct execution helps
-most. A separate generated covariance near-field component, whose partitions
+Section~\ref{sec:relevance}. In that program the discretization supplies the
+block structure, an assembled operator drives a sequence of dependent
+products, and every final coefficient is checked against repeated
+double-precision products and against the analytically translated wave.
+It is the only workload here with those three properties. Wide dependent
+traces are where direct execution helps most. A separate generated covariance near-field component, whose partitions
 come from a spatial cluster tree, tests a dense-block component drawn from the
 hierarchical setting. It excludes far-field compression and the complete
 construction pipeline, and BSR8 wins its steady-state comparison, so we report
@@ -550,7 +590,11 @@ localities, and four degrees. The MAGMA column selects the faster of its
 slot and reduction compositions within each process. The best-library
 column selects the fastest compatible method, including BSR32 on uniform
 blocks. These are comparator-favoring lower envelopes, not deployed tuning
-policies. The focused protocol and application traces are described below.
+policies. This is the current campaign, and it carries the headline result.
+Section~\ref{sec:relevance} gives its protocol, its repeatability, and the
+transport trace immediately after. The earlier NVIDIA-only campaigns, which
+predate the MAGMA comparator and use separate protocols, are reported in the
+supplement and contribute nothing to these aggregates.
 
 \begin{table}[!htbp]
 \centering\small
@@ -567,97 +611,22 @@ against the fastest library and \RelevanceMagmaRatio{} against the faster
 MAGMA composition. It wins \RelevanceCoreWins{} of 128 best-library
 comparisons. All four widths have aggregate advantages, while RHS 64 wins
 all 32 individual comparisons. The narrow-width exceptions remain visible
-in the table. The original three-process NVIDIA-only comparison and its
-width breakdown are retained separately in the supplement.
+in the table.
 
 Retaining packed blocks also avoids scalar metadata expansion and fixed-tile
 conversion. Section~\ref{sec:lifecycle-results} measures the corresponding
 storage and startup costs. These matter when a matrix is replaced before
 many products can amortize a library conversion.
 
-\subsection{Original NVIDIA-library controls}
-The original seed-1 campaign below uses three processes per configuration
-and predates the MAGMA comparison. Its aggregates remain separate.
-Table~\ref{tab:core} compares execution times on the core grid. The direct path has a
-geometric speedup of \AuditCsr{} against the CSR lower envelope and
-\AuditGrouped{} against cached grouped cuBLAS. The respective win counts
-are \AuditCsrWins{} and \AuditGroupedWins{} out of 128 configurations.
-Selecting the CSR algorithm reduces the aggregate ratio from
-\AuditDefaultCsr{} for default CSR to \AuditCsr{} for the lower envelope.
-The subdivided BSR8 ratio is \AuditBsrEight{}, with
-\AuditBsrEightWins{} direct wins out of 128. This comparison retains block
-structure without padding, comparing two ways to execute the same dense
-blocks.
-The supplementary distribution figure shows the spread behind these averages.
-Its sorted curves expose the fastest comparators and the width of the
-performance range across the grid.
-
-
-
-\begin{table}[!htbp]
-\centering\small
-\caption{Core-grid ratios over 128 configurations and three process observations
-per configuration. Minima and wins use GPU ratios averaged in log space across
-processes. Changing-address grouped execution is paired with changing-address
-direct execution.}\label{tab:core}
-\input{generated/core.tex}
-\end{table}
-
-
-
-The supplementary width and degree table breaks down the results by width and degree. Each row averages the four size distributions and two
-localities. Direct time is the geometric mean of the corresponding process
-medians. Absolute times distinguish small launch-sensitive cases from larger
-products. The CSR column uses the lower envelope, and grouped execution uses
-cached pointers.
-
-
-
-\subsection{Additional seeds and queued NVIDIA comparisons}
-The follow-up repeats all 128 core configurations on matrix seeds 2, 3,
-and 5. Each seed and timing mode uses one fresh process per configuration,
-giving 768 processes. The two modes synchronize after either one product
-or eight queued products. Each process measures twenty samples, with GPU
-and host times divided by the number of products in the sample. The eight
-products use the same prepared plan and buffers. Changing-address controls
-alternate the two buffer pairs on each product. Validation runs outside
-timing, before and after the samples, and outputs are poisoned before each
-method. Jobs and methods are randomized, and GPU processes run serially.
-
-Table~\ref{tab:robustness} uses the same library lower envelope as the
-original core comparison. Each row includes 32 configurations on each of
-three matrix seeds. The seed range contains the smallest and largest
-32-configuration geometric means. These ranges describe matrix variation
-combined with process noise. There is one process for each seed and mode,
-so they do not separate those sources or define confidence intervals.
-The original three-process campaign remains separate. The follow-up uses
-C++20 host compilation and the same library source bytes and CUDA toolkit.
-
-\begin{table}[!htbp]
-\centering\small
-\caption{Additional matrix seeds and synchronization intervals for the NVIDIA controls. Ratios divide
-comparator time by direct time, so values above one favor direct execution.
-Batch is the number of products queued before synchronization. Wins compare
-direct execution with the fastest tested library for each of 96 instances.}
-\label{tab:robustness}
-\input{generated/robustness.tex}
-\end{table}
-
-Across all 384 instances per mode, the fastest-NVIDIA-library ratios are
-\RobustLatencyOverall{} for individual products and
-\RobustQueuedOverall{} for batches of eight, with
-\RobustLatencyWins{} and \RobustQueuedWins{} direct wins respectively.
-Every width has a geometric-mean advantage on each additional seed in
-both timing modes. RHS 64 gives the largest aggregate advantage, about
-1.39, winning all 96 individual-product instances and 95 of 96 queued
-instances. The narrow-panel gains remain smaller, about three to six
-percent against the fastest tested library. Queueing eight products
-preserves this width-dependent pattern on the measured grid.
+\input{relevance.tex}
 
 
 \subsection{Fixed blocks, scaling, and degree imbalance}
-Both partitions have constant extent in uniform matrices, making fixed-block
-BSR a suitable control. Across the 32 uniform configurations, the BSR ratio is
+The remaining subsections cover the workloads outside the core grid, plus
+the fixed-block control. Both partitions have constant extent in uniform
+matrices, making fixed-block
+BSR a suitable control. Across the 32 uniform configurations of the
+seed-1 campaign, the BSR ratio is
 \AuditBsr{}, with \AuditBsrWins{} direct wins. Table~\ref{tab:bsr} shows the
 width dependence and helps distinguish variable-block reuse from the
 benefits already available with a uniform block format.
@@ -799,7 +768,6 @@ input, timing protocol, and full-output reference. Development seed 4 was
 used to choose the replacement, while this comparison uses seeds 1, 2,
 and 3. Historical tuning evidence is retained in the separate supplement.
 
-\input{relevance.tex}
 
 \section{Scope and limitations}
 Measurements cover one GPU and one local operating environment. Three
@@ -833,9 +801,22 @@ construction or solver code that reports end-to-end time, or a trace captured
 from an existing production workload. Supporting dimensions above 64 is a
 prerequisite for the first.
 
+The specialized transport comparator is one implementation of the obvious
+specialization, built on batched GEMM. A hand-written kernel that fused the
+element contributions and kept the cached operators resident is not measured,
+and it remains the strongest untested alternative for that problem.
+
+The narrow-width dispatch policy is fixed rather than tuned, and its evidence
+is one device. The per-configuration counts show that the RHS-8 and RHS-16
+advantages do not hold for every configuration, so a second GPU is the
+measurement most likely to change how the narrow policy should be stated.
+The wide-panel results do not depend on that resolution.
+
 Library lower envelopes favor the comparators by selecting measured medians
 without charging a tuning cost. The grouped cuBLAS baseline is the stated slot
-composition. MAGMA is measured with both slots and a separate reduction. Other research kernels, reordering methods, other block
+composition. MAGMA is measured with both slots and a separate reduction.
+Tensor-core research kernels are excluded for the stated precision, block
+shape, and preprocessing reasons. Other reordering methods, other block
 ensembles, and additional precisions are outside this evaluation. The work
 contributes an implementation and measured execution policy for an established
 variable-block representation, with performance claims confined to the
@@ -871,6 +852,15 @@ in \path{docs/relevance.md}. Python dependencies are pinned in
 \path{pyproject.toml} and \path{uv.lock}. Paper building also uses
 pdfLaTeX and pdftotext.
 
+The specialized transport comparison is a separate campaign, run by
+\path{scripts/run_dg.py} into \path{data/dg/} and exported by
+\path{scripts/export_dg.py}. It reuses the same transport inputs, horizon,
+and numerical checks, and it records the discovered operator count, batched
+call count, and stored bytes before any timing, so a record that does not
+report the structure the comparator exploits is rejected. Its comparator
+plan refuses to construct when the input lacks repeated block operators,
+which keeps it from standing in for a general product.
+
 The replacement archive is \path{data/relevance-v2/}. Its checksummed
 \path{inputs.zip}, stored in checked 64 MiB parts, retains every transport matrix, initial state, numerical
 and analytic reference, mass-weight vector, metadata file, and refinement
@@ -905,7 +895,11 @@ preparation directory to measure assembly again.
 \path{scripts/analyze_supplement.py} validates native and matched controls.
 Both emit full-precision summaries beside the generated tables.
 \path{scripts/build_paper.ps1} requires both analyses to pass before
-compiling the manuscript. Regression tests in \path{tests/test_evidence.py}
+compiling the manuscript. After compilation it extracts the rendered text of
+both documents and runs \path{scripts/check_references.py}, which rejects
+unresolved references and control sequences that reached the page as literal
+text. A successful compilation does not catch either defect.
+Regression tests in \path{tests/test_evidence.py}
 exercise corrupt timing records and stale source or binary receipts.
 The historical RHS-8 archive is validated separately for the supplement.
 The two seed-4 development archives are under \path{data/narrow-tuning/}
@@ -921,10 +915,16 @@ blocks and sufficiently favorable panel widths and shapes. The transport
 program carries the application argument: its large RHS-64 trace gives
 \TransportLargeRatio{} over the fastest library and
 \TransportLargeMagmaRatio{} over the better MAGMA composition across 128
-dependent products, on an operator the discretization supplies. The core
-comparison including MAGMA gives a fastest-library ratio of
-\RelevanceCoreRatio{} over the same widths and shapes. Narrow and small
-traces still favor a library.
+dependent products, on an operator the discretization supplies. A specialized
+comparator built for that problem, caching its \DgDistinctOperators{} distinct
+operators and running one strided batched SGEMM per shape group, is slower
+than direct execution on every trace while holding \DgStorageFactor{} times
+less matrix storage, so the obvious specialization does not remove the reason
+to call this kernel. The core comparison including MAGMA gives a
+fastest-library ratio of \RelevanceCoreRatio{} over the same widths and
+shapes, and \RelevanceMarginWins{} of 128 configurations clear a 5 percent
+margin on their own repeated observations. Narrow and small traces still
+favor a library.
 
 The implementation shares input tiles, reuses sparse values across
 accumulators, and retains one writer per output without execution workspace.
@@ -937,10 +937,12 @@ Establishing the hierarchical case would require block dimensions above 64
 and an end-to-end integration, which this evaluation does not provide.
 \end{samepage}
 
-{\small
+{\footnotesize
 \setlength{\parskip}{0pt}
 \begin{thebibliography}{11}
-\setlength{\itemsep}{2pt}
+% Keep the reference list on the page the conclusion ends on.
+\setlength{\itemsep}{0pt}
+\setlength{\parsep}{0pt}
 \bibitem{yang} C. Yang, A. Bulu\c{c}, and J. D. Owens.
 Design Principles for Sparse Matrix Multiplication on the GPU.
 \emph{Euro-Par}, 2018. \url{https://arxiv.org/abs/1803.08601}

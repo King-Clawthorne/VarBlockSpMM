@@ -33,11 +33,23 @@ Seed ranges average over processes, and process-label ranges average over
 seeds. These descriptive ranges are not confidence intervals. Repeating both
 factors avoids using timing trials as independent matrix samples.
 
+An aggregate range can hide a configuration whose winner changes between
+observations, which matters most at the narrow widths where the aggregate
+advantage is a few percent. The last three columns therefore describe
+individual configurations rather than width averages. A configuration counts
+as a win beyond the margin when its own nine observations have a geometric
+mean above 1.05, which is a practical threshold for changing an
+implementation. A configuration is unanimous when all nine observations favor
+direct, and split when some favor direct and others favor a library.
+
 \begin{table}[!htbp]
 \centering\small
 \caption{Repeated MAGMA-inclusive comparisons. Each width and batch contains
 32 configurations, three seeds, and three processes per seed. Ratios above
-one favor direct. Wins count 96 configuration and seed combinations.}
+one favor direct. Wins count 96 configuration and seed combinations. The last
+three columns count individual configurations out of 32: wins with a
+geometric mean above 1.05, configurations where all nine observations favor
+direct, and configurations whose winner changes between observations.}
 \label{tab:magma-repeatability}
 \input{generated/magma-repeatability.tex}
 \end{table}
@@ -46,6 +58,17 @@ The overall ratios are \RelevanceCoreRatio{} for individual products and
 \RelevanceQueuedRatio{} for batches of eight. The corresponding configuration
 win counts, averaged across both seeds and processes, are
 \RelevanceCoreWins{} and \RelevanceQueuedWins{} out of 128.
+
+Applying the 5 percent margin to single products leaves
+\RelevanceMarginWins{} of 128 configurations, and \RelevanceUnanimous{} are
+unanimous. The two results separate by width. At RHS 32 and 64,
+\RelevanceWideMarginWins{} of 64 configurations clear the margin and every
+RHS-64 configuration is unanimous. At RHS 8 and 16, \RelevanceNarrowMarginWins{}
+of 64 clear it and \RelevanceNarrowSplit{} change winner between observations.
+The few-percent aggregates at those widths therefore describe a population
+that includes configurations a deployment would not move, and some whose
+winner is not stable across repetitions. The narrow-width results support a
+measured description of one device, not a tuned dispatch rule.
 
 \paragraph{An application trace.}
 A standalone periodic transport example solves \(u_t+u_x=0\) using
@@ -74,11 +97,12 @@ This replaces the original near-identity forward-Euler trace. The old trace
 remains historical evidence and does not contribute to current results.
 The full overlap equations, refinement observations, and startup definition
 are in the supplement. This remains a standalone transport component with
-prescribed orders. It does not compare optimized DG-specific implementations.
-It is nonetheless the closest thing to an application integration in this
-paper. The operator comes from the discretization rather than from an
-imposed partition, the products are dependent rather than repeated in
-isolation, and the trace is validated against the analytic solution.
+prescribed orders. What it does demonstrate is that the measured advantage survives three
+conditions the synthetic cases do not impose. The block structure comes
+from the discretization rather than from a chosen partition, each product
+consumes the previous output so no step can be reordered or overlapped, and
+the timed trace produces coefficients that pass both the double-precision
+and the analytic comparison.
 
 \begin{table}[!htbp]
 \centering\small
@@ -91,6 +115,44 @@ NVIDIA controls. Times are direct GPU milliseconds per trace.}
 \end{table}
 
 \input{generated/relevance-findings.tex}
+
+\paragraph{A specialized transport comparator.}
+Those comparators are all general implementations, so they do not answer
+whether a transport code should call this kernel at all. Repeating element
+orders and a constant translation give the operator only
+\DgDistinctOperators{} distinct dense blocks, whatever the element count, and
+preparation already caches them. A specialized implementation would exploit
+that. We therefore built one and measured it under the same protocol. It
+recovers the distinct operators from the packed matrix by deduplicating block
+payloads, groups the elements that share an operator, and runs each group as
+one strided batched SGEMM whose stride over the operator is zero, so a single
+cached block serves the whole batch. It issues \DgLaunches{} batched calls per
+product and never assembles the matrix on the device: it holds
+\DgOperatorKiB{} KiB of operators instead of the \DgAssembledMiB{} MiB packed
+matrix at 4,096 elements, a factor of \DgStorageFactor{}. It runs the same
+dependent trace, in FP32, and passes the same coefficient and analytic checks.
+
+\begin{table}[!htbp]
+\centering\small
+\caption{Specialized transport comparator against direct execution on the
+same six traces. Ratios divide specialized time by direct time, so values
+above one favor direct. The process range gives the smallest and largest of
+three paired process ratios. Times are median GPU milliseconds per trace.}
+\label{tab:dg}
+\input{generated/dg.tex}
+\end{table}
+
+\input{generated/dg-findings.tex}
+
+The specialized plan wins decisively on storage and loses on time in every
+tested case. Its per-step work is split across \DgLaunches{} batched calls
+whose individual GEMMs are small, while direct execution issues one kernel
+that keeps each block row in one thread array. This is one specialized
+implementation, not the best possible one. A hand-written kernel that fused
+the two contributions per element and kept the cached operators resident could
+close or reverse the gap, and we do not claim otherwise. What the comparison
+establishes is that the obvious specialization, the one the cached operators
+invite, does not by itself beat direct execution here.
 
 \paragraph{Separating workload factors.}
 A crossed control varies block rows over \(128,512\), degree over

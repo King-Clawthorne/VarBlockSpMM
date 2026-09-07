@@ -84,12 +84,15 @@ python scripts/run_revision.py --output data/revision-rerun
 python scripts/run_application.py --output data/application/rerun
 python scripts/run_supplement.py native --output data/native-rerun
 python scripts/run_supplement.py ablation --output data/ablation-rerun
+python scripts/run_dg.py --output data/dg-rerun
 python scripts/analyze_revision.py --revision data/revision-rerun --application data/application/rerun --output build/rerun-tables
 python scripts/analyze_supplement.py --native data/native-rerun --ablation data/ablation-rerun --output build/rerun-tables
 python -m unittest discover -s tests -p 'test_*.py'
 ```
 
 Native binary arrays are large and excluded from Git. Their generator, geometry, partition metadata, assembly observations, and checksums are retained. `prepare_native.py` reconstructs identical binaries while preserving the archived CPU assembly observations. `--output` with a fresh directory remeasures preparation.
+
+The specialized transport comparison is a separate campaign in `data/dg/`, produced by `scripts/run_dg.py` and exported by `scripts/export_dg.py`. It reuses the transport inputs prepared for the main campaign and compares direct execution against an application-specific plan that caches the eight distinct block operators. See [docs/relevance.md](docs/relevance.md).
 
 The replacement MAGMA/transport archive is `data/relevance-v2/`, including exact transport payloads stored as `inputs.zip.000` through `inputs.zip.003`. The analyzer checks and reconstructs these parts automatically. The earlier `data/relevance/` archive remains historical and does not generate the current headline. The original canonical campaigns are under `data/product-evaluation/`, in `synthetic/`, `published/`, `native/`, and `ablation/`. Sanitizer records are in its `validation/` subdirectory. The analyzers reject checksum, build receipt, design, command, process, method, and timing inconsistencies before emitting tables.
 

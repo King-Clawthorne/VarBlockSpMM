@@ -53,6 +53,12 @@ if ($ResultsRoot) {
   python "$PSScriptRoot/export_relevance.py"
 }
 if ($LASTEXITCODE -ne 0) { throw 'Focused follow-up validation failed' }
+if ($ResultsRoot) {
+  python "$PSScriptRoot/export_dg.py" --input (Join-Path $ResultsRoot 'dg')
+} else {
+  python "$PSScriptRoot/export_dg.py"
+}
+if ($LASTEXITCODE -ne 0) { throw 'Specialized transport comparison validation failed' }
 Assert-PaperPunctuation (Join-Path $projectRoot 'research/paper.tex')
 Assert-PaperPunctuation (Join-Path $projectRoot 'research/relevance.tex')
 Assert-PaperPunctuation (Join-Path $projectRoot 'research/supplement.tex')
@@ -68,7 +74,6 @@ try {
   & pdftotext -enc UTF-8 (Join-Path $output 'paper.pdf') (Join-Path $output 'paper-text.txt')
   if ($LASTEXITCODE -ne 0) { throw 'PDF text extraction failed' }
   Assert-PaperPunctuation (Join-Path $output 'paper-text.txt')
-  Copy-Item -LiteralPath (Join-Path $output 'paper.pdf') -Destination (Join-Path $projectRoot 'research/paper.pdf')
   foreach ($pass in 1..2) {
     & pdflatex -interaction=nonstopmode -halt-on-error "-output-directory=$output" supplement.tex
     if ($LASTEXITCODE -ne 0) { throw 'Supplement build failed' }
@@ -76,6 +81,11 @@ try {
   & pdftotext -enc UTF-8 (Join-Path $output 'supplement.pdf') (Join-Path $output 'supplement-text.txt')
   if ($LASTEXITCODE -ne 0) { throw 'Supplement text extraction failed' }
   Assert-PaperPunctuation (Join-Path $output 'supplement-text.txt')
+  # A mistyped control sequence such as "Section~ef{sec:relevance}" compiles
+  # without error and only shows up in the rendered page, so check the text.
+  python "$PSScriptRoot/check_references.py"
+  if ($LASTEXITCODE -ne 0) { throw 'Rendered reference check failed' }
+  Copy-Item -LiteralPath (Join-Path $output 'paper.pdf') -Destination (Join-Path $projectRoot 'research/paper.pdf')
   Copy-Item -LiteralPath (Join-Path $output 'supplement.pdf') -Destination (Join-Path $projectRoot 'research/supplement.pdf')
 } finally {
   Pop-Location
