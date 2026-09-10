@@ -113,46 +113,110 @@ NVIDIA controls. Times are direct GPU milliseconds per trace.}
 
 \input{generated/relevance-findings.tex}
 
-\paragraph{A specialized transport comparator.}
-Those comparators are all general implementations, so they do not answer
+\paragraph{Two specialized transport comparators.}
+The comparators above are general implementations, so they do not answer
 whether a transport code should call this kernel at all. Repeating element
 orders and a constant translation give the operator only
 \DgDistinctOperators{} distinct dense blocks, whatever the element count, and
 preparation already caches them. A specialized implementation would exploit
-that. We therefore built one and measured it under the same protocol. It
-recovers the distinct operators from the packed matrix by deduplicating block
-payloads, groups the elements that share an operator, and runs each group as
-one batched SGEMM whose operator pointer array repeats that single cached
-block. Both panels are bound when the plan is built, so every pointer array is
-uploaded once and none is refreshed during the trace. It issues
-\DgLaunches{} batched calls per product and never assembles the matrix on the
-device. At 4,096 elements it keeps \DgOperatorKiB{} KiB of operator values,
-and \DgPlanKiB{} KiB in total once the batch pointer arrays are counted,
-against the \DgAssembledMiB{} MiB packed matrix, a factor of
-\DgStorageFactor{}. Unlike the operators, those pointer arrays grow with the
-element count. It runs the same dependent trace, in FP32, and passes the same
+that. We built two, differing in what they give up, and measured both under the
+protocol above. Both run the same dependent trace, in FP32, and pass the same
 coefficient and analytic checks.
+
+The batched comparator recovers the distinct operators from the packed matrix
+by deduplicating block payloads, groups the elements that share an operator,
+and runs each group as one batched SGEMM whose operator pointer array repeats
+that single cached block. Both panels are bound when the plan is built, so
+every pointer array is uploaded once and none is refreshed during the trace. It
+issues \DgLaunches{} batched calls per product and never assembles the matrix
+on the device. At 4,096 elements one plan keeps \DgOperatorKiB{} KiB of
+operator values and \DgPlanKiB{} KiB once its batch pointer arrays are counted.
+The alternating trace holds one plan per direction, each owning its own copies,
+so it retains \DgTraceKiB{} KiB against the \DgAssembledMiB{} MiB packed
+matrix, a factor of \DgStorageFactor{}. Those figures exclude the dense panels
+and any allocation inside cuBLAS, which every method shares.
+
+The fused comparator keeps the operator caching and gives up nothing else. Its
+kernels mirror the release kernels for the panel width they serve, with the
+same thread mapping, shared input staging, register accumulators and single
+output write. One thread array owns an element, accumulates both contributions
+before writing, and reads the cached operator for its order class instead of
+its own packed copy. Because the order schedule repeats with period four, it
+derives the block structure from the element index and stores no per-element
+metadata at all, keeping only \DgOperatorKiB{} KiB of operators for any element
+count. That specialization is valid only for this operator, so its constructor
+checks the assumed periodicity, degree, columns and payload equality against
+the packed matrix and refuses anything else.
 
 \begin{table}[!htbp]
 \centering\small
-\caption{Specialized transport comparator against direct execution on the
-same six traces. Ratios divide specialized time by direct time, so values
-above one favor direct. The process range gives the smallest and largest of
-three paired process ratios. Times are median GPU milliseconds per trace.}
+\caption{Both specialized transport comparators against direct execution on
+the same six traces, with the matched control. Batched, Fused and Copies each
+divide comparator time by direct time, so values above one favor direct
+execution and values below one favor the comparator. Copies is the fused
+kernel reading a private operator copy per element. Sharing divides Copies by
+Fused, isolating what operator sharing is worth, and its range gives the
+smallest and largest of three paired process ratios. Times are median GPU
+milliseconds per trace.}
 \label{tab:dg}
 \input{generated/dg.tex}
 \end{table}
 
 \input{generated/dg-findings.tex}
 
-The specialized plan wins on storage and loses on time in every tested case.
-Its per-step work is split across \DgLaunches{} batched calls whose individual
-GEMMs are small, while direct execution issues one kernel that keeps each
-block row in one thread array. This is one specialized implementation. A
-hand-written kernel that fused the two contributions per element and kept the
-cached operators resident is not measured, and it could close or reverse the
-gap. The result is confined to the implementation tested: direct execution
-beats this cached-operator batched-GEMM comparator on these traces.
+The two results separate cleanly, and they answer the question in opposite
+directions. The batched comparator loses on time everywhere while winning on
+storage, because its per-step work is split across \DgLaunches{} batched calls
+whose individual GEMMs are small. The fused comparator wins on both. It is
+\DgFusedRatio{} times faster than direct execution in geometric mean over the
+six traces, \DgFusedLarge{} times on the 4,096-element RHS-64 trace that
+carries this paper's headline transport number, and \DgFusedNarrowLarge{} times
+at 4,096 elements and RHS 8.
+
+The fused comparator changes four things at once relative to direct
+execution: which operator bytes an element reads, whether per-element metadata
+is loaded, how addresses are computed, and the order of the two contributions.
+A matched control separates the first from the rest. It is the same kernel,
+thread mapping, addressing arithmetic and contribution order, with one change:
+each element reads a private copy of its operators instead of the shared class
+copy, so the operand bytes are duplicated exactly as the assembled matrix
+duplicates them. The Copies column gives that variant against direct
+execution, and the Sharing column divides it by the fused time, which isolates
+what operator sharing is worth.
+
+Sharing carries the large cases and nothing else. At 4,096 elements it is
+worth \DgSharingLarge{} at RHS 64 and \DgSharingNarrowLarge{} at RHS 8, and the
+duplicated variant falls back to roughly direct execution's time
+(\DgCopiesLarge{} and \DgCopiesNarrowLarge{}). At 256 and 1,024 elements the
+same control gives between \DgSharingSmallMin{} and \DgSharingSmallMax{},
+which is no measured effect, so the smaller advantages at those sizes come from
+the rest of the specialization rather than from operator sharing.
+
+The natural reading is that the shared operators stay resident in cache while
+the duplicated ones do not, and that this only matters once the operator
+working set is large enough. We have not measured memory traffic, so that
+remains an interpretation consistent with the control rather than a
+demonstrated mechanism. Allocated matrix size is not itself evidence about
+DRAM traffic. What the control does establish is that at 4,096 elements the
+advantage is attributable to the operand source and not to the metadata,
+addressing, or ordering changes that accompany it.
+
+We therefore state the transport conclusion as the measurements support it.
+Direct execution is faster than every general library composition tested, and
+faster than a specialized implementation built on batched GEMM. It is slower
+than a specialized fused kernel that exploits the repeated operators. Against this one
+comparator, direct execution reaches \DgDirectShareMin{} to
+\DgDirectShareMax{} percent of its throughput across the six traces, and
+\DgDirectShareLarge{} percent on the headline RHS-64 trace. One hand-written
+comparator does not define the ceiling, so those are gaps against a measured
+alternative rather than against the best achievable. The case for VarBlockSpMM
+on this application is that those gaps come with no problem-specific kernel to
+write, verify, or maintain, and no structural assumption that a change to the
+order schedule or the stencil would invalidate. The fused comparator's
+constructor rejects any input that breaks its assumptions, which is the cost
+of the speed it gains. Where an application has repeated operators, knows it,
+and accepts that maintenance burden, the measurements here say it should write
+the kernel.
 
 \paragraph{Separating workload factors.}
 A crossed control varies block rows over \(128,512\), degree over

@@ -3,6 +3,7 @@
 // Galerkin code would exploit. Every method runs the same dependent trace, to
 // the same physical time, and passes the same numerical checks.
 #include "dg_specialized.hpp"
+#include "dg_fused.cuh"
 #include "application_data.hpp"
 #include "support.hpp"
 #include <algorithm>
@@ -78,13 +79,18 @@ int main(int argc, char** argv) {
     };
     {
       // Report the structure the specialized comparator exploits, once, before
-      // any timing. A campaign record without this line is incomplete.
-      vbsr::bench::DgSpecializedPlan probe(host, rhs, x.data(), y.data());
-      std::cerr << "specialized_structure," << probe.distinct_operators() << ','
-                << probe.launch_count() << ',' << probe.operator_bytes() << ','
-                << probe.assembled_bytes() << ',' << probe.storage_bytes() << '\n';
+      // any timing. A campaign record without this line is incomplete. The
+      // alternating trace holds one plan per direction, and each owns its
+      // operators and pointer arrays, so report the timed total as well.
+      vbsr::bench::DgSpecializedPlan even(host, rhs, x.data(), y.data());
+      vbsr::bench::DgSpecializedPlan odd(host, rhs, y.data(), x.data());
+      std::cerr << "specialized_structure," << even.distinct_operators() << ','
+                << even.launch_count() << ',' << even.operator_bytes() << ','
+                << even.assembled_bytes() << ',' << even.storage_bytes() << ','
+                << even.storage_bytes() + odd.storage_bytes() << '\n';
     }
-    std::vector<std::string> methods = {"direct", "dg_specialized", "grouped", "bsr8"};
+    std::vector<std::string> methods = {"direct", "dg_specialized", "dg_fused",
+                                        "dg_fused_copies", "grouped", "bsr8"};
     std::shuffle(methods.begin(), methods.end(), std::mt19937(seed));
     b::print_environment(&host);
     b::print_timing_header();
@@ -116,6 +122,13 @@ int main(int argc, char** argv) {
         vbsr::bench::DgSpecializedPlan even(host, rhs, x.data(), y.data());
         vbsr::bench::DgSpecializedPlan odd(host, rhs, y.data(), x.data());
         run([&](int step, const float*, float*) { (step % 2 ? odd : even).execute(); });
+      } else if (name == "dg_fused") {
+        vbsr::bench::DgFusedPlan plan(host, rhs);
+        run([&](int, const float* a, float* c) { plan.execute(a, c); });
+      } else if (name == "dg_fused_copies") {
+        // Matched control: same kernel, private operator copies per element.
+        vbsr::bench::DgFusedPlan plan(host, rhs, false);
+        run([&](int, const float* a, float* c) { plan.execute(a, c); });
       } else if (name == "grouped") {
         vbsr::GroupedGemmPlan plan(host, rhs, true);
         run([&](int, const float* a, float* c) { plan.execute(a, c); });

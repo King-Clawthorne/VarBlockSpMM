@@ -142,7 +142,8 @@ def run_process(output: Path, stem: str, command: list[str], methods: list[str],
 
 def source_paths(runner: str) -> list[Path]:
     """Include shared headers and helpers as well as executable entry points."""
-    patterns = ("src/**/*.cu", "src/**/*.cpp", "include/**/*.hpp", "bench/*.cpp", "bench/*.hpp", "bench/*.cu",
+    patterns = ("src/**/*.cu", "src/**/*.cuh", "src/**/*.cpp", "include/**/*.hpp",
+                "include/**/*.cuh", "bench/*.cpp", "bench/*.hpp", "bench/*.cu", "bench/*.cuh",
                 "tests/*.cpp", "scripts/*.py", "scripts/*.ps1", "cmake/*.cmake.in", "cmake/*.cmake", "pyproject.toml", "uv.lock")
     paths = {path for pattern in patterns for path in ROOT.glob(pattern)}
     paths.update((ROOT / "CMakeLists.txt", ROOT / "scripts" / runner,

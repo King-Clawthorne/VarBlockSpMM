@@ -51,8 +51,12 @@ speedup of \RelevanceCoreRatio{} over the fastest tested library, with
 A variable-order discontinuous Galerkin transport program supplies a
 dependent application trace: at 4,096 elements and 64 simultaneous fields,
 128 dependent steps run \TransportLargeRatio{} times faster than the fastest
-library, and faster than an application-specific comparator that caches the
-\DgDistinctOperators{} distinct block operators the discretization repeats.
+library, and faster than an application-specific comparator built on batched
+GEMM. A fused application-specific kernel that both accumulates an element's
+contributions in one thread array and reads only the
+\DgDistinctOperators{} cached operators the discretization repeats is faster
+than direct execution instead, by \DgFusedRatio{} in geometric mean and
+\DgFusedLarge{} on that trace, which bounds the application claim.
 The boundary is reported with the result. Narrow panels win by a few percent
 and not in every configuration, BSR8 is faster on a geometry-derived
 covariance component, and scalar CSR is faster on published matrices given
@@ -90,27 +94,36 @@ execution plan with direct access to the application's packed values.
 
 The contribution is a standalone execution policy for this packed format,
 with an experimentally measured boundary against conversion-based library
-alternatives. The individual mechanisms are established. What distinguishes
-this policy is the combination the packed variable-block format forces, and
-each part of it rules out a strategy the prior kernels rely on. Because block
-heights differ between rows, a fixed tile shape cannot be assigned to a warp,
-so the row splitting and merge-based balancing of Yang et al. [1] and the
-row caching of GE-SpMM [8] have no fixed row extent to work with. Because
-block dimensions are runtime values rather than compile-time constants, the
-staging decision has to be made per width at dispatch instead of being
-specialized into the tile shape. Because several blocks in a row accumulate
-into the same output rows, the one-writer rule replaces both output atomics
-and the reduction that a batched or grouped composition needs, which is what
-removes the execution workspace that the MAGMA reduction composition and the
-grouped slot composition require. And because the blocks are already dense
-and packed, the tensor-core route of Okanovic et al. [2] would have to retile
-them to the shape its matrix instruction fixes, which is the conversion this
-work avoids. The measured boundary is where these choices pay for themselves.
-The matched experiments test which of them improve this implementation. The
+alternatives. The individual mechanisms are established, and none of the
+choices below is the only way to execute this operation. A fixed tile shape
+can be applied to variable block heights through masking or several tile
+sizes, and runtime dimensions can select among specialized kernels rather
+than dispatching per width. What this work provides is a measurement of one
+coherent set of choices against the alternatives an application would
+otherwise reach for. Each block row is owned by one thread array, which keeps
+a single writer per output and needs no execution workspace. Staging is
+selected per panel width at dispatch, and block dimensions stay runtime
+values, so one build covers every supported shape. The packed values are read
+where the application already put them, with no retiling and no scalar
+expansion. The matched experiments measure what each of these is worth inside
+this implementation, rather than assuming the combination is necessary. The
 library comparisons test when their combined benefit exceeds the benefit of
 padding-free BSR8 subdivision or scalar CSR expansion. These are
 implementation and measurement contributions. They do not establish a new
 sparse storage model or an end-to-end application speedup.
+
+The adoption case is correspondingly narrow, and worth stating plainly at the
+outset. No existing application has adopted this implementation, and every
+workload measured here was generated for the evaluation. Of the three
+application-shaped inputs, the transport program is purpose-built, BSR8 is
+faster on the covariance component in steady state, and compact CSR is faster
+on the published matrices under the artificial partitions we gave them. The
+measurements therefore delimit a regime, dense variable blocks with wide
+panels and enough reuse to matter, without demonstrating an application that
+sits in it and was not written by us. A captured workload from an existing
+code, or an integration reporting end-to-end time, would settle that, and it
+is the evidence this paper most lacks. Additional synthetic seeds would not
+substitute for it.
 
 Startup and storage measurements separately test the cost of adopting each
 representation, with raw measurements tied to verified builds.
@@ -502,9 +515,48 @@ duration, method position, command, executable checksum, and process status
 is saved. Medians use the mean of the two middle
 observations for an even sample count.
 
+Device sources are compiled with \texttt{-{}-use\_fast\_math}, which implies
+\texttt{-ftz=true} [15]. Each output entry is a sum of products evaluated as
+FP32 multiply-add with FP32 accumulation, in an unspecified order, with no
+compensated summation. Flush-to-zero applies per instruction, to that
+instruction's inputs and to its rounded result. It does not apply to the
+product term inside a fused multiply-add, which is computed exactly and added
+to the accumulator before a single rounding, so
+\(\mathrm{fma}(\mathrm{FLT\_MIN},0.5,\mathrm{FLT\_MIN})\) retains
+\(1.5\,\mathrm{FLT\_MIN}\). The consequences still cannot be excluded by
+inspecting the caller's inputs. An instruction input, or an accumulator value
+an instruction produces, that lands in the subnormal range is replaced by zero,
+so contributions that pass through a subnormal accumulator are lost: two
+contributions of \(\mathrm{FLT\_MIN}\times 0.5\) have normal operands and an
+exact sum of \(\mathrm{FLT\_MIN}\), and the kernel returns zero at every
+supported width, because each multiply-add produces a subnormal result from a
+zero accumulator.
+A partial sum above \(\mathrm{FLT\_MAX}\) becomes an infinity even when the
+exact sum is finite, and the unspecified order means a later cancelling term
+cannot be relied on. Accumulated error otherwise grows with the number of
+terms and with cancellation, as in any uncompensated FP32 summation.
+
+The claim is therefore verified rather than guaranteed. On the tested
+workloads, results agree with a reference that accumulates in double and
+rounds once, within the thresholds stated below. A dedicated range test pins
+each behavior above, including the multi-contribution cases.
+
+The measured inputs are not uniformly in the normal range. The three clustered
+2,048-point covariance matrices contain 162, 212, and 294 subnormal packed
+values. Those values carry less than \(10^{-30}\) of each matrix's total
+magnitude, so their numerical contribution is negligible, and the measured
+outputs pass the stated correctness checks. That is a statement about
+numerical contribution, not about time: we did not measure these workloads
+with and without flush-to-zero, so nothing here establishes that the timing
+ratios are unaffected. A checked-in census keeps
+these counts tied to the payloads. It covers the covariance and published
+matrices and all six transport configurations, including the transport initial
+states, references, and mass weights, which are operands as well. Those
+contain no subnormal values.
+
 The revision uses the RTX 5060 Ti with compute capability 12.0, CUDA runtime
-and driver API 13.4, Windows, MSVC 19.44, Release compilation, native CUDA
-architecture, and fast FP32 math. The Windows display driver reports version
+and driver API 13.4, Windows, MSVC 19.44, Release compilation, and native CUDA
+architecture. The Windows display driver reports version
 32.0.16.1656. The GPU is not clock-locked or isolated from all operating-system
 activity. Per-process environment records accompany the synthetic timings.
 
@@ -767,9 +819,16 @@ The tuning evidence behind the choice is in the supplement.
 Measurements cover one GPU and one local operating environment. Three
 process observations describe repeatability over this campaign, while
 long-term drift and hardware variation require separate measurements.
-The MAGMA-inclusive campaign crosses three matrix seeds with three processes
-per seed in both timing modes. The matched, native, and specialized transport
-experiments each use three instances with three processes per instance.
+The campaign designs differ and are not interchangeable. The MAGMA-inclusive
+campaign crosses three matrix seeds with three processes per seed in both
+timing modes. The matched and native experiments each use three generated
+instances with three processes per instance, so their ranges cover input
+variation as well as process noise. The transport campaigns, both the main one
+and the specialized comparison, instead run six configurations of three
+element counts and two panel widths, with one deterministic input per
+configuration and three processes on it. Different element counts are
+different configurations, not repeated draws of one workload, so transport
+ranges describe process variation only.
 These chosen workloads do not define a random application population.
 Campaigns run under earlier protocols are reported separately in the
 supplement and are excluded from these averages.
@@ -787,16 +846,24 @@ production workload. The covariance component is a boundary case in which
 BSR8 wins steady state. Supported dimensions reach 64, which meets the
 smallest leaf size reported by the motivating hierarchical study, so the
 larger leaves and the surrounding construction pipeline of that study are
-untested here. Two things would settle the application question and neither
-is claimed by these measurements: an integration inside a hierarchical
-construction or solver code that reports end-to-end time, or a trace captured
-from an existing production workload. Supporting dimensions above 64 is a
-prerequisite for the first.
+untested here. Compact CSR is faster on the published scalar matrices, whose
+partitions we imposed, so those inputs are a control rather than an adopter.
+This leaves the central external-validity gap: no measured workload comes from
+an application that already exists and chose this representation for its own
+reasons. Two things would close it, and neither is claimed here: an
+integration inside a hierarchical construction or solver code that reports
+end-to-end time, or a trace captured from an existing production workload.
+Supporting dimensions above 64 is a prerequisite for the first. Until one of
+them exists, the regime this paper maps should be read as a prediction about
+where such an application would benefit, tested only on inputs we generated.
 
-The specialized transport comparator is one implementation of the obvious
-specialization, built on batched GEMM. A hand-written kernel that fused the
-element contributions and kept the cached operators resident is not measured,
-and it remains the strongest untested alternative for that problem.
+The transport comparison now includes a fused application-specific kernel,
+and it is faster than direct execution on every trace. That result is specific
+to an operator with heavily repeated blocks, and the comparator is allowed to
+assume the periodic structure this operator has, which a general kernel cannot.
+It is one hand-written implementation on one device, not a bound on what either
+approach can reach. What it does establish is that the transport measurements
+here do not show direct execution to be the fastest way to run this problem.
 
 The narrow-width dispatch policy is fixed rather than tuned, and its evidence
 is one device. The per-configuration counts show that the RHS-8 and RHS-16
@@ -910,8 +977,15 @@ program carries the application argument: its large RHS-64 trace gives
 dependent products, on an operator the discretization supplies. Direct
 execution also beats an application-specific comparator for that problem,
 which caches the \DgDistinctOperators{} distinct block operators and runs one
-batched GEMM per shape group, on all six traces. A fused kernel using those
-cached operators is not measured. The core comparison including MAGMA gives a
+batched GEMM per shape group, on all six traces. A fused kernel that both
+accumulates an element's contributions in one thread array and reads only
+those cached operators is faster than direct execution instead, by
+\DgFusedLarge{} on that trace. Against that comparator direct execution
+reaches \DgDirectShareLarge{} percent of its throughput there, and
+\DgDirectShareMin{} to \DgDirectShareMax{} percent across the six traces.
+Those gaps buy a kernel with no structural assumption to maintain and no
+problem-specific code to write or verify, which is the trade this application
+faces. The core comparison including MAGMA gives a
 fastest-library ratio of \RelevanceCoreRatio{} over the same widths and
 shapes, and \RelevanceMarginWins{} of 128 configurations clear a 5 percent
 margin on their own repeated observations. Narrow and small traces still
@@ -930,8 +1004,8 @@ and an end-to-end integration, which this evaluation does not provide.
 
 {\footnotesize
 \setlength{\parskip}{0pt}
+% Keep the reference list as tight as the page allows.
 \begin{thebibliography}{11}
-% Keep the reference list on the page the conclusion ends on.
 \setlength{\itemsep}{0pt}
 \setlength{\parsep}{0pt}
 \bibitem{yang} C. Yang, A. Bulu\c{c}, and J. D. Owens.
@@ -963,10 +1037,9 @@ Accessed 5 September 2026.
 and HB/BCSSTK15. Accessed 5 September 2026.
 \url{https://sparse.tamu.edu/HB/bcsstk13}
 \bibitem{nist} NIST Matrix Market. BCS Structural Engineering Matrices.
-BCSSTK13, BCSSTK14, and BCSSTK15 problem descriptions.
-\url{https://math.nist.gov/MatrixMarket/data/Harwell-Boeing/bcsstruc1/bcsstk13.html}
-\url{https://math.nist.gov/MatrixMarket/data/Harwell-Boeing/bcsstruc2/bcsstk14.html}
-\url{https://math.nist.gov/MatrixMarket/data/Harwell-Boeing/bcsstruc2/bcsstk15.html}
+BCSSTK13, BCSSTK14, and BCSSTK15 problem descriptions, in the Harwell-Boeing
+\texttt{bcsstruc1} and \texttt{bcsstruc2} sets.
+\url{https://math.nist.gov/MatrixMarket/data/Harwell-Boeing/}
 \bibitem{magma} MAGMA developers. Variable-size batched FP32 GEMM.
 Revision \texttt{c3de65f855dd}, accessed 6 September 2026.
 \url{https://github.com/icl-utk-edu/magma}
@@ -978,6 +1051,9 @@ Computing}, 16, 2001, pages 173 to 261.
 Galerkin schemes for some first- and second-order partial differential equations.
 \emph{ESAIM: Mathematical Modelling and Numerical Analysis}, 50(6), 2016,
 pages 1699 to 1730. \url{https://doi.org/10.1051/m2an/2016004}
+\bibitem{nvcc} NVIDIA. CUDA Compiler Driver NVCC, flush-to-zero behavior of
+\texttt{-{}-use\_fast\_math} and \texttt{-ftz}. Accessed 10 September 2026.
+\url{https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/}
 \end{thebibliography}
 }
 \end{document}

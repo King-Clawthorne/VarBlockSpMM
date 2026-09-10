@@ -41,6 +41,12 @@ if(BUILD_TESTING)
 add_executable(vbsr_tests tests/test_main.cpp)
 target_link_libraries(vbsr_tests PRIVATE varblockspmm)
 add_test(NAME vbsr_tests COMMAND vbsr_tests)
+# Pins the flush-to-zero boundary that --use_fast_math introduces.
+add_executable(vbsr_numeric_range tests/test_numeric_range.cpp)
+target_link_libraries(vbsr_numeric_range PRIVATE varblockspmm)
+add_test(NAME vbsr_numeric_range COMMAND vbsr_numeric_range)
+add_executable(vbsr_probe_accum tests/test_probe_accum.cpp)
+target_link_libraries(vbsr_probe_accum PRIVATE varblockspmm)
 endif()
 
 if(VARBLOCKSPMM_BUILD_BENCHMARKS)
@@ -51,8 +57,11 @@ add_library(vbsr_benchmark_support STATIC
   bench/application_data.cpp
   bench/dense.cpp
   bench/dg_specialized.cpp
+  bench/dg_fused.cu
   bench/compact_csr.cpp)
 target_link_libraries(vbsr_benchmark_support PUBLIC varblockspmm)
+# The fused comparator must use the library's device math flags.
+target_compile_options(vbsr_benchmark_support PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--use_fast_math>)
 add_executable(vbsr_audit bench/audit.cpp)
 target_link_libraries(vbsr_audit PRIVATE vbsr_benchmark_support)
 add_executable(vbsr_application_audit bench/application.cpp)

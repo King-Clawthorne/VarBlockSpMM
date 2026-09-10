@@ -97,10 +97,44 @@ each into `data/dg/`, under the same horizon, buffers, and numerical checks as
 the main campaign. Each record must carry the structure line naming the
 discovered operator count, batched call count, and stored bytes.
 `scripts/export_dg.py` validates the archive and writes the paper table.
-Direct execution is faster in all six cases, by 1.323x to 5.654x, winning all
-18 process comparisons, while the specialized plan holds 153 times less
-matrix storage. A fused hand-written DG kernel is not tested, so the result is
-confined to this cached-operator batched-GEMM implementation.
+Direct execution is faster than this batched comparator in all six cases, by
+1.373x to 5.303x, winning all 18 process comparisons, while the batched plan
+holds 76.5 times less matrix storage.
+
+## Fused transport comparator
+
+`bench/dg_fused.cu` keeps the operator caching and gives up nothing else. Its
+kernels mirror the release kernels for the width they serve, with the same
+thread mapping, shared input staging, register accumulators, and single output
+write. One thread array owns an element and accumulates both contributions
+before writing, reading the cached operator for its order class rather than its
+own packed copy. The order schedule repeats with period four, so it derives the
+structure from the element index and stores no per-element metadata: 33.8 KiB
+of operators at any element count. Its constructor verifies the assumed
+periodicity, degree, block columns, and payload equality against the packed
+matrix, and refuses any other input. It is compiled with the library's device
+math flags.
+
+It is faster than direct execution in every case, by 1.015x to 2.251x, taking
+17 of 18 process comparisons, including 1.358x on the 4,096-element RHS-64
+trace and 2.251x at 4,096 elements with RHS 8.
+
+The `dg_fused_copies` method is a matched control for the cause. It is the
+same kernel, thread mapping, addressing arithmetic, and contribution order,
+with one change: each element reads a private copy of its operators instead of
+the shared class copy, so the operand bytes are duplicated the way the
+assembled matrix duplicates them. Dividing its time by the fused time isolates
+operator sharing. Sharing is worth 1.395x at 4,096 elements and RHS 64 and
+2.198x at RHS 8, where the duplicated variant falls back to roughly direct
+execution's time. At 256 and 1,024 elements it is worth between 0.986x and
+1.027x, which is no measured effect, so the smaller advantages at those sizes
+come from the rest of the specialization.
+
+The natural reading is cache residency of the shared operators, but memory
+traffic was not measured, so that is an interpretation consistent with the
+control rather than a demonstrated mechanism. What the control does establish
+is that at 4,096 elements the advantage is attributable to the operand source
+rather than to the metadata, addressing, or ordering changes beside it.
 
 ## Controlled factors
 

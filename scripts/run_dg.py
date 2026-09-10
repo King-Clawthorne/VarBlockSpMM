@@ -3,9 +3,11 @@
 The generic library controls in the main campaign do not answer whether a
 specialized transport implementation would beat direct execution. This campaign
 adds one: a plan that keeps only the distinct dense operators the repeating
-element orders produce and runs each shape group as a strided batched SGEMM.
-It reuses the transport inputs, physical horizon, and numerical checks of the
-main campaign, so only the comparator set differs.
+element orders produce and runs each shape group as one batched SGEMM whose
+operator pointer array repeats that cached block. It reuses the transport
+inputs, physical horizon, and numerical checks of the main campaign, so only
+the comparator set differs. The archive records the content hashes of those
+inputs, so the reuse is checkable rather than asserted.
 """
 import argparse
 import hashlib
@@ -15,13 +17,14 @@ from pathlib import Path
 import random
 import statistics
 import time
+import zipfile
 
 from benchmark_runs import (ROOT, archive_runs, read_runs, run_process, save_manifest,
                             source_hashes, source_paths, validate_run)
 from build_verified import verified_build, validate_build_receipt
 from prepare_transport import INPUT_DIRECTORY, transport_steps
 
-METHODS = ['direct', 'dg_specialized', 'grouped', 'bsr8']
+METHODS = ['direct', 'dg_specialized', 'dg_fused', 'dg_fused_copies', 'grouped', 'bsr8']
 ELEMENTS = (256, 1024, 4096)
 WIDTHS = (8, 64)
 PROCESSES = 3
@@ -52,19 +55,70 @@ def structure(metadata):
     if len(lines) != 1:
         raise ValueError('Missing specialized structure record')
     fields = [int(x) for x in lines[0].split(',')[1:]]
-    if len(fields) != 5:
+    if len(fields) != 6:
         raise ValueError('Missing specialized structure record')
-    distinct, launches, operator_bytes, assembled_bytes, storage_bytes = fields
+    distinct, launches, operator_bytes, assembled_bytes, storage_bytes, trace_bytes = fields
+    # The trace keeps one plan per buffer direction, so its allocation is
+    # twice a single plan. Anything less would mean the plans share state.
     if (not 0 < distinct < launches or operator_bytes <= 0
-            or assembled_bytes <= operator_bytes or storage_bytes < operator_bytes):
+            or assembled_bytes <= operator_bytes or storage_bytes < operator_bytes
+            or trace_bytes != 2 * storage_bytes):
         raise ValueError('Implausible specialized structure record')
     return dict(distinct=distinct, launches=launches, operator_bytes=operator_bytes,
-                assembled_bytes=assembled_bytes, storage_bytes=storage_bytes)
+                assembled_bytes=assembled_bytes, storage_bytes=storage_bytes,
+                trace_bytes=trace_bytes)
+
+
+def input_paths(root=ROOT):
+    """Every transport payload the campaign reads, in a stable order."""
+    names = set()
+    for elements, rhs, _, _ in jobs():
+        base = f'transport_e{elements}_n{rhs}'
+        for suffix in ('.bin', '.input', '.reference', '.exact', '.weights', '.json'):
+            names.add((INPUT_DIRECTORY / (base + suffix)).as_posix())
+    return sorted(names)
+
+
+def input_hashes(root=ROOT):
+    return {name: hashlib.sha256((root / name).read_bytes()).hexdigest()
+            for name in input_paths(root)}
+
+
+def validate_snapshot(folder, manifest):
+    """The archive must carry the sources and inputs it claims."""
+    with zipfile.ZipFile(folder / 'source_snapshot.zip') as archive:
+        names = archive.namelist()
+        if len(names) != len(set(names)) or set(names) != set(manifest['sources']):
+            raise ValueError('Snapshot coverage mismatch')
+        for name, digest in manifest['sources'].items():
+            if hashlib.sha256(archive.read(name)).hexdigest() != digest:
+                raise ValueError('Snapshot checksum mismatch')
+    recorded = manifest.get('inputs')
+    if not recorded or set(recorded) != set(input_paths()):
+        raise ValueError('Input coverage mismatch')
+    for name, digest in recorded.items():
+        payload = ROOT / name
+        if not payload.is_file():
+            raise ValueError('Missing transport input payload: ' + name)
+        if hashlib.sha256(payload.read_bytes()).hexdigest() != digest:
+            raise ValueError('Transport input payload checksum mismatch: ' + name)
+    # Bind this campaign to the inputs the main transport campaign validated,
+    # so its claim to reuse them does not rest on the shared path alone.
+    canonical = ROOT / 'data/relevance-v2/manifest.json'
+    if canonical.is_file():
+        published = json.loads(canonical.read_text()).get('inputs', {})
+        shared = {name: digest for name, digest in recorded.items() if name in published}
+        if len(shared) != len(recorded):
+            raise ValueError('Transport inputs are not the archived campaign inputs')
+        for name, digest in shared.items():
+            if published[name] != digest:
+                raise ValueError('Transport input differs from the archived campaign: ' + name)
 
 
 def analyze(folder):
     manifest = json.loads((folder / 'manifest.json').read_text())
     validate_build_receipt(manifest)
+    validate_snapshot(folder, manifest)
     if manifest['jobs'] != [list(job) for job in jobs()] or manifest['reps'] != REPS:
         raise ValueError('Transport comparison design mismatch')
     if manifest['methods'] != METHODS:
@@ -95,6 +149,9 @@ def analyze(folder):
         rows.append(dict(elements=elements, rhs=rhs, steps=transport_steps(elements),
                          medians=medians, structure=structure(record.metadata),
                          specialized=medians['dg_specialized'] / medians['direct'],
+                         fused=medians['dg_fused'] / medians['direct'],
+                         fused_copies=medians['dg_fused_copies'] / medians['direct'],
+                         sharing=medians['dg_fused_copies'] / medians['dg_fused'],
                          best_generic=min(medians[m] for m in ('grouped', 'bsr8')) / medians['direct']))
     shapes = {(r['elements'], r['rhs']) for r in rows}
     summary = []
@@ -105,6 +162,8 @@ def analyze(folder):
         if len({(r['structure']['distinct'], r['structure']['operator_bytes']) for r in selected}) != 1:
             raise ValueError('Structure disagreement across processes')
         ratios = sorted(r['specialized'] for r in selected)
+        fused_ratios = sorted(r['fused'] for r in selected)
+        sharing_ratios = sorted(r['sharing'] for r in selected)
         summary.append(dict(
             elements=elements, rhs=rhs, steps=selected[0]['steps'],
             direct_ms=statistics.median(r['medians']['direct'] for r in selected),
@@ -112,6 +171,13 @@ def analyze(folder):
             specialized=statistics.median(ratios), specialized_min=ratios[0],
             specialized_max=ratios[-1],
             wins=sum(r['specialized'] > 1 for r in selected),
+            fused_ms=statistics.median(r['medians']['dg_fused'] for r in selected),
+            fused=statistics.median(fused_ratios), fused_min=fused_ratios[0],
+            fused_max=fused_ratios[-1],
+            fused_wins=sum(r['fused'] > 1 for r in selected),
+            fused_copies=statistics.median(r['fused_copies'] for r in selected),
+            sharing=statistics.median(sharing_ratios), sharing_min=sharing_ratios[0],
+            sharing_max=sharing_ratios[-1],
             best_generic=statistics.median(r['best_generic'] for r in selected),
             **selected[0]['structure']))
     output = dict(processes=len(rows), methods=METHODS, summary=summary, records=rows)
@@ -134,7 +200,8 @@ def main():
     manifest = dict(started_utc=time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
                     jobs=jobs(), reps=REPS, methods=METHODS,
                     executable_sha256=hashlib.sha256(executable.read_bytes()).hexdigest(),
-                    sources=source_hashes(sources), build_receipt=receipt)
+                    sources=source_hashes(sources), inputs=input_hashes(),
+                    build_receipt=receipt)
     save_manifest(args.output, manifest, sources)
     existing = {r.stem: r for r in read_runs(args.output)}
     start = time.monotonic()

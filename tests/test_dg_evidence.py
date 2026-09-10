@@ -60,7 +60,7 @@ class DgEvidenceTests(unittest.TestCase):
 
     def test_implausible_structure_record_is_rejected(self):
         # Operators as large as the assembled matrix would mean no reuse.
-        line = 'specialized_structure,8,10,4096,4096,8192\n'
+        line = 'specialized_structure,8,10,4096,4096,8192,16384\n'
         with self.assertRaisesRegex(ValueError, 'Implausible specialized structure'):
             structure({'environment': line})
 
@@ -70,9 +70,87 @@ class DgEvidenceTests(unittest.TestCase):
             structure({'environment': line})
 
     def test_plan_storage_below_operator_bytes_is_rejected(self):
-        line = 'specialized_structure,8,10,34560,35389440,1024\n'
+        line = 'specialized_structure,8,10,34560,35389440,1024,2048\n'
         with self.assertRaisesRegex(ValueError, 'Implausible specialized structure'):
             structure({'environment': line})
+
+    def test_trace_allocation_must_cover_both_plans(self):
+        # The timed trace builds one plan per direction, so a record claiming a
+        # single plan's bytes would understate what the comparator retains.
+        line = 'specialized_structure,8,10,34560,35389440,231168,231168\n'
+        with self.assertRaisesRegex(ValueError, 'Implausible specialized structure'):
+            structure({'environment': line})
+
+    def test_recorded_trace_allocation_is_two_plans(self):
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory)
+            self.copy(destination)
+            data = analyze(destination)
+        for row in data['summary']:
+            self.assertEqual(row['trace_bytes'], 2 * row['storage_bytes'])
+
+    def test_corrupt_source_snapshot_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory)
+            self.copy(destination)
+            (destination / 'source_snapshot.zip').write_bytes(b'not a zip archive')
+            with self.assertRaises(Exception):
+                analyze(destination)
+
+    def test_altered_snapshot_member_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory)
+            self.copy(destination)
+            with zipfile.ZipFile(destination / 'source_snapshot.zip') as archive:
+                contents = {name: archive.read(name) for name in archive.namelist()}
+            target = next(n for n in contents if n.endswith('bench/dg_specialized.cpp'))
+            contents[target] += b'\n// tampered\n'
+            with zipfile.ZipFile(destination / 'source_snapshot.zip', 'w') as archive:
+                for name, payload in contents.items():
+                    archive.writestr(name, payload)
+            with self.assertRaisesRegex(ValueError, 'Snapshot checksum mismatch'):
+                analyze(destination)
+
+    def test_missing_snapshot_member_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory)
+            self.copy(destination)
+            with zipfile.ZipFile(destination / 'source_snapshot.zip') as archive:
+                contents = {name: archive.read(name) for name in archive.namelist()}
+            contents.pop(next(n for n in contents if n.endswith('scripts/run_dg.py')))
+            with zipfile.ZipFile(destination / 'source_snapshot.zip', 'w') as archive:
+                for name, payload in contents.items():
+                    archive.writestr(name, payload)
+            with self.assertRaisesRegex(ValueError, 'Snapshot coverage mismatch'):
+                analyze(destination)
+
+    def test_missing_input_hashes_are_rejected(self):
+        def alter(manifest):
+            manifest.pop('inputs')
+        self.check_rejected(alter, 'Input coverage mismatch')
+
+    def test_incomplete_input_coverage_is_rejected(self):
+        def alter(manifest):
+            manifest['inputs'].pop(sorted(manifest['inputs'])[0])
+        self.check_rejected(alter, 'Input coverage mismatch')
+
+    def test_changed_input_payload_is_rejected(self):
+        def alter(manifest):
+            name = next(n for n in sorted(manifest['inputs']) if n.endswith('.bin'))
+            manifest['inputs'][name] = '0' * 64
+        self.check_rejected(alter, 'checksum mismatch')
+
+    def test_inputs_match_the_archived_transport_campaign(self):
+        """The reuse claim is checked against the canonical archive, not asserted."""
+        manifest = json.loads((SOURCE / 'manifest.json').read_text())
+        canonical = ROOT / 'data/relevance-v2/manifest.json'
+        if not canonical.is_file():
+            self.skipTest('canonical transport archive not present')
+        published = json.loads(canonical.read_text())['inputs']
+        self.assertTrue(manifest['inputs'])
+        for name, digest in manifest['inputs'].items():
+            self.assertIn(name, published, name)
+            self.assertEqual(published[name], digest, name)
 
     def test_archive_checksums_are_verified(self):
         with tempfile.TemporaryDirectory() as directory:
