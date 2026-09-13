@@ -362,20 +362,49 @@ void run_parameter_matrix() {
 }
 
 void run_device_api_test(int rhs) {
-  auto host = vbsr::generate({8, 8, 2, rhs, vbsr::Distribution::Bimodal, false, 17});
+  // Degree eight forces RHS-32's classification-dependent dispatch.
+  auto host = vbsr::generate({8, 8, 8, rhs, vbsr::Distribution::Bimodal, false, 17});
   auto input = make_random_input(host.scalar_cols() * rhs, 13);
-  vbsr::Matrix owner(host), replacement(host);
+  auto reference = vbsr::cpu_reference(host, input, rhs);
+  if (std::none_of(host.row_size.begin(), host.row_size.end(), [](int n) { return n <= 16; }) ||
+      std::none_of(host.row_size.begin(), host.row_size.end(), [](int n) { return n > 16; }))
+    throw std::runtime_error("constructor regression requires both row classes");
   cudaStream_t stream{};
   float *b = nullptr, *c = nullptr;
-  check_cuda(cudaStreamCreate(&stream));
+  check_cuda(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
   check_cuda(cudaMalloc(&b, input.size() * sizeof(float)));
   check_cuda(cudaMalloc(&c, host.scalar_rows() * rhs * sizeof(float)));
   try {
     check_cuda(cudaMemcpyAsync(b, input.data(), input.size() * sizeof(float), cudaMemcpyHostToDevice, stream));
-    vbsr::Plan borrowed(owner.device_view(), {rhs}, stream);
+    check_cuda(cudaMemsetAsync(c, 0xff, reference.size() * sizeof(float), stream));
+    check_cuda(cudaStreamSynchronize(stream));
+    // Panels are ready before construction. No allocation, copy, or host
+    // synchronization may mask the upload-to-execution boundary below.
+    vbsr::Matrix owner(host);
     vbsr::Plan owned(owner, {rhs});
-    auto reference = vbsr::cpu_reference(host, input, rhs);
-    execute_and_compare([&] { borrowed.execute(b, c, stream); }, stream, reference, c, "borrowed device matrix");
+    owned.execute(b, c, stream);
+    check_cuda(cudaStreamSynchronize(stream));
+    compare_device_result(reference, c, "immediate owning constructor execution");
+    check_cuda(cudaMemsetAsync(c, 0xff, reference.size() * sizeof(float), stream));
+    check_cuda(cudaStreamSynchronize(stream));
+    vbsr::Plan borrowed(owner.device_view(), {rhs}, stream);
+    borrowed.execute(b, c, stream);
+    check_cuda(cudaStreamSynchronize(stream));
+    compare_device_result(reference, c, "immediate borrowed constructor execution");
+    auto immediate_baseline = [&](auto make_plan) {
+      check_cuda(cudaMemsetAsync(c, 0xff, reference.size() * sizeof(float), stream));
+      check_cuda(cudaStreamSynchronize(stream));
+      auto plan = make_plan();
+      plan.execute(b, c, stream);
+      check_cuda(cudaStreamSynchronize(stream));
+      compare_device_result(reference, c, "immediate baseline constructor execution");
+    };
+    for (bool cached : {false, true})
+      immediate_baseline([&] { return vbsr::GroupedGemmPlan(host, rhs, cached); });
+    for (int algorithm : {1, 2, 3})
+      immediate_baseline([&] { return vbsr::ScalarCsrPlan(host, rhs, algorithm, algorithm != 2); });
+    immediate_baseline([&] { return vbsr::ScalarCsrPlan(host, rhs, 0, false, true, 8); });
+    vbsr::Matrix replacement(host);
     // A queued update must be visible to both existing plans, without reconstruction.
     check_cuda(cudaMemsetAsync(const_cast<float*>(replacement.device_view().values), 0,
                               host.values.size() * sizeof(float), stream));

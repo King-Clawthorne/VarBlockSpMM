@@ -143,6 +143,8 @@ GroupedGemmPlan::GroupedGemmPlan(const HostMatrix& a, int rhs, bool cache_pointe
     cuda_check(cudaMemcpy(slot_data.device_matrix_a_pointers, slot_data.matrix_a_pointers.data(),
                           pointer_bytes, cudaMemcpyHostToDevice));
   }
+  // Nonblocking execution streams do not inherit default-stream uploads.
+  cuda_check(cudaStreamSynchronize(nullptr));
 }
 
 GroupedGemmPlan::~GroupedGemmPlan() = default;

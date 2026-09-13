@@ -100,6 +100,8 @@ The replacement MAGMA/transport archive is `data/relevance-v2/`, including exact
 
 ## API contract
 
+Owning matrices and public plan constructors complete their setup uploads before
+returning, so an immediate first execution may use a nonblocking stream.
 Plans can borrow existing GPU allocations through `Plan(DeviceMatrix, PlanOptions, stream)`.
 Construction waits for that stream and validates metadata. Matrix values remain on the GPU.
 Keep the supplied structure and allocations live and unchanged while the plan is in use.

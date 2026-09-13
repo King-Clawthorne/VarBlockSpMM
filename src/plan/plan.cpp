@@ -48,6 +48,8 @@ Plan::Plan(DeviceMatrix matrix, PlanOptions options, cudaStream_t stream)
   check(cudaMalloc(reinterpret_cast<void**>(&allocation), order.size() * sizeof(int32_t)));
   owned_row_shape_order_ = std::shared_ptr<int32_t>(allocation, [](int32_t* p) { cudaFree(p); });
   check(cudaMemcpy(allocation, order.data(), order.size() * sizeof(int32_t), cudaMemcpyHostToDevice));
+  // The caller's stream may not wait for this default-stream upload.
+  check(cudaStreamSynchronize(nullptr));
   row_shape_order_ = allocation;
 }
 Plan::Plan(const Matrix& matrix, PlanOptions options)

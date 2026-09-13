@@ -2,6 +2,14 @@
 
 Reviewed on 13 September 2026 on an RTX 5060 Ti, CUDA 13.4, Windows, and MSVC 19.44. The [paper](paper.pdf) and [supplement](supplement.pdf) contain the current results. Dated campaign notes below preserve the protocols and validation performed at those stages.
 
+## Public constructor upload completion
+
+The public owning matrix and borrowed direct-plan constructors now wait for their default-stream setup uploads before returning. The audit also found and fixed the same boundary in scalar CSR/BSR, grouped GEMM, and optional MAGMA plans. Execution kernels are unchanged.
+
+The public regression now prepares panels before construction and immediately executes on a nonblocking stream, without an intervening allocation or synchronization. It covers owning and borrowed direct plans, both grouped modes, explicit CSR algorithms, and BSR8 at all four RHS widths. Mixed small and large block rows at degree eight force RHS-32's classification-dependent path. MAGMA tests likewise immediately execute both compositions on a nonblocking stream. This provides runtime coverage of the ordering contract, not a claim that the original public-API race was numerically reproduced.
+
+Final clean builds explicitly use CUDA 13.4. All three standard CTest tests and four optional-comparison CTest tests pass. Compute Sanitizer memcheck reports zero errors for the public suite and MAGMA suite. The installed consumer also passes. Source and executable receipts match the current builds. No performance campaign was rerun. Archived default-stream results remain tied to their original sources, and constructor startup costs were not remeasured for the new synchronization calls. Independent application evidence remains an acknowledged research gap.
+
 ## Comparator runtime coverage and scope wording
 
 The tensor-core paragraph now states the FP32 evaluation scope. Different arithmetic could be compared at common output tolerances with conversion and preprocessing charged. BSR8 results do not predict SMaT's cost-benefit balance. The storage paragraph separately excludes common dense panels and internal library allocations, and identifies that direct and fused execution do not use cuBLAS.

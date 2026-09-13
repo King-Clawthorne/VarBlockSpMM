@@ -242,3 +242,12 @@ The retained campaign used the default stream, where upload and execution
 were already ordered. Kernel arithmetic and timed execution calls are
 unchanged. Startup timings have not been remeasured for the added constructor
 synchronization.
+
+The same upload-completion guarantee now applies to the public owning matrix,
+borrowed direct plan, scalar CSR/BSR plan, and grouped GEMM plan. The public API
+regression preallocates and initializes dense panels before construction, then
+immediately executes on a nonblocking stream without an intervening allocation
+or synchronization. RHS 32 uses both row classes and degree eight to exercise
+classification-dependent dispatch. Archived default-stream measurements remain
+tied to their original sources. Constructor startup costs were not remeasured
+for these added synchronization calls.

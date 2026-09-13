@@ -221,6 +221,8 @@ ScalarCsrPlan::ScalarCsrPlan(const HostMatrix& matrix, int rhs_width, int algori
   impl_->row_offsets = copy_to_device(csr.row_offsets);
   impl_->column_indices = copy_to_device(csr.column_indices);
   impl_->values = copy_to_device(csr.values);
+  // Complete setup uploads before execution on an unrelated stream.
+  check_cuda(cudaStreamSynchronize(nullptr));
   impl_->format_bytes = csr.values.size() * sizeof(float) +
                         (csr.row_offsets.size() + csr.column_indices.size()) * sizeof(int32_t);
 

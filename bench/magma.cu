@@ -82,6 +82,8 @@ struct MagmaPlan::Impl {
       batch->a.upload(ap); batch->b.upload(bp); batch->c.upload(cp);
       batches.push_back(std::move(batch));
     }
+    // The MAGMA queue may use a nonblocking stream, independent of uploads.
+    check_cuda(cudaStreamSynchronize(nullptr));
     int device;
     check_cuda(cudaGetDevice(&device));
     magma_queue_create_from_cuda(device, stream, nullptr, nullptr, &queue);

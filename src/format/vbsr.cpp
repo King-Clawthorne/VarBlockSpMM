@@ -131,6 +131,9 @@ Matrix::Matrix(const HostMatrix& host) {
     value_off_ = copy_to_device(host.value_off);
     values_ = copy_to_device(host.values);
     row_shape_order_ = copy_to_device(row_shape_order);
+    // Pageable uploads may return before device completion. A new matrix
+    // must be ready for an immediate launch on a nonblocking stream.
+    check_cuda(cudaStreamSynchronize(nullptr));
   } catch (...) {
     release();
     throw;
