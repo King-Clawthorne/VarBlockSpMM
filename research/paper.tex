@@ -152,26 +152,11 @@ These techniques motivate the present kernel. We compare the relevant
 MAGMA composition below, but do not compare implementations of these
 other research kernels.
 
-The tensor-core work is the closest research comparator, so we state why it
-is not measured here rather than leaving the omission open. SMaT executes
-\texttt{mma.m16n8k16} in half precision and stores blocks in a BCSR whose
-block dimensions match the matrix instruction, which is 16 by 8 for that
-precision. It also applies a similarity-based row and column permutation
-before execution to reduce the number of nonzero blocks. Three things would
-have to be matched for the comparison to mean anything. The precision differs:
-this work measures FP32 inputs and FP32 accumulation, and the transport trace
-is accepted only against an FP64 coefficient reference and an analytic
-tolerance, so a half-precision comparator would be answering a different
-numerical question. The block shape differs: our inputs carry the
-application's own block dimensions, and feeding them to a 16 by 8 instruction
-requires exactly the retiling this work avoids, which the BSR controls already
-price. The preprocessing differs: the permutation would have to be charged
-against the conversion and setup costs measured here, and its reported effect
-on block count varies by matrix and is not always favorable. A matched
-comparison is therefore possible only at equal precision on retiled inputs
-with preprocessing charged, and it is not attempted here. Its published
-results are also measured on a different GPU and are not transferable to this
-device.
+SMaT [2] is not measured in this FP32 evaluation. An application-level
+comparison could use different arithmetic if it passes the same output
+tolerances, with conversion and preprocessing charged at the stated reuse
+count. That experiment remains outside this study. BSR8 measurements do not
+establish the cost-benefit balance of SMaT's execution path.
 
 Hierarchical matrix construction motivates the packed-block product itself.
 Boukaram et al. describe a non-uniform batched BSR product implemented through
@@ -819,8 +804,7 @@ cross-architecture validation.
 Library lower envelopes favor the comparators by selecting measured medians
 without charging a tuning cost. The grouped cuBLAS baseline is the stated slot
 composition. MAGMA is measured with both slots and a separate reduction.
-Tensor-core research kernels are excluded for the stated precision, block
-shape, and preprocessing reasons. Other reordering methods, other block
+Tensor-core research kernels are outside the FP32 comparison scope. Other reordering methods, other block
 ensembles, and additional precisions are outside this evaluation. The work
 contributes an implementation and measured execution policy for an established
 variable-block representation, with performance claims confined to the

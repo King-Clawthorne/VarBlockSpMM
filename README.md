@@ -62,7 +62,7 @@ The library uses C++20 for both host and CUDA sources and requires CMake 3.25 or
 scripts/build.ps1
 ```
 
-The full-output tests poison output before each comparison, reject a deliberately empty operation, check CUDA errors, cover all 64 block shapes at every RHS width, and include mixed and completely empty rows. They check BSR8 conversion, explicit CSR algorithms, queued input/output address changes, and non-default streams.
+The full-output tests poison output before each comparison, reject a deliberately empty operation, check CUDA errors, cover all 64 block shapes at every RHS width, and include mixed and completely empty rows. They check BSR8 conversion, explicit CSR algorithms, queued input/output address changes, and non-default streams. CTest also runs the specialized batched transport plan and both fused storage modes on a small self-contained fixture, including alternating buffers and structural rejection. This test remains enabled when benchmark executables are disabled.
 
 ## Reproduce the paper
 

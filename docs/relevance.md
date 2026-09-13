@@ -226,3 +226,19 @@ The 4,096-element/RHS-64 transport trace takes 50.824 ms and gives ratios
 1.439 over the fastest library and 1.833 over the faster MAGMA composition.
 All six cases reject unchanged input, and every measured method passes the
 coefficient and analytic checks.
+
+## Routine comparator regression
+
+`vbsr_dg_tests` is part of CTest whenever `BUILD_TESTING` is enabled, including
+builds with `VARBLOCKSPMM_BUILD_BENCHMARKS=OFF`. Its in-memory repeated-operator
+fixture checks all four RHS widths, both fused storage modes, the batched plan,
+odd and even dependent traces, poisoned outputs, and a nonblocking stream. It
+rejects violated periodicity, adjacency, degree, repeated payloads, and the
+batched plan's operator-reuse requirement. It needs no campaign inputs.
+
+This test exposed incomplete constructor uploads before nonblocking-stream
+execution. Both comparator constructors now wait for their setup uploads.
+The retained campaign used the default stream, where upload and execution
+were already ordered. Kernel arithmetic and timed execution calls are
+unchanged. Startup timings have not been remeasured for the added constructor
+synchronization.

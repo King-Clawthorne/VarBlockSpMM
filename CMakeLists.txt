@@ -37,6 +37,12 @@ else()
   target_compile_options(varblockspmm PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall;-Wextra;-Wpedantic>)
 endif()
 
+if(BUILD_TESTING OR VARBLOCKSPMM_BUILD_BENCHMARKS)
+add_library(vbsr_dg_support STATIC bench/dg_specialized.cpp bench/dg_fused.cu)
+target_link_libraries(vbsr_dg_support PUBLIC varblockspmm)
+target_compile_options(vbsr_dg_support PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--use_fast_math>)
+endif()
+
 if(BUILD_TESTING)
 add_executable(vbsr_tests tests/test_main.cpp)
 target_link_libraries(vbsr_tests PRIVATE varblockspmm)
@@ -47,6 +53,9 @@ target_link_libraries(vbsr_numeric_range PRIVATE varblockspmm)
 add_test(NAME vbsr_numeric_range COMMAND vbsr_numeric_range)
 add_executable(vbsr_probe_accum tests/test_probe_accum.cpp)
 target_link_libraries(vbsr_probe_accum PRIVATE varblockspmm)
+add_executable(vbsr_dg_tests tests/test_dg_runtime.cpp)
+target_link_libraries(vbsr_dg_tests PRIVATE vbsr_dg_support)
+add_test(NAME vbsr_dg_tests COMMAND vbsr_dg_tests)
 endif()
 
 if(VARBLOCKSPMM_BUILD_BENCHMARKS)
@@ -56,10 +65,8 @@ add_library(vbsr_benchmark_support STATIC
   bench/support.cpp
   bench/application_data.cpp
   bench/dense.cpp
-  bench/dg_specialized.cpp
-  bench/dg_fused.cu
   bench/compact_csr.cpp)
-target_link_libraries(vbsr_benchmark_support PUBLIC varblockspmm)
+target_link_libraries(vbsr_benchmark_support PUBLIC varblockspmm vbsr_dg_support)
 # The fused comparator must use the library's device math flags.
 target_compile_options(vbsr_benchmark_support PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--use_fast_math>)
 add_executable(vbsr_audit bench/audit.cpp)

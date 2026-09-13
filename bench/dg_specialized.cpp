@@ -166,6 +166,8 @@ DgSpecializedPlan::DgSpecializedPlan(const HostMatrix& a, int rhs, const float* 
     cursor += 3 * size_t(group.count);
     impl_->groups.push_back(group);
   }
+  // Finish default-stream uploads before callers use a nonblocking stream.
+  cuda_check(cudaStreamSynchronize(nullptr));
 }
 
 DgSpecializedPlan::~DgSpecializedPlan() = default;

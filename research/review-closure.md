@@ -2,6 +2,16 @@
 
 Reviewed on 13 September 2026 on an RTX 5060 Ti, CUDA 13.4, Windows, and MSVC 19.44. The [paper](paper.pdf) and [supplement](supplement.pdf) contain the current results. Dated campaign notes below preserve the protocols and validation performed at those stages.
 
+## Comparator runtime coverage and scope wording
+
+The tensor-core paragraph now states the FP32 evaluation scope. Different arithmetic could be compared at common output tolerances with conversion and preprocessing charged. BSR8 results do not predict SMaT's cost-benefit balance. The storage paragraph separately excludes common dense panels and internal library allocations, and identifies that direct and fused execution do not use cuBLAS.
+
+`vbsr_dg_tests` now runs in ordinary CTest, including when benchmark executables are disabled. It uses a small in-memory fixture to exercise the specialized batched plan and both fused storage modes at all four widths, odd and even alternating traces, poisoned outputs, a nonblocking stream, and rejection of unsupported structures. It requires no campaign data.
+
+The test exposed a real constructor-upload ordering defect in fused copied-operator execution on a nonblocking stream. Both comparator constructors now finish their setup uploads before returning. The regression passes without caller synchronization. The retained campaign used the default stream and already ordered uploads before execution. The execution kernels are unchanged, and startup timings were not remeasured for the new constructor synchronization.
+
+Validation: clean Release build and all three CTest tests pass. The comparator test also passes in a separate build with benchmarks disabled, taking about 0.3 seconds. Compute Sanitizer memcheck reports zero errors. All 51 Python tests pass. The paper build validates retained campaigns, documentation, references, and punctuation, and all 17 main-paper pages were rendered and visually inspected. Independent application evidence and second-architecture measurements remain outside the demonstrated scope. No performance campaign was rerun.
+
 ## Specialized aggregation correction
 
 A subsequent review found that the specialized transport analyzer used medians of process ratios while the manuscript described geometric process averaging. The earlier documentation check compared exports with prose and did not detect this methodological mismatch. The earlier completion assessment missed it.

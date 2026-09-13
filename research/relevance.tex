@@ -133,8 +133,9 @@ on the device. At 4,096 elements one plan keeps \DgOperatorKiB{} KiB of
 operator values and \DgPlanKiB{} KiB once its batch pointer arrays are counted.
 The alternating trace holds one plan per direction, each owning its own copies,
 so it retains \DgTraceKiB{} KiB against the \DgAssembledMiB{} MiB packed
-matrix, a factor of \DgStorageFactor{}. Those figures exclude the dense panels
-and any allocation inside cuBLAS, which every method shares.
+matrix, a factor of \DgStorageFactor{}. Dense panels are common to the methods and excluded from these figures.
+Internal library allocations are also excluded. Direct and fused execution
+do not use cuBLAS.
 
 The fused comparator combines operator caching with fused accumulation. Its
 kernels mirror the release kernels for the panel width they serve, with the

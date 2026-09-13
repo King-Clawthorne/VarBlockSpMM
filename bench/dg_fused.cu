@@ -224,6 +224,9 @@ DgFusedPlan::DgFusedPlan(const HostMatrix& a, int rhs, bool share_operators)
   cuda_check(cudaMalloc(&impl_->operators, impl_->operator_bytes));
   cuda_check(cudaMemcpy(impl_->operators, payload.data(), impl_->operator_bytes,
                         cudaMemcpyHostToDevice));
+  // Pageable host uploads may return before the device transfer completes.
+  // Construction must make the data ready for execution on any stream.
+  cuda_check(cudaStreamSynchronize(nullptr));
   view.operators = impl_->operators;
   impl_->view = view;
 }
