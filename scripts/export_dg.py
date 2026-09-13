@@ -95,7 +95,7 @@ findings = (
     f'for {large["sharing"]:.3f} times at 4,096 elements and RHS 64 and '
     f'{narrow_large["sharing"]:.3f} times at RHS 8, while at 256 and 1,024 elements it accounts '
     f'for between {min(r["sharing"] for r in small):.3f} and '
-    f'{max(r["sharing"] for r in small):.3f} times, which is no measured effect.\n')
+    f'{max(r["sharing"] for r in small):.3f} times, showing more modest differences than at 4,096 elements.\n')
 (OUT / 'dg-findings.tex').write_text(findings)
 (OUT / 'dg-summary.json').write_text(json.dumps(dict(macros=macros, summary=data['summary']), indent=2))
 print(json.dumps(macros, indent=2))

@@ -59,6 +59,10 @@ if ($ResultsRoot) {
   python "$PSScriptRoot/export_dg.py"
 }
 if ($LASTEXITCODE -ne 0) { throw 'Specialized transport comparison validation failed' }
+if (-not $ResultsRoot) {
+  python "$PSScriptRoot/check_documentation.py"
+  if ($LASTEXITCODE -ne 0) { throw 'Public documentation consistency check failed' }
+}
 Assert-PaperPunctuation (Join-Path $projectRoot 'research/paper.tex')
 Assert-PaperPunctuation (Join-Path $projectRoot 'research/relevance.tex')
 Assert-PaperPunctuation (Join-Path $projectRoot 'research/supplement.tex')

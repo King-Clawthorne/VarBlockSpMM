@@ -136,7 +136,7 @@ so it retains \DgTraceKiB{} KiB against the \DgAssembledMiB{} MiB packed
 matrix, a factor of \DgStorageFactor{}. Those figures exclude the dense panels
 and any allocation inside cuBLAS, which every method shares.
 
-The fused comparator keeps the operator caching and gives up nothing else. Its
+The fused comparator combines operator caching with fused accumulation. Its
 kernels mirror the release kernels for the panel width they serve, with the
 same thread mapping, shared input staging, register accumulators and single
 output write. One thread array owns an element, accumulates both contributions
@@ -156,22 +156,17 @@ divide comparator time by direct time, so values above one favor direct
 execution and values below one favor the comparator. Copies is the fused
 kernel reading a private operator copy per element. Sharing divides Copies by
 Fused, isolating what operator sharing is worth, and its range gives the
-smallest and largest of three paired process ratios. Times are median GPU
-milliseconds per trace.}
+smallest and largest of three paired process ratios. Ratios and absolute
+times are geometric means across three processes, each using the median of
+six timed traces. Times are GPU milliseconds per trace.}
 \label{tab:dg}
 \input{generated/dg.tex}
 \end{table}
 
 \input{generated/dg-findings.tex}
 
-The two results separate cleanly, and they answer the question in opposite
-directions. The batched comparator loses on time everywhere while winning on
-storage, because its per-step work is split across \DgLaunches{} batched calls
-whose individual GEMMs are small. The fused comparator wins on both. It is
-\DgFusedRatio{} times faster than direct execution in geometric mean over the
-six traces, \DgFusedLarge{} times on the 4,096-element RHS-64 trace that
-carries this paper's headline transport number, and \DgFusedNarrowLarge{} times
-at 4,096 elements and RHS 8.
+Across the six configurations, the fused comparator has geometric speedup
+\DgFusedRatio{}, including \DgFusedLarge{} on the headline RHS-64 trace.
 
 The fused comparator changes four things at once relative to direct
 execution: which operator bytes an element reads, whether per-element metadata
@@ -184,39 +179,23 @@ duplicates them. The Copies column gives that variant against direct
 execution, and the Sharing column divides it by the fused time, which isolates
 what operator sharing is worth.
 
-Sharing carries the large cases and nothing else. At 4,096 elements it is
+The largest observed sharing benefits occur at 4,096 elements, where it is
 worth \DgSharingLarge{} at RHS 64 and \DgSharingNarrowLarge{} at RHS 8, and the
 duplicated variant falls back to roughly direct execution's time
 (\DgCopiesLarge{} and \DgCopiesNarrowLarge{}). At 256 and 1,024 elements the
 same control gives between \DgSharingSmallMin{} and \DgSharingSmallMax{},
-which is no measured effect, so the smaller advantages at those sizes come from
-the rest of the specialization rather than from operator sharing.
+showing more modest differences than at 4,096 elements. These
+observations do not establish equivalence or exclude an operator-sharing effect.
 
-The natural reading is that the shared operators stay resident in cache while
-the duplicated ones do not, and that this only matters once the operator
-working set is large enough. We have not measured memory traffic, so that
-remains an interpretation consistent with the control rather than a
-demonstrated mechanism. Allocated matrix size is not itself evidence about
-DRAM traffic. What the control does establish is that at 4,096 elements the
-advantage is attributable to the operand source and not to the metadata,
-addressing, or ordering changes that accompany it.
-
-We therefore state the transport conclusion as the measurements support it.
-Direct execution is faster than every general library composition tested, and
-faster than a specialized implementation built on batched GEMM. It is slower
-than a specialized fused kernel that exploits the repeated operators. Against this one
-comparator, direct execution reaches \DgDirectShareMin{} to
-\DgDirectShareMax{} percent of its throughput across the six traces, and
-\DgDirectShareLarge{} percent on the headline RHS-64 trace. One hand-written
-comparator does not define the ceiling, so those are gaps against a measured
-alternative rather than against the best achievable. The case for VarBlockSpMM
-on this application is that those gaps come with no problem-specific kernel to
-write, verify, or maintain, and no structural assumption that a change to the
-order schedule or the stencil would invalidate. The fused comparator's
-constructor rejects any input that breaks its assumptions, which is the cost
-of the speed it gains. Where an application has repeated operators, knows it,
-and accepts that maintenance burden, the measurements here say it should write
-the kernel.
+The operand-source control is consistent with better cache reuse, but memory
+traffic was not measured, so cache residency remains an interpretation.
+Direct execution beats the fastest general library in five of six
+configurations and the specialized batched-GEMM plan in all six after process
+averaging. It reaches \DgDirectShareMin{} to \DgDirectShareMax{} percent of the
+fused comparator's throughput, and \DgDirectShareLarge{} percent on the
+headline trace. The fused kernel is preferable for the repeated operator it
+supports. The general plan supports the full block-format contract without
+application-specific kernel code.
 
 \paragraph{Separating workload factors.}
 A crossed control varies block rows over \(128,512\), degree over

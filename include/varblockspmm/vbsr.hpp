@@ -42,7 +42,7 @@ namespace vbsr {
  *
  * What is verified, rather than guaranteed: on the tested workloads results
  * agree with a reference that accumulates in double and rounds once, within a
- * maximum absolute error of 5e-4 or a relative L2 error of 5e-5, and
+ * maximum absolute error at most 5e-4 and relative L2 error at most 5e-5, and
  * `tests/test_numeric_range.cpp` pins each behavior above, including the
  * multi-contribution cases. This library is not a drop-in numerical
  * substitute for an IEEE 754 gradual-underflow implementation. Callers whose

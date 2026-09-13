@@ -112,18 +112,12 @@ padding-free BSR8 subdivision or scalar CSR expansion. These are
 implementation and measurement contributions. They do not establish a new
 sparse storage model or an end-to-end application speedup.
 
-The adoption case is correspondingly narrow, and worth stating plainly at the
-outset. No existing application has adopted this implementation, and every
-workload measured here was generated for the evaluation. Of the three
-application-shaped inputs, the transport program is purpose-built, BSR8 is
-faster on the covariance component in steady state, and compact CSR is faster
-on the published matrices under the artificial partitions we gave them. The
-measurements therefore delimit a regime, dense variable blocks with wide
-panels and enough reuse to matter, without demonstrating an application that
-sits in it and was not written by us. A captured workload from an existing
-code, or an integration reporting end-to-end time, would settle that, and it
-is the evidence this paper most lacks. Additional synthetic seeds would not
-substitute for it.
+The evaluation uses a purpose-built transport program, generated covariance
+blocks, and artificially partitioned published matrices. It establishes local
+performance regimes rather than adoption by an independent application.
+BSR8 wins covariance steady state, compact CSR wins the published-matrix
+controls, and a specialized fused kernel wins the transport comparison.
+Section~\ref{sec:limitations} states the remaining external-validity limits.
 
 Startup and storage measurements separately test the cost of adopting each
 representation, with raw measurements tied to verified builds.
@@ -515,44 +509,13 @@ duration, method position, command, executable checksum, and process status
 is saved. Medians use the mean of the two middle
 observations for an even sample count.
 
-Device sources are compiled with \texttt{-{}-use\_fast\_math}, which implies
-\texttt{-ftz=true} [15]. Each output entry is a sum of products evaluated as
-FP32 multiply-add with FP32 accumulation, in an unspecified order, with no
-compensated summation. Flush-to-zero applies per instruction, to that
-instruction's inputs and to its rounded result. It does not apply to the
-product term inside a fused multiply-add, which is computed exactly and added
-to the accumulator before a single rounding, so
-\(\mathrm{fma}(\mathrm{FLT\_MIN},0.5,\mathrm{FLT\_MIN})\) retains
-\(1.5\,\mathrm{FLT\_MIN}\). The consequences still cannot be excluded by
-inspecting the caller's inputs. An instruction input, or an accumulator value
-an instruction produces, that lands in the subnormal range is replaced by zero,
-so contributions that pass through a subnormal accumulator are lost: two
-contributions of \(\mathrm{FLT\_MIN}\times 0.5\) have normal operands and an
-exact sum of \(\mathrm{FLT\_MIN}\), and the kernel returns zero at every
-supported width, because each multiply-add produces a subnormal result from a
-zero accumulator.
-A partial sum above \(\mathrm{FLT\_MAX}\) becomes an infinity even when the
-exact sum is finite, and the unspecified order means a later cancelling term
-cannot be relied on. Accumulated error otherwise grows with the number of
-terms and with cancellation, as in any uncompensated FP32 summation.
-
-The claim is therefore verified rather than guaranteed. On the tested
-workloads, results agree with a reference that accumulates in double and
-rounds once, within the thresholds stated below. A dedicated range test pins
-each behavior above, including the multi-contribution cases.
-
-The measured inputs are not uniformly in the normal range. The three clustered
-2,048-point covariance matrices contain 162, 212, and 294 subnormal packed
-values. Those values carry less than \(10^{-30}\) of each matrix's total
-magnitude, so their numerical contribution is negligible, and the measured
-outputs pass the stated correctness checks. That is a statement about
-numerical contribution, not about time: we did not measure these workloads
-with and without flush-to-zero, so nothing here establishes that the timing
-ratios are unaffected. A checked-in census keeps
-these counts tied to the payloads. It covers the covariance and published
-matrices and all six transport configurations, including the transport initial
-states, references, and mass weights, which are operands as well. Those
-contain no subnormal values.
+Device sources use FP32 multiply-add and accumulation with
+\texttt{-{}-use\_fast\_math}, including flush-to-zero [15]. Accumulation order
+is unspecified. Subnormal intermediates, overflow, and cancellation can
+change agreement with a double-accumulated reference. The supplement gives
+worked edge cases and the input census. The reported workloads pass the
+checks below, which do not guarantee accuracy for arbitrary inputs or bound
+the timing effect of flush-to-zero.
 
 The revision uses the RTX 5060 Ti with compute capability 12.0, CUDA runtime
 and driver API 13.4, Windows, MSVC 19.44, Release compilation, and native CUDA
@@ -815,7 +778,7 @@ policies use the same input, timing protocol, and full-output reference.
 The tuning evidence behind the choice is in the supplement.
 
 
-\section{Scope and limitations}
+\section{Scope and limitations}\label{sec:limitations}
 Measurements cover one GPU and one local operating environment. Three
 process observations describe repeatability over this campaign, while
 long-term drift and hardware variation require separate measurements.
@@ -840,36 +803,18 @@ Its startup and storage results cover a generated component rather than a
 complete solver or hierarchical construction pipeline. Total storage and
 setup still include matrix values and classification metadata.
 
-The application evidence rests on the transport program, and it is a
-standalone program written for this evaluation rather than a captured
-production workload. The covariance component is a boundary case in which
-BSR8 wins steady state. Supported dimensions reach 64, which meets the
-smallest leaf size reported by the motivating hierarchical study, so the
-larger leaves and the surrounding construction pipeline of that study are
-untested here. Compact CSR is faster on the published scalar matrices, whose
-partitions we imposed, so those inputs are a control rather than an adopter.
-This leaves the central external-validity gap: no measured workload comes from
-an application that already exists and chose this representation for its own
-reasons. Two things would close it, and neither is claimed here: an
-integration inside a hierarchical construction or solver code that reports
-end-to-end time, or a trace captured from an existing production workload.
-Supporting dimensions above 64 is a prerequisite for the first. Until one of
-them exists, the regime this paper maps should be read as a prediction about
-where such an application would benefit, tested only on inputs we generated.
+No measured packed-block workload was captured from an independent
+application. The transport program was written for this evaluation, and its
+repeated operators permit the fused comparator to outperform direct execution.
+A captured workload or integration into an existing application would test
+adoption relevance. The motivating hierarchical study also uses leaves above
+our maximum dimension of 64, so its larger blocks and construction pipeline
+remain untested.
 
-The transport comparison now includes a fused application-specific kernel,
-and it is faster than direct execution on every trace. That result is specific
-to an operator with heavily repeated blocks, and the comparator is allowed to
-assume the periodic structure this operator has, which a general kernel cannot.
-It is one hand-written implementation on one device, not a bound on what either
-approach can reach. What it does establish is that the transport measurements
-here do not show direct execution to be the fastest way to run this problem.
-
-The narrow-width dispatch policy is fixed rather than tuned, and its evidence
-is one device. The per-configuration counts show that the RHS-8 and RHS-16
-advantages do not hold for every configuration, so a second GPU is the
-measurement most likely to change how the narrow policy should be stated.
-The wide-panel results do not depend on that resolution.
+Performance evidence covers one GPU. Narrow-panel gains are small and vary
+by configuration, and the dispatch thresholds have not been tested on another
+architecture. Wider-panel gains are larger on this GPU but also lack
+cross-architecture validation.
 
 Library lower envelopes favor the comparators by selecting measured medians
 without charging a tuning cost. The grouped cuBLAS baseline is the stated slot
@@ -967,40 +912,20 @@ and \path{data/narrow-tuning-2/}. Their 96 processes are validated by
 It predates build-linked receipts and is not used to generate current
 library ratios or matched mechanism effects.
 
-\begin{samepage}
 \section{Conclusion}
-VarBlockSpMM is a useful alternative when an application has dense variable
-blocks and sufficiently favorable panel widths and shapes. The transport
-program carries the application argument: its large RHS-64 trace gives
-\TransportLargeRatio{} over the fastest library and
-\TransportLargeMagmaRatio{} over the better MAGMA composition across 128
-dependent products, on an operator the discretization supplies. Direct
-execution also beats an application-specific comparator for that problem,
-which caches the \DgDistinctOperators{} distinct block operators and runs one
-batched GEMM per shape group, on all six traces. A fused kernel that both
-accumulates an element's contributions in one thread array and reads only
-those cached operators is faster than direct execution instead, by
-\DgFusedLarge{} on that trace. Against that comparator direct execution
-reaches \DgDirectShareLarge{} percent of its throughput there, and
-\DgDirectShareMin{} to \DgDirectShareMax{} percent across the six traces.
-Those gaps buy a kernel with no structural assumption to maintain and no
-problem-specific code to write or verify, which is the trade this application
-faces. The core comparison including MAGMA gives a
-fastest-library ratio of \RelevanceCoreRatio{} over the same widths and
-shapes, and \RelevanceMarginWins{} of 128 configurations clear a 5 percent
-margin on their own repeated observations. Narrow and small traces still
-favor a library.
+VarBlockSpMM provides direct execution of packed variable blocks with one
+output writer and no execution workspace. The MAGMA-inclusive core gives
+\RelevanceCoreRatio{} over the fastest tested library, with
+\RelevanceMarginWins{} of 128 configurations exceeding a 5 percent margin.
+The large RHS-64 transport trace gives \TransportLargeRatio{} over the fastest
+library, while its fused application-specific comparator is
+\DgFusedLarge{} faster than direct execution. BSR8 remains preferable for
+covariance steady state and compact CSR for the published scalar inputs.
+These results support choosing the implementation by representation, shape,
+panel width, and reuse. The device-input and value-update APIs let callers
+retain packed allocations within the supported format. Independent application
+adoption and performance portability remain unestablished.
 
-The implementation shares input tiles, reuses sparse values across
-accumulators, and retains one writer per output without execution workspace.
-Its device-input and value-update paths let callers retain their packed
-allocations. Controlled results show why degree and shape belong in the
-choice of implementation. BSR8 remains preferable on the measured covariance
-component, and scalar CSR remains preferable for the published sparse inputs.
-The reported regimes guide the choice without claiming universal superiority.
-Establishing the hierarchical case would require block dimensions above 64
-and an end-to-end integration, which this evaluation does not provide.
-\end{samepage}
 
 {\footnotesize
 \setlength{\parskip}{0pt}

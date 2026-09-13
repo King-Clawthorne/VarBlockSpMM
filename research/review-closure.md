@@ -1,6 +1,32 @@
 # Review closure
 
-Validated on 6 September 2026 on an RTX 5060 Ti, CUDA 13.4, Windows, and MSVC 19.44. The [paper](paper.pdf) and its [source](paper.tex) describe the final evidence. Earlier validation notes are archived history.
+Reviewed on 13 September 2026 on an RTX 5060 Ti, CUDA 13.4, Windows, and MSVC 19.44. The [paper](paper.pdf) and [supplement](supplement.pdf) contain the current results. Dated campaign notes below preserve the protocols and validation performed at those stages.
+
+## Specialized aggregation correction
+
+A subsequent review found that the specialized transport analyzer used medians of process ratios while the manuscript described geometric process averaging. The earlier documentation check compared exports with prose and did not detect this methodological mismatch. The earlier completion assessment missed it.
+
+The analyzer now takes trial medians within each process and geometric means across processes for both ratios and absolute times. The three-process extrema and observed win counts are unchanged. Overall fused speedup changes from 1.293 to 1.274, and sharing at 256 elements with RHS 8 changes from 1.027 to 1.077. The separate 1.139 library headline is unaffected. Tables, macros, README, and method notes use the corrected aggregation. Retained raw measurements are unchanged.
+
+An independent regression reads raw CSVs from the retained ZIP, computes trial medians without the analyzer helper, and checks every process aggregate using products and roots. This distinguishes geometric averaging from the former median reduction. Repeated discussion was compressed and detailed FP32 edge cases moved to the supplement, with unfavorable comparisons retained in the main paper. All 51 Python tests pass. Restoring the old median reduction in a temporary runtime patch makes the new regression reject 48 incorrect aggregates. The paper build validates retained evidence, documentation, references, and punctuation. The 17-page paper and eight-page supplement were rendered and visually inspected. No GPU measurements were rerun.
+
+## Earlier consistency review
+
+The current review covered the public API and implementation paths, numerical acceptance and timing helpers, retained evidence validation, repeated public claims, installation, and rendered documents. It found documentation inconsistencies and did not identify a new numerical correctness failure in the reviewed paths.
+
+- Corrected the error acceptance rule in both README and public header. Passing requires both maximum absolute error and relative L2 error to meet their thresholds.
+- Corrected the stale specialized batched-comparator range in the method notes and removed the stale duplicate fused range from the README.
+- Replaced claims of no operator-sharing effect with the observed small process-averaged differences. Neither equivalence nor absence of an effect is established.
+- Qualified the transport library comparison as five of six configurations, while the specialized batched comparator loses all six after process averaging. Removed wording suggesting the general kernel recovers the throughput it gives up or accepts structural changes without replanning.
+- Added `scripts/check_documentation.py` to the canonical paper build. It checks repeated numerical claims against validated exports and checks both copies of the numerical acceptance contract. Regression tests reject the previously stale ranges and the incorrect acceptance conjunction.
+
+A clean CUDA Release build and both CTest tests pass. The installed external consumer also passes its runtime reference comparison. All 50 Python tests pass, including archive corruption and documentation-drift regressions. The paper build validates all retained campaigns, references, and punctuation. All 18 main-paper pages and eight supplement pages were rendered as PNGs and visually inspected. No clipping or unresolved references were found. One underfull bibliography line is a minor spacing warning. No new performance campaigns or sanitizer runs were performed in this review. Current compiled source and executable hashes match the clean-build receipt.
+
+## Explicit study boundaries
+
+An independently captured workload, external solver adoption, a second GPU architecture, and a broader algorithmic novelty claim remain outside the demonstrated evidence. The manuscript states these limits. The transport program is an implemented standalone application component written for this evaluation, not an independently sourced production workload. The fused transport comparator wins its process-averaged cases, BSR8 wins the covariance steady-state comparison, and compact CSR wins the published sparse-matrix controls. These results bound the recommendation and remain visible in the paper.
+
+This review does not turn those limits into demonstrated results or guarantee that future review will find no defects. Extending those claims requires new research, rather than another wording change.
 
 ## Replacement campaign validation
 

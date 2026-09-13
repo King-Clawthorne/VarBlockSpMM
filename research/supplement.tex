@@ -256,6 +256,48 @@ three paired process ratios. Fixed-size 32 cases include BSR32.}
 
 \input{generated/update-findings.tex}
 \FloatBarrier
+\section{Numerical behavior and input census}
+Device sources are compiled with \texttt{-{}-use\_fast\_math}, which implies
+\texttt{-ftz=true} (see the CUDA compiler reference in the main paper). Each output entry is a sum of products evaluated as
+FP32 multiply-add with FP32 accumulation, in an unspecified order, with no
+compensated summation. Flush-to-zero applies per instruction, to that
+instruction's inputs and to its rounded result. It does not apply to the
+product term inside a fused multiply-add, which is computed exactly and added
+to the accumulator before a single rounding, so
+\(\mathrm{fma}(\mathrm{FLT\_MIN},0.5,\mathrm{FLT\_MIN})\) retains
+\(1.5\,\mathrm{FLT\_MIN}\). The consequences still cannot be excluded by
+inspecting the caller's inputs. An instruction input, or an accumulator value
+an instruction produces, that lands in the subnormal range is replaced by zero,
+so contributions that pass through a subnormal accumulator are lost: two
+contributions of \(\mathrm{FLT\_MIN}\times 0.5\) have normal operands and an
+exact sum of \(\mathrm{FLT\_MIN}\), and the kernel returns zero at every
+supported width, because each multiply-add produces a subnormal result from a
+zero accumulator.
+A partial sum above \(\mathrm{FLT\_MAX}\) becomes an infinity even when the
+exact sum is finite, and the unspecified order means a later cancelling term
+cannot be relied on. Accumulated error otherwise grows with the number of
+terms and with cancellation, as in any uncompensated FP32 summation.
+
+The claim is therefore verified rather than guaranteed. On the tested
+workloads, results agree with a reference that accumulates in double and
+rounds once, with maximum absolute error at most \(5\times10^{-4}\)
+and relative L2 error at most \(5\times10^{-5}\). A dedicated range test pins
+each behavior above, including the multi-contribution cases.
+
+The measured inputs are not uniformly in the normal range. The three clustered
+2,048-point covariance matrices contain 162, 212, and 294 subnormal packed
+values. Those values carry less than \(10^{-30}\) of each matrix's total
+magnitude, so their numerical contribution is negligible, and the measured
+outputs pass the stated correctness checks. That is a statement about
+numerical contribution, not about time: we did not measure these workloads
+with and without flush-to-zero, so nothing here establishes that the timing
+ratios are unaffected. A checked-in census keeps
+these counts tied to the payloads. It covers the covariance and published
+matrices and all six transport configurations, including the transport initial
+states, references, and mass weights, which are operands as well. Those
+contain no subnormal values.
+
+
 \section{Historical development evidence}\label{sec:history}
 This appendix reports archived development measurements. They are separate
 from the verified-build campaigns in the main text and are not combined

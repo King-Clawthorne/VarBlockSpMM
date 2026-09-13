@@ -164,21 +164,23 @@ def analyze(folder):
         ratios = sorted(r['specialized'] for r in selected)
         fused_ratios = sorted(r['fused'] for r in selected)
         sharing_ratios = sorted(r['sharing'] for r in selected)
+        # Reduce trials by median within each process, then give processes
+        # equal weight in log space, matching the manuscript methodology.
         summary.append(dict(
             elements=elements, rhs=rhs, steps=selected[0]['steps'],
-            direct_ms=statistics.median(r['medians']['direct'] for r in selected),
-            specialized_ms=statistics.median(r['medians']['dg_specialized'] for r in selected),
-            specialized=statistics.median(ratios), specialized_min=ratios[0],
+            direct_ms=statistics.geometric_mean(r['medians']['direct'] for r in selected),
+            specialized_ms=statistics.geometric_mean(r['medians']['dg_specialized'] for r in selected),
+            specialized=statistics.geometric_mean(ratios), specialized_min=ratios[0],
             specialized_max=ratios[-1],
             wins=sum(r['specialized'] > 1 for r in selected),
-            fused_ms=statistics.median(r['medians']['dg_fused'] for r in selected),
-            fused=statistics.median(fused_ratios), fused_min=fused_ratios[0],
+            fused_ms=statistics.geometric_mean(r['medians']['dg_fused'] for r in selected),
+            fused=statistics.geometric_mean(fused_ratios), fused_min=fused_ratios[0],
             fused_max=fused_ratios[-1],
             fused_wins=sum(r['fused'] > 1 for r in selected),
-            fused_copies=statistics.median(r['fused_copies'] for r in selected),
-            sharing=statistics.median(sharing_ratios), sharing_min=sharing_ratios[0],
+            fused_copies=statistics.geometric_mean(r['fused_copies'] for r in selected),
+            sharing=statistics.geometric_mean(sharing_ratios), sharing_min=sharing_ratios[0],
             sharing_max=sharing_ratios[-1],
-            best_generic=statistics.median(r['best_generic'] for r in selected),
+            best_generic=statistics.geometric_mean(r['best_generic'] for r in selected),
             **selected[0]['structure']))
     output = dict(processes=len(rows), methods=METHODS, summary=summary, records=rows)
     (folder / 'summary.json').write_text(json.dumps(output, indent=2))
