@@ -39,29 +39,28 @@
 \maketitle
 
 \begin{abstract}
-A sparse matrix whose blocks have independently chosen row and column
-extents must be expanded, retiled, or split into batched calls before a GPU
-library can multiply it by a dense panel. VarBlockSpMM computes that FP32
-product directly from the packed blocks, giving each block row one thread
-array, one output writer, and no execution workspace, with the staging
-decision specialized per panel width. On one RTX 5060 Ti, a 128-case
-comparison including MAGMA variable-size batched GEMM gives a geometric
-speedup of \RelevanceCoreRatio{} over the fastest tested library, with
-\RelevanceCoreWins{} direct wins and the strongest advantage on wide panels.
-A variable-order discontinuous Galerkin transport program supplies a
-dependent application trace: at 4,096 elements and 64 simultaneous fields,
-128 dependent steps run \TransportLargeRatio{} times faster than the fastest
-library, and faster than an application-specific comparator built on batched
-GEMM. A fused application-specific kernel that both accumulates an element's
-contributions in one thread array and reads only the
-\DgDistinctOperators{} cached operators the discretization repeats is faster
-than direct execution instead, by \DgFusedRatio{} in geometric mean and
-\DgFusedLarge{} on that trace, which bounds the application claim.
-The boundary is reported with the result. Narrow panels win by a few percent
-and not in every configuration, BSR8 is faster on a geometry-derived
-covariance component, and scalar CSR is faster on published matrices given
-artificial partitions. The evidence supports choosing direct execution in the
-measured regimes rather than as a universal replacement.
+VarBlockSpMM achieves a geometric speedup of \RelevanceCoreRatio{} over the
+fastest tested library in a 128-case FP32 sparse-dense comparison on one
+RTX 5060 Ti, including MAGMA variable-size batched GEMM. It wins
+\RelevanceCoreWins{} cases. At dense panel widths 8, 16, 32, and 64, the
+respective ratios are \RelevanceRhsEight{}, \RelevanceRhsSixteen{},
+\RelevanceRhsThirtyTwo{}, and \RelevanceRhsSixtyFour{}, making width 64
+the strongest measured regime.
+The implementation reads packed variable blocks directly, avoiding scalar
+expansion, retiling, and batched compositions. One thread array owns each
+block row and writes its output once, with no execution workspace.
+Panel width selects the staging and accumulation policy.
+
+The evaluation measures when these choices outweigh library execution and
+representation costs. A purpose-built variable-order discontinuous Galerkin
+transport trace runs \TransportLargeRatio{} times faster than the fastest
+library at 4,096 elements, 64 fields, and 128 dependent steps. However, a
+specialized fused kernel exploiting repeated operators beats direct execution
+by \DgFusedLarge{} on that trace. BSR8 also wins covariance steady state,
+and compact CSR wins the published matrices with artificial partitions.
+Narrow-panel gains are smaller and vary by configuration. The results support
+direct execution for the measured packed-block regimes, with independent
+application adoption and hardware portability still untested.
 \end{abstract}
 
 \section{Introduction}
@@ -92,25 +91,23 @@ runtime block dimensions. One CTA owns each block row, shares the dense
 input tile, and writes the completed output once. This combines a small
 execution plan with direct access to the application's packed values.
 
-The contribution is a standalone execution policy for this packed format,
-with an experimentally measured boundary against conversion-based library
-alternatives. The individual mechanisms are established, and none of the
-choices below is the only way to execute this operation. A fixed tile shape
-can be applied to variable block heights through masking or several tile
-sizes, and runtime dimensions can select among specialized kernels rather
-than dispatching per width. What this work provides is a measurement of one
-coherent set of choices against the alternatives an application would
-otherwise reach for. Each block row is owned by one thread array, which keeps
-a single writer per output and needs no execution workspace. Staging is
-selected per panel width at dispatch, and block dimensions stay runtime
-values, so one build covers every supported shape. The packed values are read
-where the application already put them, with no retiling and no scalar
-expansion. The matched experiments measure what each of these is worth inside
-this implementation, rather than assuming the combination is necessary. The
-library comparisons test when their combined benefit exceeds the benefit of
-padding-free BSR8 subdivision or scalar CSR expansion. These are
-implementation and measurement contributions. They do not establish a new
-sparse storage model or an end-to-end application speedup.
+The contribution is a measured execution policy for this packed format.
+The organizing question is when reuse within a block row outweighs the
+staging and representation costs of achieving it. Panel width determines
+how many outputs can reuse each sparse value, while thread mapping and
+buffering determine the register, shared-memory, and synchronization costs.
+Matched experiments hold output ownership fixed to compare these choices.
+Library comparisons then test whether the resulting execution savings
+outweigh padding-free BSR8 subdivision or scalar CSR expansion.
+
+This gives readers a way to evaluate the same tradeoff in another packed
+implementation: separate within-row reuse from conversion and startup
+costs, then measure both at the intended panel width and reuse count.
+The selected thresholds remain specific to the measured GPU. One CTA per
+block row, staging, and runtime block dimensions are established mechanisms.
+Fixed tiles with masking or several specialized kernels are also possible.
+Our contribution is their measured execution policy and performance boundary,
+not a new sparse storage model or an end-to-end application speedup.
 
 The evaluation uses a purpose-built transport program, generated covariance
 blocks, and artificially partitioned published matrices. It establishes local
@@ -283,10 +280,34 @@ policy rather than a universal pipeline. All dispatch thresholds were selected
 from development sweeps and held fixed for the main library comparison.
 
 \section{Experimental design}
-The main campaign measures the optimized dispatch described above against
-persistent library controls. All synthetic and application measurements were
-collected with the current implementation. The separate kernel ablations
-compare direct implementations under their stated protocols.
+The headline comparison uses the 128-configuration core grid, matrix seeds
+2, 3, and 5, and three fresh processes per seed. Each process records 20
+samples per method, separately for one product and eight queued products.
+The two modes use 2,304 fresh processes in total and are never pooled.
+The headline uses one-product samples, with equal weight for each seed,
+process, and configuration. Its comparator is the fastest applicable library
+within each process, including both MAGMA compositions. Dispatch thresholds
+remain fixed. Table~\ref{tab:campaigns} distinguishes this protocol from the
+other campaigns before their workload and comparator details.
+
+\begin{table}[!htbp]
+\centering\small
+\caption{Main campaign designs. Each input instance and timing mode has
+three fresh processes. Samples are reduced to a median within each process.
+General and specialized transport comparisons use separate processes.}\label{tab:campaigns}
+\begin{tabular}{p{0.24\linewidth}p{0.43\linewidth}p{0.23\linewidth}}
+\toprule
+Campaign & Input variation & Samples per method and process\\
+\midrule
+Headline libraries & 128 configurations, seeds 2, 3, 5 & 20 per mode (batch 1 or 8)\\
+Earlier synthetic & 168 configurations, seed 1 & 20 single products\\
+Published and native & Three published matrices and 12 generated geometries, four widths & 20 single products\\
+Matched mechanisms & 32 configurations, seeds 1, 2, 3 & 20 single products\\
+Controlled factors & 24 configurations, seed 11 & 6 single products\\
+Transport comparators & Six element-count and width pairs, fixed inputs & 6 dependent traces\\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Persistent library controls}
 \textbf{Scalar CSR.} Synthetic dense blocks are expanded into scalar CSR
@@ -360,8 +381,10 @@ from successive rows of the degree-16 parent matrix. Eight constant-degree
 4,096-row configurations already belong to the core grid. Thus the union
 contains 168 unique configurations.
 
-The synthetic campaign holds matrix seed 1 fixed and repeats each configuration in
-three fresh processes. The dense input contains independent pseudorandom
+The earlier NVIDIA-only synthetic campaign holds matrix seed 1 fixed and
+repeats each configuration in three fresh processes. The headline comparison
+uses the same 128-case core with seeds 2, 3, and 5, as specified in
+Table~\ref{tab:campaigns}. The dense input contains independent pseudorandom
 uniform values on \([-1,1]\), generated with seed 9123. Changing-address
 buffers contain identical values to isolate address-dependent work.
 
@@ -474,7 +497,8 @@ the other two RHS-8 factors, and the retained per-variant timings expose
 interactions rather than assuming that speedups multiply.
 
 \subsection{Timing and correctness}
-Each method receives five warmups and 20 measured executions. Methods are
+The earlier synthetic, published, native, and matched campaigns give each
+method five warmups and 20 measured executions. Methods are
 randomly ordered within each process. Configuration and process-label jobs
 are shuffled before serial execution, with one GPU benchmark active at a
 time. Synthetic order uses seed 20260905, published-matrix order uses 20260906,
@@ -482,8 +506,9 @@ and both supplementary campaigns use 20260907.
 Three process labels identify repeated observations of the same matrix,
 rather than three different matrix instances.
 
-CUDA events bracket each execute call on the default stream, followed by an
-end-event synchronization. Synchronized host durations are also retained.
+For single-product measurements, CUDA events bracket each execute call on
+the default stream, followed by an end-event synchronization. Queued headline
+samples bracket eight products and divide the elapsed time by eight. Synchronized host durations are also retained.
 The intervals measure execution calls, including any device idle time while
 the host submits later work. This matters particularly for library compositions
 with multiple calls, so the intervals do not isolate kernel-instruction time.
@@ -523,6 +548,11 @@ or relative \(\ell_2\) error \(5\times10^{-5}\), with NaN and infinity rejected.
 Each timed synthetic matrix also receives 64 CPU output probes per method
 outside timing. Every application output is checked against a separate
 compact-CSR CPU reference, which also tests the packing transformation.
+Separate untimed comparison tests check every output for a uniform matrix
+with 4,194,304 stored values at RHS 64 and a high-variance matrix with
+10,474,048 stored values at RHS 32. All applicable comparators pass the
+full CPU-reference check. These tests supplement sampled campaign checks,
+without establishing full-output coverage of every archived configuration.
 The expanded test executable also passes Compute Sanitizer memcheck with
 zero reported errors. Racecheck restricted to the project's row-owned and pointer-refresh kernels
 reports zero hazards. Library kernels are outside that racecheck filter.
@@ -558,20 +588,25 @@ For each \(k\), the comparator is the lowest total among all measured
 library methods. No tuning cost is charged to that lower envelope.
 
 \subsection{Aggregation and uncertainty}
-For configuration \(c\), process label \(p\), comparator \(b\), and direct
-method \(d\), let
+For headline configuration \(c\), matrix seed \(s\in S=\{2,3,5\}\),
+process label \(p\), comparator \(b\), and direct method \(d\), let
 \[
- y_{c,p}=\log\left(t_{b,c,p}/t_{d,c,p}\right),\qquad
- g_c=\exp\left(\frac{1}{3}\sum_{p=1}^{3}y_{c,p}\right).
+ y_{c,s,p}=\log\left(t_{b,c,s,p}/t_{d,c,s,p}\right),\qquad
+ g_c=\exp\left(\frac{1}{3|S|}\sum_{s\in S}\sum_{p=1}^{3}y_{c,s,p}\right).
 \]
-The reported geometric mean is
+Here \(t\) is a process median, and the best-library comparator takes the
+minimum applicable library median within that same process. The overall
+geometric mean is
 \(G=\exp(|\mathcal C|^{-1}\sum_{c\in\mathcal C}\log g_c)\).
-Each configuration and each process within it has equal weight. Ratios
-above one favor the direct method. Minima and win counts refer to the
-configuration ratios \(g_c\), not to individual timing trials.
+Each configuration, seed, and process has equal weight. Ratios above one
+favor direct execution. The headline win count uses \(g_c>1\), not
+individual timing trials. The repeatability table additionally reports
+per-seed wins, computed over three processes for each configuration and seed.
+For the earlier seed-1 campaign, \(S=\{1\}\), so the formula reduces to
+three-process averaging without matrix-seed variation.
 
 We also report the range of three aggregate ratios obtained by holding the
-process label fixed. This is a descriptive repeatability check, not a
+process label fixed, averaging over seeds where the campaign includes them. This is a descriptive repeatability check, not a
 confidence interval or a test of significance. Three process observations
 provide limited information about tails and shared thermal drift. No
 population-level confidence interval is assigned to this deliberately chosen
@@ -933,9 +968,10 @@ Adaptive Sketching Based Construction of H\textsuperscript{2} Matrices on GPUs.
 \bibitem{vuduc} R. Vuduc and H.-J. Moon. Fast Sparse Matrix-Vector Multiplication
 by Exploiting Variable Block Structure. \emph{HPCC}, 2005.
 \url{https://doi.org/10.1007/11557654_91}
-\bibitem{oski} Berkeley Benchmarking and Optimization Group.
-OSKI Variable Block Row Format. 2007.
-\url{https://bebop.cs.berkeley.edu/oski/html/group__MATTYPE__VBR.html}
+\bibitem{oski} R. Vuduc, J. W. Demmel, and K. A. Yelick.
+An interface for a self-optimizing sparse matrix kernel library.
+OSKI design document, draft, 14 March 2005, Section 5.2, p. 30.
+\url{https://bebop.cs.berkeley.edu/oski/oski-interface.pdf}
 \bibitem{ge} G. Huang, G. Dai, Y. Wang, and H. Yang. GE-SpMM: General-Purpose
 Sparse Matrix-Matrix Multiplication on GPUs for Graph Neural Networks.
 \emph{SC20}, 2020. \url{https://doi.org/10.1109/SC41405.2020.00076}

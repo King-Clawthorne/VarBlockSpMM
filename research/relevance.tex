@@ -11,11 +11,8 @@ Setup validates dimensions before calling the dispatcher used by MAGMA's
 \texttt{max\_nocheck} interface. Its normal launch and attribute-setting
 overhead remains inside timing.
 
-The comparison crosses all 128 core configurations with matrix
-seeds 2, 3, and 5, three fresh processes per seed, and batches of one or
-eight products. Each process records twenty timing samples per method,
-for 2,304 core processes. Eight-product samples divide elapsed time by eight.
-They reuse the same input and output buffers and synchronize once per batch.
+The headline and queued comparisons follow Table~\ref{tab:campaigns}.
+Eight-product samples reuse the same input and output buffers.
 Methods and jobs are randomized, with all GPU processes run serially.
 The comparator set includes the explicit CSR algorithms, grouped cuBLAS,
 BSR8, applicable BSR32, and both MAGMA compositions. As noted above, only the 64 boundary

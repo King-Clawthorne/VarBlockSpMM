@@ -2,6 +2,72 @@
 
 Reviewed on 13 September 2026 on an RTX 5060 Ti, CUDA 13.4, Windows, and MSVC 19.44. The [paper](paper.pdf) and [supplement](supplement.pdf) contain the current results. Dated campaign notes below preserve the protocols and validation performed at those stages.
 
+## Headline widths and campaign methodology
+
+The abstract now reports all four best-library width ratios through macros
+computed by the same exporter as the results table. The experimental design
+starts with the headline's three matrix seeds and three processes per seed,
+with the one-product and eight-product modes kept separate. A compact table
+distinguishes the main campaigns, and the aggregation equation explicitly
+includes the seed dimension. The earlier seed-1 design, per-seed repeatability
+wins, and six-sample transport and factor-control exceptions are identified.
+Repeated headline setup details were removed from the results section.
+
+An independent agent checked campaign counts against retained manifests and
+reviewed the final formula and table. All 51 Python tests and the complete
+paper build passed. The 17-page PDF was rendered to PNG and visually inspected,
+including the campaign table and methodology layout. No performance campaign
+or GPU test was rerun for these exporter and prose changes. Independent
+application evidence, cross-architecture evaluation, and hardware-counter
+measurements remain acknowledged research extensions.
+
+## Abstract and OSKI reference
+
+The abstract now leads with the current library result and execution policy,
+with detailed comparator mechanisms left in the results section. It retains
+the specialized fused loss, covariance and published-matrix controls, and
+single-GPU and independent-application boundaries.
+
+The reported OSKI developer-page 404 was not reproduced on 13 September 2026.
+The URL returned HTTP 200 locally. The citation nevertheless now points to
+the authors' 14 March 2005 design-document draft, Section 5.2, page 30,
+which explicitly describes the separate row and column partitions. Its PDF
+was downloaded and checked, and an independent agent verified the citation
+and revised abstract. No DOI or repository identifier is claimed for the draft.
+
+The paper build passed evidence, reference and punctuation checks. All 17
+pages were rendered to PNG and checked for layout, with the opening and
+reference pages inspected individually. No GPU tests or experiments were
+rerun for these prose changes. Independent application capture, second-GPU
+measurements and targeted hardware profiling remain research extensions.
+
+## Release configuration and large-output verification
+
+The comparison runner now explicitly configures Release, records the resolved
+CMake generator, build type, selected configuration and cache hash, and resolves
+binary locations from the generator's configuration model. Validation here used
+Visual Studio on Windows with CUDA 13.4. A Linux toolchain was not exercised.
+
+Two optional CTest cases now use the relevance executable's `--verify-only`
+mode. Each comparator executes once with poisoned output and every element is
+checked against the double-accumulation CPU reference. The uniform case has
+4,194,304 stored values and 1,048,576 outputs at RHS 64. The high-variance case
+has 10,474,048 stored values and 578,560 outputs at RHS 32. Both exceed the
+campaign's sampling threshold. All nine applicable uniform comparators and
+eight mixed comparators passed, including both MAGMA compositions. Combined
+runtime was about 1.5 seconds. These are representative large-case checks,
+not full-output verification of every retained campaign configuration.
+
+The introduction now organizes the contribution around within-row reuse,
+panel width, staging costs and representation costs. Independent application
+inputs and a second GPU remain acknowledged research extensions.
+
+Validation: three standard CTest tests, six optional comparison CTest tests,
+and all 51 Python tests passed. Both build receipts match sources, binaries,
+and CMake caches. The paper build passed evidence, reference and punctuation
+checks. All 17 pages were rendered as PNGs and inspected for layout, with the
+edited pages also inspected individually. No performance campaign was rerun.
+
 ## Public constructor upload completion
 
 The public owning matrix and borrowed direct-plan constructors now wait for their default-stream setup uploads before returning. The audit also found and fixed the same boundary in scalar CSR/BSR, grouped GEMM, and optional MAGMA plans. Execution kernels are unchanged.

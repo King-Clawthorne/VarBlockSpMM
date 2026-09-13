@@ -12,7 +12,11 @@
     "RelevanceSplit": 11,
     "RelevanceNarrowMarginWins": 45,
     "RelevanceNarrowSplit": 7,
-    "RelevanceWideMarginWins": 52
+    "RelevanceWideMarginWins": 52,
+    "RelevanceRhsEight": 1.0598454987671015,
+    "RelevanceRhsSixteen": 1.0450488993708258,
+    "RelevanceRhsThirtyTwo": 1.0875400763835803,
+    "RelevanceRhsSixtyFour": 1.397698908357982
   },
   "contrasts": {
     "8": {

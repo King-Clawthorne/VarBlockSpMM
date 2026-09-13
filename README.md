@@ -66,6 +66,8 @@ The full-output tests poison output before each comparison, reject a deliberatel
 
 ## Reproduce the paper
 
+The complete GPU campaign runner currently requires Windows. The Python analysis tools can read the retained archives on other operating systems.
+
 The paper environment uses Python 3.13 and uv. Install its pinned dependencies with `uv sync --locked`, then activate `.venv` before running the commands below (`.venv\Scripts\Activate.ps1` in PowerShell, or `source .venv/bin/activate` on Linux). The `paper` dependency group captures NumPy, SciPy, Requests, Matplotlib, and their required dependencies from the validated environment. PDF building additionally requires pdfLaTeX and pdftotext.
 
 ```powershell
@@ -77,7 +79,7 @@ python scripts/run_final_validation.py --output-root data/rerun
 powershell -File scripts/build_paper.ps1 -ResultsRoot data/rerun
 ```
 
-The final runner performs a verified build, memcheck, and filtered racecheck, then runs the five earlier GPU campaigns serially into the specified fresh root. It also fetches the pinned MAGMA sources, prepares all six transport inputs and the convergence study, builds and runs both comparison correctness suites through CTest, and collects the complete MAGMA/transport campaign under that root's `relevance/` directory, followed by the specialized transport comparison under `dg/`. This supplies every campaign required by the following paper-build command, and `tests/test_workflow_coverage.py` checks that the runner still produces every directory the paper build reads. It can take substantial time. Benchmark runners verify a build receipt tying compiled source hashes to the actual executable bytes, and snapshot the source used for each campaign. Existing records are resumed only with matching provenance and commands. Run `scripts/build_paper.ps1` without `-ResultsRoot` to rebuild the checked-in paper from its canonical campaigns instead.
+The final runner performs a verified build, memcheck, and filtered racecheck, then runs the five earlier GPU campaigns serially into the specified fresh root. It also fetches the pinned MAGMA sources, prepares all six transport inputs and the convergence study, builds and runs the comparison correctness tests through CTest, including two untimed large full-output checks, and collects the complete MAGMA/transport campaign under that root's `relevance/` directory, followed by the specialized transport comparison under `dg/`. This supplies every campaign required by the following paper-build command, and `tests/test_workflow_coverage.py` checks that the runner still produces every directory the paper build reads. It can take substantial time. Benchmark runners verify a build receipt tying compiled source hashes to the actual executable bytes, and snapshot the source used for each campaign. Existing records are resumed only with matching provenance and commands. Run `scripts/build_paper.ps1` without `-ResultsRoot` to rebuild the checked-in paper from its canonical campaigns instead.
 
 Use individual runners and fresh output directories for independent repetitions:
 
@@ -135,10 +137,10 @@ See the [design](docs/design.md), [prior-art discussion](docs/prior-art.md), and
 VarBlockSpMM is a standalone library. The consumer example checks its installed public API without depending on the benchmark code.
 
 ```powershell
-cmake -S . -B build/package -DCMAKE_CUDA_ARCHITECTURES=native -DVARBLOCKSPMM_BUILD_BENCHMARKS=OFF -DBUILD_TESTING=OFF
+cmake -S . -B build/package -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_ARCHITECTURES=native -DVARBLOCKSPMM_BUILD_BENCHMARKS=OFF -DBUILD_TESTING=OFF
 cmake --build build/package --config Release
 cmake --install build/package --config Release --prefix "$PWD/build/install"
-cmake -S examples/consumer -B build/consumer "-DCMAKE_PREFIX_PATH=$PWD/build/install"
+cmake -S examples/consumer -B build/consumer -DCMAKE_BUILD_TYPE=Release "-DCMAKE_PREFIX_PATH=$PWD/build/install"
 cmake --build build/consumer --config Release
 ctest --test-dir build/consumer -C Release --output-on-failure
 ```

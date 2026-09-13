@@ -251,3 +251,31 @@ or synchronization. RHS 32 uses both row classes and degree eight to exercise
 classification-dependent dispatch. Archived default-stream measurements remain
 tied to their original sources. Constructor startup costs were not remeasured
 for these added synchronization calls.
+
+
+## Large full-output verification
+
+The comparison build configures `CMAKE_BUILD_TYPE=Release` and records the
+resolved generator, build type, selected configuration, and CMake cache hash
+in its receipt. Multi-configuration builds also select Release when building
+and testing.
+
+The optional CTest suite includes two untimed full-output checks above the
+timing harness's two-million-value sampling threshold: 512 block rows with
+degree eight, fixed 32-by-32 blocks and RHS 64, and 512 block rows with degree
+16, high-variance blocks and RHS 32. Each method executes once with poisoned
+output and is checked against a double-accumulation CPU reference using both
+standard error thresholds. The methods include both MAGMA compositions,
+grouped cuBLAS, direct execution, all three CSR algorithms, and BSR8. The
+uniform case also checks BSR32. Each test has a 90-second timeout.
+
+For another configuration, append `--verify-only` to the normal
+`vbsr_relevance` arguments. This skips warmups and timing loops and checks
+every output, regardless of matrix size. For example, on Windows:
+
+```powershell
+build/relevance/Release/vbsr_relevance.exe 512 8 64 32 1 2 1 none random 1 --verify-only
+```
+
+These checks supplement the archived campaign's sampled validation. They do
+not retroactively provide full-output verification of every timed matrix.

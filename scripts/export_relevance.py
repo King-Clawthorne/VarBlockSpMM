@@ -107,6 +107,8 @@ macros=dict(RelevanceCoreRatio=gm(best(r) for r in core),RelevanceCoreWins=sum(v
             RelevanceNarrowMarginWins=margin_wins([r for r in core if r['args'][2] in (8,16)]),
             RelevanceNarrowSplit=changes_winner([r for r in core if r['args'][2] in (8,16)]),
             RelevanceWideMarginWins=margin_wins([r for r in core if r['args'][2] in (32,64)]))
+for rhs, label in ((8,'Eight'),(16,'Sixteen'),(32,'ThirtyTwo'),(64,'SixtyFour')):
+    macros['RelevanceRhs'+label]=gm(best(r) for r in core if r['args'][2]==rhs)
 (OUT/'relevance-macros.tex').write_text(''.join('\\newcommand{\\'+k+'}{'+(str(v) if isinstance(v,int) else f'{v:.3f}')+'}\n' for k,v in macros.items()))
 findings=(f'On the 4,096-element, RHS-64 transport case, the fastest-library-to-direct ratio is '
           f'{macros["TransportLargeRatio"]:.3f}, with {sum(best(r)>1 for r in large)} of three direct wins. '

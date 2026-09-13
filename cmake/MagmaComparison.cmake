@@ -37,4 +37,11 @@ if(BUILD_TESTING)
   add_executable(vbsr_magma_tests tests/test_magma.cpp)
   target_link_libraries(vbsr_magma_tests PRIVATE vbsr_magma_comparison)
   add_test(NAME vbsr_magma_tests COMMAND vbsr_magma_tests)
+  # Both cases exceed the timing harness's two-million-value sampling cutoff.
+  add_test(NAME vbsr_relevance_full_uniform COMMAND vbsr_relevance
+    512 8 64 32 1 2 1 none random 1 --verify-only)
+  add_test(NAME vbsr_relevance_full_mixed COMMAND vbsr_relevance
+    512 16 32 -1 2 2 2 none random 1 --verify-only)
+  set_tests_properties(vbsr_relevance_full_uniform vbsr_relevance_full_mixed
+    PROPERTIES TIMEOUT 90 RUN_SERIAL TRUE)
 endif()
