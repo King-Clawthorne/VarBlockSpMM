@@ -1,7 +1,0 @@
-cmake_minimum_required(VERSION 3.25)
-project(VarBlockSpMMConsumer LANGUAGES CXX)
-find_package(VarBlockSpMM 1 CONFIG REQUIRED)
-add_executable(consumer main.cpp)
-target_link_libraries(consumer PRIVATE VarBlockSpMM::varblockspmm)
-include(CTest)
-add_test(NAME consumer COMMAND consumer)
