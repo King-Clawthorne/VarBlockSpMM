@@ -53,6 +53,3 @@ __pycache__/
 !/data/dg/manifest.json
 !/data/dg/source_snapshot.zip
 !/data/dg/runs.zip
-
-# Large split input archives (regenerable); too big for GitHub HTTPS push.
-/data/relevance-v2/inputs.zip.*
