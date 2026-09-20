@@ -1,0 +1,58 @@
+/build/
+/.venv/
+/data/*.sqlite
+/data/*.nsys-rep
+/data/*.ncu-rep
+/research/*.aux
+/research/*.log
+/research/*.out
+/research/*.toc
+__pycache__/
+*.py[cod]
+/data/native/*.bin
+
+# Keep new experiments local. Explicitly retain the evidence used by the paper.
+# Files already tracked by Git remain tracked, including historical archives.
+/data/**
+!/data/README.md
+!/data/product-evaluation/
+!/data/product-evaluation/**
+!/data/narrow-tuning/
+!/data/narrow-tuning/*.json
+!/data/narrow-tuning/*.zip
+!/data/narrow-tuning-2/
+!/data/narrow-tuning-2/*.json
+!/data/narrow-tuning-2/*.zip
+!/data/native/
+!/data/native/*.json
+!/data/native/*-geometry.npz
+
+# Validated additional-seed and queued-throughput evidence.
+!/data/robustness/
+!/data/robustness/manifest.json
+!/data/robustness/source_snapshot.zip
+!/data/robustness/runs.zip
+
+# Bounded MAGMA, transport, factor-control, and API-update evidence.
+!/data/relevance/
+!/data/relevance/manifest.json
+!/data/relevance/sources.zip
+!/data/relevance/runs.zip
+!/data/relevance/MAGMA-COPYRIGHT
+
+# Repeated MAGMA comparison and validated characteristic-transport inputs.
+!/data/relevance-v2/
+!/data/relevance-v2/manifest.json
+!/data/relevance-v2/sources.zip
+!/data/relevance-v2/runs.zip
+!/data/relevance-v2/inputs.zip.[0-9][0-9][0-9]
+!/data/relevance-v2/MAGMA-COPYRIGHT
+
+# Specialized application comparator evidence for the transport traces.
+!/data/dg/
+!/data/dg/manifest.json
+!/data/dg/source_snapshot.zip
+!/data/dg/runs.zip
+
+# Large split input archives (regenerable); too big for GitHub HTTPS push.
+/data/relevance-v2/inputs.zip.*

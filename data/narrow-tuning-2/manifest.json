@@ -1,0 +1,407 @@
+{
+  "jobs": [
+    [
+      1024,
+      2,
+      16,
+      "uniform"
+    ],
+    [
+      256,
+      16,
+      16,
+      "high"
+    ],
+    [
+      256,
+      16,
+      8,
+      "high"
+    ],
+    [
+      4096,
+      2,
+      16,
+      "low"
+    ],
+    [
+      256,
+      2,
+      16,
+      "low"
+    ],
+    [
+      1024,
+      2,
+      8,
+      "low"
+    ],
+    [
+      4096,
+      2,
+      16,
+      "uniform"
+    ],
+    [
+      256,
+      2,
+      8,
+      "bimodal"
+    ],
+    [
+      256,
+      16,
+      8,
+      "low"
+    ],
+    [
+      1024,
+      2,
+      8,
+      "high"
+    ],
+    [
+      4096,
+      2,
+      16,
+      "high"
+    ],
+    [
+      256,
+      2,
+      16,
+      "uniform"
+    ],
+    [
+      4096,
+      16,
+      16,
+      "bimodal"
+    ],
+    [
+      4096,
+      2,
+      16,
+      "bimodal"
+    ],
+    [
+      4096,
+      2,
+      8,
+      "high"
+    ],
+    [
+      1024,
+      2,
+      16,
+      "low"
+    ],
+    [
+      4096,
+      16,
+      8,
+      "low"
+    ],
+    [
+      1024,
+      2,
+      16,
+      "bimodal"
+    ],
+    [
+      256,
+      2,
+      8,
+      "low"
+    ],
+    [
+      256,
+      2,
+      8,
+      "high"
+    ],
+    [
+      4096,
+      16,
+      8,
+      "bimodal"
+    ],
+    [
+      4096,
+      16,
+      16,
+      "uniform"
+    ],
+    [
+      1024,
+      16,
+      8,
+      "low"
+    ],
+    [
+      4096,
+      16,
+      8,
+      "high"
+    ],
+    [
+      4096,
+      2,
+      8,
+      "low"
+    ],
+    [
+      1024,
+      16,
+      8,
+      "uniform"
+    ],
+    [
+      4096,
+      2,
+      8,
+      "bimodal"
+    ],
+    [
+      256,
+      2,
+      16,
+      "high"
+    ],
+    [
+      1024,
+      16,
+      16,
+      "uniform"
+    ],
+    [
+      1024,
+      2,
+      8,
+      "bimodal"
+    ],
+    [
+      1024,
+      16,
+      16,
+      "bimodal"
+    ],
+    [
+      1024,
+      16,
+      8,
+      "bimodal"
+    ],
+    [
+      1024,
+      16,
+      8,
+      "high"
+    ],
+    [
+      256,
+      16,
+      16,
+      "low"
+    ],
+    [
+      4096,
+      2,
+      8,
+      "uniform"
+    ],
+    [
+      256,
+      2,
+      16,
+      "bimodal"
+    ],
+    [
+      1024,
+      16,
+      16,
+      "high"
+    ],
+    [
+      256,
+      16,
+      8,
+      "bimodal"
+    ],
+    [
+      256,
+      2,
+      8,
+      "uniform"
+    ],
+    [
+      1024,
+      2,
+      8,
+      "uniform"
+    ],
+    [
+      4096,
+      16,
+      16,
+      "low"
+    ],
+    [
+      1024,
+      16,
+      16,
+      "low"
+    ],
+    [
+      4096,
+      16,
+      8,
+      "uniform"
+    ],
+    [
+      4096,
+      16,
+      16,
+      "high"
+    ],
+    [
+      256,
+      16,
+      8,
+      "uniform"
+    ],
+    [
+      1024,
+      2,
+      16,
+      "high"
+    ],
+    [
+      256,
+      16,
+      16,
+      "uniform"
+    ],
+    [
+      256,
+      16,
+      16,
+      "bimodal"
+    ]
+  ],
+  "matrix_seed": 4,
+  "reps": 20,
+  "warmup": 5,
+  "executable_sha256": "30bfe9b95e3f8eb8400a60479ea7ff091810592a7f9f733ddfac81672aeb45a3",
+  "sources": {
+    "bench/ablation.cpp": "7be62e1376880515ecbba558155e559118bf9f1b6bf6e32a7949d428d8460b19",
+    "bench/application.cpp": "0a9d0692b2f6cf9d88aa388214e8e796f6b4250f80bf77bcbf1b8132a3bf4f18",
+    "bench/application_data.cpp": "c3ecd3447a04d65056e6419730d0d8fb32b94b9e48148e042762a092603e3dbe",
+    "bench/application_data.hpp": "3a3c239ea83216582c3cae1defdeec41a4db28eec5f3d14b812a02f81ffbc54f",
+    "bench/audit.cpp": "f7872539affc92ac33d68a98f5219a398158fa29e152aee1a907b2b163fe1d76",
+    "bench/benchmark.cpp": "806a22aecbc2eb75a58cb46c77e855885835bb48af90d4ec097125bfc73041a7",
+    "bench/compact_csr.cpp": "a40d622ada4bcdd713f6be5596fb88a740aefac26c102ed393fdfa1c8e893588",
+    "bench/compact_csr.hpp": "d2ad4dc5c134dd11f1fa03744ad21e0fda93e3c6b2826285fb39e9c7936ac845",
+    "bench/dense.cpp": "623a34200b3e9826f76dedc181ca01c62886e5bc1a28c82e954ee8da255bccc1",
+    "bench/dense.hpp": "6cfcab7a7611c11e25887d5fdfbb350df7b79e522ed1ec9a1eacc0aa76f6311f",
+    "bench/kernel.cpp": "d10ab9265eadb2920f1f10ed748d135e9ec5df23187f60eae7ca9790311aaaa1",
+    "bench/support.cpp": "419ffa8ecccacc6ce9d1db3041767c98a84d3ec094419a012a9caf4be0fe3b03",
+    "bench/support.hpp": "937e6cad7e67881fbf2d05ef2b1c1532469114336334d60863659121ac28cd61",
+    "CMakeLists.txt": "cc2f99f1a5e765200a7372f2b620fd31eeaba26024fff02bd2c95b9e65fc6e87",
+    "include/varblockspmm/vbsr.hpp": "e3ba154571b2487cb1fc28432fffdaeaa9eb10d0c8be38ee544b6c45da26bde3",
+    "scripts/analyze_kernel.py": "1acd48c7be0b37110afb2fdf686010345b4f31a6c1ff7934633595db9533797b",
+    "scripts/analyze_publication.ps1": "0c2290e299aad4973f54caee75b4a5318c5685200e9d8ea8cc52f783f0138891",
+    "scripts/analyze_revision.py": "2bab1f0097e25077c311332a35f52bcfa47dc63359e33127dab48df1d8eaea7f",
+    "scripts/analyze_supplement.py": "ef831b83c418c1ff4ca8ae77a0f7cad6c345b2016bfb27e9989b4b2feb4f1638",
+    "scripts/benchmark_kernel.py": "bfd1aca1ddb0e75fc3ec2c47332971c9e27283c4bf0005481834a742e3e31e5c",
+    "scripts/benchmark_runs.py": "847b2475e866d9b11bb2bc8cd3c84a46c389bf5cd2b024f3eca477b249abdfc8",
+    "scripts/build.ps1": "b6f543da590f87e455a93df642c31057d8ee71c2d89b10e255850726cfa70dd3",
+    "scripts/build_paper.ps1": "a17990aaa5a994028a0d9bdc8fda06cbd5bfd0ac96b10c59db54d1d7f0b7052c",
+    "scripts/build_verified.py": "f5040fefd830f269140659c6d12106364a21ca13f2da06acb0c5858ac003bc1d",
+    "scripts/plot_revision.py": "9377792dbba61aaef518d92f3f2251ca9b74e1bfda18460307d037570ae03cf8",
+    "scripts/prepare_application.py": "c7683069c6b02d184d647316aeffee312771ab4c2b2f57efc0aff9b8d5c1652a",
+    "scripts/prepare_native.py": "c703a9a14e7d1b156d865edf11e0e6a2c275b9d439189f80fd521bae41fcf4e3",
+    "scripts/run_application.py": "6487c9ce514ba947783a1da82ad897be08b008cd253dac65c81675a96278d519",
+    "scripts/run_final_validation.py": "3dcb438facb798c4ac77c83a9481bb4d1ca059f83850984b536c1759f0e810de",
+    "scripts/run_grid.ps1": "316c7af7fdba13b8995a2bb25858371f58ea82b452336429005592758c121935",
+    "scripts/run_revision.py": "0eebc33c94b31490453756c04a1b6e69b14370a49296e125c0fbb2cac9993517",
+    "scripts/run_supplement.py": "a06443b383db8083b4d4d0b5180343eb7d6d864f42b5ace6f3048273aa4447b7",
+    "scripts/run_tuning.py": "010bf633990f5632e025ef8dba5397d15ead05b2b0db111f59442e8883c344e8",
+    "src/baseline/cusparse_baseline.cu": "5d36cfae3d3ce17116bc11c25508ca56e47832983f3070491ebfce84ab27cbe7",
+    "src/baseline/slot_split.cu": "23c72927633640f0d67448557470c6a00a0f1d379f297044f9384d533000bec8",
+    "src/format/generator.cpp": "dbbe644f5202613e421a64680364c1138fa104fe66fc3671f0b13d467b6132cf",
+    "src/format/vbsr.cpp": "5d20ba10be3c1c6d7f87f891b2801dfce65d971c97dfcf7cb3c7eca531c98e31",
+    "src/kernels/row_owned.cu": "274577cb0bfb1499215a66ba0ac05b1a3c0b68e3dbe4bcfd4572b962add27367",
+    "src/plan/plan.cpp": "119f10bf2d1133cf91ae9a4ed31ef23f5fb3218b53d1f88a1b34bc763b859913",
+    "tests/test_main.cpp": "a4ac95fba1a24bfbfea04a0ea27fd2c7c155b2be903b71eb49a70c3c16d24766"
+  },
+  "build_receipt": {
+    "schema": 1,
+    "sources": {
+      "bench/ablation.cpp": "7be62e1376880515ecbba558155e559118bf9f1b6bf6e32a7949d428d8460b19",
+      "bench/application.cpp": "0a9d0692b2f6cf9d88aa388214e8e796f6b4250f80bf77bcbf1b8132a3bf4f18",
+      "bench/application_data.cpp": "c3ecd3447a04d65056e6419730d0d8fb32b94b9e48148e042762a092603e3dbe",
+      "bench/application_data.hpp": "3a3c239ea83216582c3cae1defdeec41a4db28eec5f3d14b812a02f81ffbc54f",
+      "bench/audit.cpp": "f7872539affc92ac33d68a98f5219a398158fa29e152aee1a907b2b163fe1d76",
+      "bench/benchmark.cpp": "806a22aecbc2eb75a58cb46c77e855885835bb48af90d4ec097125bfc73041a7",
+      "bench/compact_csr.cpp": "a40d622ada4bcdd713f6be5596fb88a740aefac26c102ed393fdfa1c8e893588",
+      "bench/compact_csr.hpp": "d2ad4dc5c134dd11f1fa03744ad21e0fda93e3c6b2826285fb39e9c7936ac845",
+      "bench/dense.cpp": "623a34200b3e9826f76dedc181ca01c62886e5bc1a28c82e954ee8da255bccc1",
+      "bench/dense.hpp": "6cfcab7a7611c11e25887d5fdfbb350df7b79e522ed1ec9a1eacc0aa76f6311f",
+      "bench/kernel.cpp": "d10ab9265eadb2920f1f10ed748d135e9ec5df23187f60eae7ca9790311aaaa1",
+      "bench/support.cpp": "419ffa8ecccacc6ce9d1db3041767c98a84d3ec094419a012a9caf4be0fe3b03",
+      "bench/support.hpp": "937e6cad7e67881fbf2d05ef2b1c1532469114336334d60863659121ac28cd61",
+      "CMakeLists.txt": "cc2f99f1a5e765200a7372f2b620fd31eeaba26024fff02bd2c95b9e65fc6e87",
+      "include/varblockspmm/vbsr.hpp": "e3ba154571b2487cb1fc28432fffdaeaa9eb10d0c8be38ee544b6c45da26bde3",
+      "scripts/build_verified.py": "f5040fefd830f269140659c6d12106364a21ca13f2da06acb0c5858ac003bc1d",
+      "src/baseline/cusparse_baseline.cu": "5d36cfae3d3ce17116bc11c25508ca56e47832983f3070491ebfce84ab27cbe7",
+      "src/baseline/slot_split.cu": "23c72927633640f0d67448557470c6a00a0f1d379f297044f9384d533000bec8",
+      "src/format/generator.cpp": "dbbe644f5202613e421a64680364c1138fa104fe66fc3671f0b13d467b6132cf",
+      "src/format/vbsr.cpp": "5d20ba10be3c1c6d7f87f891b2801dfce65d971c97dfcf7cb3c7eca531c98e31",
+      "src/kernels/row_owned.cu": "274577cb0bfb1499215a66ba0ac05b1a3c0b68e3dbe4bcfd4572b962add27367",
+      "src/plan/plan.cpp": "119f10bf2d1133cf91ae9a4ed31ef23f5fb3218b53d1f88a1b34bc763b859913",
+      "tests/test_main.cpp": "a4ac95fba1a24bfbfea04a0ea27fd2c7c155b2be903b71eb49a70c3c16d24766"
+    },
+    "commands": [
+      [
+        "cmake",
+        "-S",
+        "C:\\Users\\cohen\\VarBlockSpMM",
+        "-B",
+        "C:\\Users\\cohen\\VarBlockSpMM\\build\\verified",
+        "-G",
+        "Visual Studio 17 2022",
+        "-A",
+        "x64",
+        "-DCMAKE_CUDA_ARCHITECTURES=native",
+        "-T",
+        "cuda=C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.4"
+      ],
+      [
+        "cmake",
+        "--build",
+        "C:\\Users\\cohen\\VarBlockSpMM\\build\\verified",
+        "--config",
+        "Release",
+        "--clean-first",
+        "--parallel"
+      ],
+      [
+        "ctest",
+        "--test-dir",
+        "C:\\Users\\cohen\\VarBlockSpMM\\build\\verified",
+        "-C",
+        "Release",
+        "--output-on-failure"
+      ]
+    ],
+    "cmake_cache_sha256": "f38c5c475fd472ee1601e846ed65b6015c1785084fbc012c4c7dad3068f22a57",
+    "executables": {
+      "vbsr_tests.exe": "d3b246cbf2cbf091d16ff4fb29ae0bc05ea7e80aef24a62d16d6f7cc4beae365",
+      "vbsr_audit.exe": "947a2177fe40730bd1bd83e370df2b03e1993461f1821a56ddd5c75708751248",
+      "vbsr_application_audit.exe": "c29f4fc761e322f78f78f0b45135349f6ea1013b52fded755d6f4dae68503944",
+      "vbsr_kernel_audit.exe": "7450a7e154e094bc1dba957cf11d8015288e9d14e823ca356e7f2259b7dc3a31",
+      "vbsr_ablation.exe": "30bfe9b95e3f8eb8400a60479ea7ff091810592a7f9f733ddfac81672aeb45a3"
+    }
+  }
+}

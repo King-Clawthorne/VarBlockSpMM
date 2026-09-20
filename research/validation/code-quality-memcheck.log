@@ -1,0 +1,19 @@
+========= COMPUTE-SANITIZER
+gpu=NVIDIA GeForce RTX 5060 Ti,cc=12.0,driver_api=13040,runtime=13040
+method,position,iteration,gpu_ms,host_ms
+grouped_cached,0,0,24.8840008,24.9164
+grouped_cached,0,1,23.4698563,23.4914
+grouped_cached,0,2,25.0150394,25.0456
+compact_alg2,1,0,2.28367996,2.3054
+compact_alg2,1,1,2.22604799,2.2371
+compact_alg2,1,2,2.18368006,2.1919
+compact_alg3_pre,2,0,1.78111994,1.83
+compact_alg3_pre,2,1,2.09328008,2.1144
+compact_alg3_pre,2,2,1.81132805,1.822
+direct,3,0,8.71116829,8.743
+direct,3,1,7.62499189,7.8117
+direct,3,2,7.93443203,7.9541
+compact_alg1_pre,4,0,2.720608,2.7454
+compact_alg1_pre,4,1,2.73961592,2.7558
+compact_alg1_pre,4,2,2.30012798,2.4271
+========= ERROR SUMMARY: 0 errors

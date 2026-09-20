@@ -1,7 +1,6 @@
 BasedOnStyle: LLVM
 ColumnLimit: 100
-IndentWidth: 4
+IndentWidth: 2
 PointerAlignment: Left
 SortIncludes: CaseSensitive
 SpaceBeforeParens: ControlStatements
-FixNamespaceComments: false

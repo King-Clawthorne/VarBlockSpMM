@@ -1,3 +1,5 @@
+# Compile the upstream variable-batch SGEMM dispatcher and its runtime support.
+# This avoids unrelated LAPACK/Fortran solvers. No MAGMA GEMM kernel is modified.
 set(MAGMA_HAVE_CUDA ON)
 set(MAGMA_CUDA_ARCH "native")
 set(MAGMA_CUDA_ARCH_MIN 1200)
@@ -32,6 +34,10 @@ target_link_libraries(vbsr_transport PRIVATE vbsr_magma_comparison)
 add_executable(vbsr_updates bench/updates.cpp)
 target_link_libraries(vbsr_updates PRIVATE vbsr_benchmark_support)
 if(BUILD_TESTING)
+  add_executable(vbsr_magma_tests tests/test_magma.cpp)
+  target_link_libraries(vbsr_magma_tests PRIVATE vbsr_magma_comparison)
+  add_test(NAME vbsr_magma_tests COMMAND vbsr_magma_tests)
+  # Both cases exceed the timing harness's two-million-value sampling cutoff.
   add_test(NAME vbsr_relevance_full_uniform COMMAND vbsr_relevance
     512 8 64 32 1 2 1 none random 1 --verify-only)
   add_test(NAME vbsr_relevance_full_mixed COMMAND vbsr_relevance

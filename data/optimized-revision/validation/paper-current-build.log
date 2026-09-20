@@ -1,0 +1,16 @@
+MSBuild version 17.14.51+25f168cee for .NET Framework
+
+  The vcpkg manifest was disabled, but we found a manifest file in C:\Users\cohen\. You may want to enable vcpkg manifests in your properties page or pass /p:VcpkgEnableManifest=true to the msbuild invocation.
+  varblockspmm.vcxproj -> C:\Users\cohen\VarBlockSpMM\build\Release\varblockspmm.lib
+  The vcpkg manifest was disabled, but we found a manifest file in C:\Users\cohen\. You may want to enable vcpkg manifests in your properties page or pass /p:VcpkgEnableManifest=true to the msbuild invocation.
+  The vcpkg manifest was disabled, but we found a manifest file in C:\Users\cohen\. You may want to enable vcpkg manifests in your properties page or pass /p:VcpkgEnableManifest=true to the msbuild invocation.
+  The vcpkg manifest was disabled, but we found a manifest file in C:\Users\cohen\. You may want to enable vcpkg manifests in your properties page or pass /p:VcpkgEnableManifest=true to the msbuild invocation.
+  vbsr_benchmark.vcxproj -> C:\Users\cohen\VarBlockSpMM\build\Release\vbsr_benchmark.exe
+  vbsr_tests.vcxproj -> C:\Users\cohen\VarBlockSpMM\build\Release\vbsr_tests.exe
+  vbsr_benchmark_support.vcxproj -> C:\Users\cohen\VarBlockSpMM\build\Release\vbsr_benchmark_support.lib
+  The vcpkg manifest was disabled, but we found a manifest file in C:\Users\cohen\. You may want to enable vcpkg manifests in your properties page or pass /p:VcpkgEnableManifest=true to the msbuild invocation.
+  The vcpkg manifest was disabled, but we found a manifest file in C:\Users\cohen\. You may want to enable vcpkg manifests in your properties page or pass /p:VcpkgEnableManifest=true to the msbuild invocation.
+  The vcpkg manifest was disabled, but we found a manifest file in C:\Users\cohen\. You may want to enable vcpkg manifests in your properties page or pass /p:VcpkgEnableManifest=true to the msbuild invocation.
+  vbsr_audit.vcxproj -> C:\Users\cohen\VarBlockSpMM\build\Release\vbsr_audit.exe
+  vbsr_kernel_audit.vcxproj -> C:\Users\cohen\VarBlockSpMM\build\Release\vbsr_kernel_audit.exe
+  vbsr_application_audit.vcxproj -> C:\Users\cohen\VarBlockSpMM\build\Release\vbsr_application_audit.exe

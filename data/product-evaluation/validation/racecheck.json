@@ -1,0 +1,82 @@
+{
+  "command": [
+    "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.4\\compute-sanitizer\\compute-sanitizer.exe",
+    "--tool",
+    "racecheck",
+    "--error-exitcode",
+    "9",
+    "--kernel-name",
+    "regex=row_owned|refresh_grouped",
+    "C:\\Users\\cohen\\VarBlockSpMM\\build\\verified\\Release\\vbsr_tests.exe"
+  ],
+  "returncode": 0,
+  "build_receipt": {
+    "schema": 1,
+    "sources": {
+      "bench/ablation.cpp": "f39e1843ac7374821b8a05e3b56a70ff7671b924a6221c147b33f72665388bc0",
+      "bench/application.cpp": "0a9d0692b2f6cf9d88aa388214e8e796f6b4250f80bf77bcbf1b8132a3bf4f18",
+      "bench/application_data.cpp": "c3ecd3447a04d65056e6419730d0d8fb32b94b9e48148e042762a092603e3dbe",
+      "bench/application_data.hpp": "3a3c239ea83216582c3cae1defdeec41a4db28eec5f3d14b812a02f81ffbc54f",
+      "bench/audit.cpp": "f7872539affc92ac33d68a98f5219a398158fa29e152aee1a907b2b163fe1d76",
+      "bench/benchmark.cpp": "806a22aecbc2eb75a58cb46c77e855885835bb48af90d4ec097125bfc73041a7",
+      "bench/compact_csr.cpp": "a40d622ada4bcdd713f6be5596fb88a740aefac26c102ed393fdfa1c8e893588",
+      "bench/compact_csr.hpp": "d2ad4dc5c134dd11f1fa03744ad21e0fda93e3c6b2826285fb39e9c7936ac845",
+      "bench/dense.cpp": "623a34200b3e9826f76dedc181ca01c62886e5bc1a28c82e954ee8da255bccc1",
+      "bench/dense.hpp": "6cfcab7a7611c11e25887d5fdfbb350df7b79e522ed1ec9a1eacc0aa76f6311f",
+      "bench/kernel.cpp": "d10ab9265eadb2920f1f10ed748d135e9ec5df23187f60eae7ca9790311aaaa1",
+      "bench/support.cpp": "419ffa8ecccacc6ce9d1db3041767c98a84d3ec094419a012a9caf4be0fe3b03",
+      "bench/support.hpp": "937e6cad7e67881fbf2d05ef2b1c1532469114336334d60863659121ac28cd61",
+      "CMakeLists.txt": "cc2f99f1a5e765200a7372f2b620fd31eeaba26024fff02bd2c95b9e65fc6e87",
+      "include/varblockspmm/vbsr.hpp": "e3ba154571b2487cb1fc28432fffdaeaa9eb10d0c8be38ee544b6c45da26bde3",
+      "scripts/build_verified.py": "f5040fefd830f269140659c6d12106364a21ca13f2da06acb0c5858ac003bc1d",
+      "src/baseline/cusparse_baseline.cu": "5d36cfae3d3ce17116bc11c25508ca56e47832983f3070491ebfce84ab27cbe7",
+      "src/baseline/slot_split.cu": "23c72927633640f0d67448557470c6a00a0f1d379f297044f9384d533000bec8",
+      "src/format/generator.cpp": "dbbe644f5202613e421a64680364c1138fa104fe66fc3671f0b13d467b6132cf",
+      "src/format/vbsr.cpp": "5d20ba10be3c1c6d7f87f891b2801dfce65d971c97dfcf7cb3c7eca531c98e31",
+      "src/kernels/row_owned.cu": "6e737c2061317c580348d67d11b31edb166d65c746bba2029207362b96d546f1",
+      "src/plan/plan.cpp": "119f10bf2d1133cf91ae9a4ed31ef23f5fb3218b53d1f88a1b34bc763b859913",
+      "tests/test_main.cpp": "a4ac95fba1a24bfbfea04a0ea27fd2c7c155b2be903b71eb49a70c3c16d24766"
+    },
+    "commands": [
+      [
+        "cmake",
+        "-S",
+        "C:\\Users\\cohen\\VarBlockSpMM",
+        "-B",
+        "C:\\Users\\cohen\\VarBlockSpMM\\build\\verified",
+        "-G",
+        "Visual Studio 17 2022",
+        "-A",
+        "x64",
+        "-DCMAKE_CUDA_ARCHITECTURES=native",
+        "-T",
+        "cuda=C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.4"
+      ],
+      [
+        "cmake",
+        "--build",
+        "C:\\Users\\cohen\\VarBlockSpMM\\build\\verified",
+        "--config",
+        "Release",
+        "--clean-first",
+        "--parallel"
+      ],
+      [
+        "ctest",
+        "--test-dir",
+        "C:\\Users\\cohen\\VarBlockSpMM\\build\\verified",
+        "-C",
+        "Release",
+        "--output-on-failure"
+      ]
+    ],
+    "cmake_cache_sha256": "f38c5c475fd472ee1601e846ed65b6015c1785084fbc012c4c7dad3068f22a57",
+    "executables": {
+      "vbsr_tests.exe": "7a8b09aab4371ce9b41da309ac8966e3b4693b523463dc876d79de5ddbc35e91",
+      "vbsr_audit.exe": "1d4d9ab33e3f7e4613b5c809b2a729ddb5205f30353270f7764c7eb041346d9e",
+      "vbsr_application_audit.exe": "c48958955fb871f925163a35b5c16bece81798a844051b7a032a9c27382d0e12",
+      "vbsr_kernel_audit.exe": "383c1059814a6eb6994dfea45dad4fd6887bc005226eea8853ab4d0f1f7f6eb2",
+      "vbsr_ablation.exe": "f72c85dc0ea081457ff821b6cc4caff39679db265cdace2b87c9fe753351db07"
+    }
+  }
+}

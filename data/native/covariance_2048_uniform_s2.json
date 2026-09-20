@@ -1,0 +1,29 @@
+{
+  "name": "covariance_2048_uniform_s2",
+  "count": 2048,
+  "geometry": "uniform",
+  "seed": 2,
+  "eta": 0.5,
+  "leaf_diameter": 0.18,
+  "leaf_quantum": 8,
+  "max_leaf": 64,
+  "length_scale": 0.1,
+  "amplitude": 0.022097086912079608,
+  "block_rows": 256,
+  "block_count": 31356,
+  "shape_counts": {
+    "8": 256
+  },
+  "mean_degree": 122.484375,
+  "max_degree": 230,
+  "packed_values": 2006784,
+  "scalar_nonzeros": 2006784,
+  "fill_fraction": 1.0,
+  "generation_and_packing_ms": 236.29859999891778,
+  "geometry_ms": 7.278099999894039,
+  "scalar_assembly_ms": 72.20639999832201,
+  "binary_sha256": "7511e28f7e7dcaee4d4e765a00fa10af7612a885c213fcdfa2361c50751a3369",
+  "numpy_version": "2.1.3",
+  "source": "https://arxiv.org/html/2506.16759v1#S2.SS1",
+  "scope": "Generated covariance near-field component, excluding far-field and solver work"
+}
