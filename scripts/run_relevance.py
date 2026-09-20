@@ -5,6 +5,7 @@ import hashlib
 import io
 import itertools
 import json
+import math
 from pathlib import Path
 import random
 import statistics
@@ -26,7 +27,6 @@ def design(version=2):
         args=[4096,degree,rhs,shape,seed,6 if version==1 else 20,0,'none',locality]
         jobs.append(dict(kind='core',args=args) if version==1 else
                     dict(kind='core',process=process,batch=batch,args=args+[batch]))
-    # Full crossed control. Three process repetitions of matrix seed 11.
     for rows,degree,rhs,shape,process in itertools.product((128,512),(4,16,128),(8,64),(8,32),(0,1,2)):
         jobs.append(dict(kind='control',process=process,args=[rows,degree,rhs,shape,11,6,0,'none']))
     for elements,rhs,process in itertools.product((256,1024,4096),(8,64),(0,1,2)):
@@ -49,11 +49,9 @@ def expected_inputs(jobs):
             names.update(job['args'][0]+suffix for suffix in ('.bin','.input','.reference','.exact','.weights','.json'))
     return names
 
-
 def validate_inputs(dest, manifest):
     with input_zip(dest, manifest) as archive:
         validate_input_archive(manifest, archive)
-
 
 def validate_input_archive(manifest, archive):
     expected = expected_inputs(manifest['jobs'])
@@ -65,7 +63,6 @@ def validate_input_archive(manifest, archive):
         if len(inputs.namelist()) != len(set(inputs.namelist())) or set(inputs.namelist()) != expected:
             raise ValueError('Input archive coverage mismatch')
         for name, digest in manifest['inputs'].items():
-            # Stream large payloads instead of allocating another matrix copy.
             with inputs.open(name) as payload:
                 actual = hashlib.file_digest(payload, 'sha256').hexdigest()
             if actual != digest: raise ValueError('Input payload checksum mismatch')
@@ -79,7 +76,6 @@ def validate_input_archive(manifest, archive):
                 or meta.get('final_time')!=1/128 or meta.get('dt')!=.25/elements
                 or meta.get('scalar_rows')!=elements*30 or meta.get('precision')!='fp32'):
                 raise ValueError('Transport metadata differs from command or physical protocol')
-            import math
             error=meta.get('analytic_relative_l2', float('nan'))
             identity=meta.get('identity_error', {})
             if (not math.isfinite(error) or not 0 <= error <= 2e-3
@@ -95,11 +91,10 @@ def validate_input_archive(manifest, archive):
         if [r['elements'] for r in convergence]!=[16,32,64]:
             raise ValueError('Convergence design mismatch')
         errors=[r['analytic_relative_l2'] for r in convergence]
-        if not all(math.isfinite(e) and e>0 for e in errors) or not all(a>4*b for a,b in zip(errors,errors[1:])):
+        if not all(math.isfinite(e) and e>0 for e in errors) or not all(a>4*b for a,b in zip(errors,errors[1:],strict=False)):
             raise ValueError('Convergence check failed')
         if any(r['final_time']!=1/16 or r['precision']!='fp64' or r['rhs']!=8 for r in convergence):
             raise ValueError('Convergence physical protocol mismatch')
-
 
 def analyze(dest, *, allow_legacy=False):
     m=json.loads((dest/'manifest.json').read_text())
@@ -139,7 +134,6 @@ def analyze(dest, *, allow_legacy=False):
                 if 'identity_negative_control,rejected' not in log:
                     raise ValueError('Missing transport negative control')
                 physical=[float(line.split(',')[1]) for line in log.splitlines() if line.startswith('analytic_relative_l2,')]
-                import math
                 if len(physical)!=24 or any(not math.isfinite(e) or not 0<=e<=2e-3 for e in physical):
                     raise ValueError('Missing or failed GPU analytic checks')
             data={}; positions={}
@@ -147,7 +141,6 @@ def analyze(dest, *, allow_legacy=False):
                 if len(row)!=5 or row[0]=='method': continue
                 try: position,trial=int(row[1]),int(row[2]); gpu,host=float(row[3]),float(row[4])
                 except ValueError: continue
-                import math
                 if not all(math.isfinite(x) and x>0 for x in (gpu,host)): raise ValueError('Invalid timing')
                 if row[0] in positions and positions[row[0]]!=position: raise ValueError('Inconsistent method position')
                 positions[row[0]]=position

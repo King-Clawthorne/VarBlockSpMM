@@ -14,24 +14,17 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 TINY = np.finfo(np.float32).tiny
-# Transport preparation writes outside data/, so name the directory explicitly
-# rather than globbing a location that happens to hold other matrices.
 TRANSPORT_DIRECTORY = Path('build/transport-v2-inputs')
 
-# The preparation format is a sequence of length-prefixed little-endian
-# vectors. The eighth is the packed block payload the kernels read.
 LAYOUT = [('row_size', '<i4'), ('col_size', '<i4'), ('row_off', '<i8'), ('col_off', '<i8'),
           ('row_ptr', '<i4'), ('block_col', '<i4'), ('value_off', '<i8'), ('packed', '<f4'),
           ('csr_ptr', '<i4'), ('csr_col', '<i4'), ('csr_values', '<f4')]
 
-# Counted from the checked-in generators. Every other prepared input is free of
-# subnormal packed values.
 EXPECTED = {
     'covariance_2048_clustered_s1.bin': 162,
     'covariance_2048_clustered_s2.bin': 212,
     'covariance_2048_clustered_s3.bin': 294,
 }
-
 
 def packed_values(path):
     raw = path.read_bytes()
@@ -45,11 +38,9 @@ def packed_values(path):
             return values
     raise ValueError('packed payload not found in ' + path.name)
 
-
 def subnormal_count(values):
     magnitude = np.abs(values.astype(np.float32))
     return int(((magnitude > 0) & (magnitude < TINY)).sum())
-
 
 class InputSubnormalTests(unittest.TestCase):
     def native_inputs(self):
@@ -97,7 +88,6 @@ class InputSubnormalTests(unittest.TestCase):
         present = {p.stem for p in directory.glob('transport_*.bin')} if directory.is_dir() else set()
         if not present:
             self.skipTest('transport inputs are not present; run prepare_transport.py --all')
-        # A partial preparation must fail rather than silently checking less.
         self.assertEqual(present, expected, 'transport input coverage is incomplete')
         return sorted(directory / name for name in expected)
 
@@ -116,7 +106,6 @@ class InputSubnormalTests(unittest.TestCase):
                     values = np.fromfile(path, dtype='<f4')
                     self.assertGreater(values.size, 0)
                     self.assertEqual(subnormal_count(values), 0)
-
 
 if __name__ == '__main__':
     unittest.main()

@@ -10,8 +10,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Rendered fragments that mean a reference did not resolve or a control
-# sequence lost its backslash.
 PAGE_PATTERNS = [
     (r'\?\?', 'unresolved reference rendered as ??'),
     (r'(?<![A-Za-z])ef\{', "reference with a stripped backslash (ef{...})"),
@@ -21,18 +19,15 @@ PAGE_PATTERNS = [
     (r'(?<![A-Za-z])(Section|Table|Figure|Appendix)~', 'unbreakable space rendered literally'),
 ]
 
-# Source fragments that produce the defects above. Checked separately so a
-# failure names the offending line.
 SOURCE_PATTERNS = [
     (r'~\s*ef\{', "'~ef{' should be '~\\ref{'"),
     (r'(?<![\\A-Za-z])(?<!\{)ef\{(sec|tab|fig|eq):', "bare 'ef{' should be '\\ref{'"),
     (r'\r', 'stray carriage return inside a line'),
 ]
 
-
 def pdf_text(path: Path) -> str:
     try:
-        import fitz  # PyMuPDF
+        import fitz
     except ImportError:
         pass
     else:
@@ -45,19 +40,16 @@ def pdf_text(path: Path) -> str:
                            'or pdftotext) for ' + str(path))
     return result.stdout
 
-
 def check_sources(paths):
     failures = []
     for path in paths:
         raw = path.read_bytes().decode('utf-8', 'replace')
-        # Normalize whole-file line endings so only stray in-line CRs are flagged.
         text = raw.replace('\r\n', '\n')
         for number, line in enumerate(text.split('\n'), 1):
             for pattern, message in SOURCE_PATTERNS:
                 if re.search(pattern, line):
                     failures.append('{}:{}: {}'.format(path, number, message))
     return failures
-
 
 def check_pdfs(paths):
     failures = []
@@ -69,7 +61,6 @@ def check_pdfs(paths):
                 context = ' '.join(text[start:match.end() + 60].split())
                 failures.append('{}: {} near "{}"'.format(path, message, context))
     return failures
-
 
 def main() -> int:
     root = Path(__file__).resolve().parent.parent
@@ -88,7 +79,6 @@ def main() -> int:
     print('Reference check passed for {} sources and {} PDFs'
           .format(len(sources), len(pdfs)))
     return 0
-
 
 if __name__ == '__main__':
     sys.exit(main())

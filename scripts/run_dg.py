@@ -31,7 +31,6 @@ PROCESSES = 3
 REPS = 6
 ORDER_SEED = 20260912
 
-
 def jobs():
     result = [(elements, rhs, process)
               for elements, rhs, process in itertools.product(ELEMENTS, WIDTHS, range(PROCESSES))]
@@ -39,15 +38,12 @@ def jobs():
     rng.shuffle(result)
     return [(e, n, p, rng.randrange(1, 2**31)) for e, n, p in result]
 
-
 def stem(elements, rhs, process):
     return f'dg_e{elements}_n{rhs}_p{process}'
-
 
 def arguments(elements, rhs, order):
     base = (INPUT_DIRECTORY / f'transport_e{elements}_n{rhs}').as_posix()
     return [base, str(rhs), str(transport_steps(elements)), str(REPS), str(order)]
-
 
 def structure(metadata):
     """Parse the one structure line the executable prints before timing."""
@@ -58,8 +54,6 @@ def structure(metadata):
     if len(fields) != 6:
         raise ValueError('Missing specialized structure record')
     distinct, launches, operator_bytes, assembled_bytes, storage_bytes, trace_bytes = fields
-    # The trace keeps one plan per buffer direction, so its allocation is
-    # twice a single plan. Anything less would mean the plans share state.
     if (not 0 < distinct < launches or operator_bytes <= 0
             or assembled_bytes <= operator_bytes or storage_bytes < operator_bytes
             or trace_bytes != 2 * storage_bytes):
@@ -67,7 +61,6 @@ def structure(metadata):
     return dict(distinct=distinct, launches=launches, operator_bytes=operator_bytes,
                 assembled_bytes=assembled_bytes, storage_bytes=storage_bytes,
                 trace_bytes=trace_bytes)
-
 
 def input_paths(root=ROOT):
     """Every transport payload the campaign reads, in a stable order."""
@@ -78,11 +71,9 @@ def input_paths(root=ROOT):
             names.add((INPUT_DIRECTORY / (base + suffix)).as_posix())
     return sorted(names)
 
-
 def input_hashes(root=ROOT):
     return {name: hashlib.sha256((root / name).read_bytes()).hexdigest()
             for name in input_paths(root)}
-
 
 def validate_snapshot(folder, manifest):
     """The archive must carry the sources and inputs it claims."""
@@ -102,8 +93,6 @@ def validate_snapshot(folder, manifest):
             raise ValueError('Missing transport input payload: ' + name)
         if hashlib.sha256(payload.read_bytes()).hexdigest() != digest:
             raise ValueError('Transport input payload checksum mismatch: ' + name)
-    # Bind this campaign to the inputs the main transport campaign validated,
-    # so its claim to reuse them does not rest on the shared path alone.
     canonical = ROOT / 'data/relevance-v2/manifest.json'
     if canonical.is_file():
         published = json.loads(canonical.read_text()).get('inputs', {})
@@ -113,7 +102,6 @@ def validate_snapshot(folder, manifest):
         for name, digest in shared.items():
             if published[name] != digest:
                 raise ValueError('Transport input differs from the archived campaign: ' + name)
-
 
 def analyze(folder):
     manifest = json.loads((folder / 'manifest.json').read_text())
@@ -138,8 +126,6 @@ def analyze(folder):
         log = record.metadata['environment']
         if 'identity_negative_control,rejected' not in log:
             raise ValueError('Missing negative control')
-        # The shared harness validates each method three times: after the
-        # untimed startup trace, after its warmup, and after its timed samples.
         errors = [float(l.split(',')[1]) for l in log.splitlines()
                   if l.startswith('analytic_relative_l2,')]
         if len(errors) != len(METHODS) * 3 or any(not 0 <= e <= 2e-3 for e in errors):
@@ -164,8 +150,6 @@ def analyze(folder):
         ratios = sorted(r['specialized'] for r in selected)
         fused_ratios = sorted(r['fused'] for r in selected)
         sharing_ratios = sorted(r['sharing'] for r in selected)
-        # Reduce trials by median within each process, then give processes
-        # equal weight in log space, matching the manuscript methodology.
         summary.append(dict(
             elements=elements, rhs=rhs, steps=selected[0]['steps'],
             direct_ms=statistics.geometric_mean(r['medians']['direct'] for r in selected),
@@ -186,7 +170,6 @@ def analyze(folder):
     (folder / 'summary.json').write_text(json.dumps(output, indent=2))
     print(json.dumps(summary, indent=2), flush=True)
     return output
-
 
 def main():
     parser = argparse.ArgumentParser(__doc__)
@@ -221,7 +204,6 @@ def main():
     if not (args.output / 'runs.zip').exists():
         archive_runs(args.output)
     analyze(args.output)
-
 
 if __name__ == '__main__':
     main()

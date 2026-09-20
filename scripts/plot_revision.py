@@ -47,7 +47,7 @@ def render_figures(output: Path, data: dict):
         low = min(0.5, min(values) / 1.08)
         high = max(2, max(values) * 1.08)
         for axis, method, title in zip(axes, ('bsr8', 'library_best'),
-                                       ('(a) Padding-free BSR8', '(b) Fastest tested library')):
+                                       ('(a) Padding-free BSR8', '(b) Fastest tested library'), strict=False):
             ratio_axis(axis, (low, high), [0.5, 0.75, 1, 1.25, 1.5, 2])
             means = []
             for index, width in enumerate((8, 16, 32, 64)):

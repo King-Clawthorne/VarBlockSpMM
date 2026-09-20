@@ -1,7 +1,5 @@
 """Numerical and input-provenance regressions for the replacement campaign."""
 import copy
-import hashlib
-import json
 from pathlib import Path
 import sys
 import tempfile

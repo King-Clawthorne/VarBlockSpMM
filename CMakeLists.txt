@@ -1,13 +1,12 @@
 cmake_minimum_required(VERSION 3.25)
 project(VarBlockSpMM VERSION 1.0.0 LANGUAGES CXX CUDA)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_CUDA_STANDARD 20)
+set(CMAKE_CUDA_STANDARD 23)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_EXTENSIONS OFF)
-# CUDA 12.6 includes both grouped GEMM and generic BSR SpMM. Measurements use 13.4.
 find_package(CUDAToolkit 12.6 REQUIRED)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
@@ -26,7 +25,7 @@ add_library(VarBlockSpMM::varblockspmm ALIAS varblockspmm)
 target_include_directories(varblockspmm PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
-target_compile_features(varblockspmm PUBLIC cxx_std_20)
+target_compile_features(varblockspmm PUBLIC cxx_std_23)
 target_link_libraries(varblockspmm PUBLIC CUDA::cudart CUDA::cusparse CUDA::cublas)
 set_target_properties(varblockspmm PROPERTIES CUDA_SEPARABLE_COMPILATION OFF)
 target_compile_options(varblockspmm PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--use_fast_math>)
@@ -47,7 +46,6 @@ if(BUILD_TESTING)
 add_executable(vbsr_tests tests/test_main.cpp)
 target_link_libraries(vbsr_tests PRIVATE varblockspmm)
 add_test(NAME vbsr_tests COMMAND vbsr_tests)
-# Pins the flush-to-zero boundary that --use_fast_math introduces.
 add_executable(vbsr_numeric_range tests/test_numeric_range.cpp)
 target_link_libraries(vbsr_numeric_range PRIVATE varblockspmm)
 add_test(NAME vbsr_numeric_range COMMAND vbsr_numeric_range)
@@ -67,7 +65,6 @@ add_library(vbsr_benchmark_support STATIC
   bench/dense.cpp
   bench/compact_csr.cpp)
 target_link_libraries(vbsr_benchmark_support PUBLIC varblockspmm vbsr_dg_support)
-# The fused comparator must use the library's device math flags.
 target_compile_options(vbsr_benchmark_support PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--use_fast_math>)
 add_executable(vbsr_audit bench/audit.cpp)
 target_link_libraries(vbsr_audit PRIVATE vbsr_benchmark_support)
@@ -99,4 +96,3 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/VarBlockSpMMConfig.cmake
   ${CMAKE_CURRENT_BINARY_DIR}/VarBlockSpMMConfigVersion.cmake
   DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/VarBlockSpMM)
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-install(FILES LICENSE DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/VarBlockSpMM)

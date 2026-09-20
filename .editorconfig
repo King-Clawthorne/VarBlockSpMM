@@ -1,5 +1,3 @@
-# Project-wide editor defaults. C++ and CUDA indentation is defined by
-# .clang-format; the language overrides below keep editors consistent with it.
 root = true
 
 [*]
@@ -10,13 +8,11 @@ charset = utf-8
 trim_trailing_whitespace = true
 insert_final_newline = true
 
-# Keep every common C/C++ and CUDA source/header extension in sync with
-# .clang-format's two-space LLVM indentation.
 [*.{c,cc,cpp,cxx,cu,h,hh,hpp,hxx,cuh}]
-indent_size = 2
+indent_size = 4
 
 [*.{ps1,sh}]
-indent_size = 2
+indent_size = 4
 
 [*.md]
 trim_trailing_whitespace = false

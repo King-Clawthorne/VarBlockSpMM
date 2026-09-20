@@ -60,7 +60,7 @@ def main():
         block_rows = np.searchsorted(ro, source.row, side='right') - 1
         block_cols = np.searchsorted(co, source.col, side='right') - 1
         blocks = {}
-        for r, c, value, br, bc in zip(source.row, source.col, source.data, block_rows, block_cols):
+        for r, c, value, br, bc in zip(source.row, source.col, source.data, block_rows, block_cols, strict=False):
             key = (int(br), int(bc))
             if key not in blocks:
                 blocks[key] = np.zeros((row_sizes[br], col_sizes[bc]), dtype=np.float32)

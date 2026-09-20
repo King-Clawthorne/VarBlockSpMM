@@ -12,17 +12,14 @@ from build_verified import validate_build_receipt
 from run_supplement import jobs_for, specification
 from analyze_revision import library_digest
 
-
 def geo(values):
     return math.exp(statistics.mean(math.log(v) for v in values))
-
 
 def table(output, name, columns, header, rows):
     text = ['\\begin{tabular}{' + columns + '}', '\\toprule', ' & '.join(header) + r' \\', '\\midrule']
     text += [' & '.join(map(str, row)) + r' \\' for row in rows]
     text += ['\\bottomrule', '\\end{tabular}']
     (output / (name + '.tex')).write_text('\n'.join(text) + '\n')
-
 
 def read_campaign(directory, kind):
     manifest = json.loads((directory / 'manifest.json').read_text())
@@ -74,7 +71,6 @@ def read_campaign(directory, kind):
         raise ValueError('Unexpected supplementary runs')
     return result, manifest
 
-
 def main():
     parser = argparse.ArgumentParser(__doc__)
     parser.add_argument('--native', type=Path, default=ROOT / 'data/product-evaluation/native')
@@ -109,14 +105,11 @@ def main():
                                f"{min(m['mean_degree'] for m in meta):.1f} to {max(m['mean_degree'] for m in meta):.1f}",
                                f"{100*min(m['packed_values']/size**2 for m in meta):.1f} to {100*max(m['packed_values']/size**2 for m in meta):.1f}"])
     table(args.output, 'native-shapes', 'rlrrrr', ['Points', 'Geometry', 'Leaf sizes', 'Block rows', 'Mean degree', r'Density \%'], shape_rows)
-    # Startup includes construction, transfer, lazy library setup and one product.
-    # k-1 synchronized host medians model subsequent products. No timing is
-    # subtracted, and no GPU-event duration is mixed into this host cost model.
     lifecycle = []
     lifecycle_summary = {}
     for products in (1, 10, 100, 1000):
         ratios, with_assembly = [], []
-        for (name, rhs, process), record in native.items():
+        for (name, _rhs, _process), record in native.items():
             meta = json.loads((ROOT / 'data/native' / (name + '.json')).read_text())
             totals = {m: s['ms'] + (products - 1) * record['timings'][m]['host'] for m, s in record['setup'].items()}
             ratios.append(min(v for m, v in totals.items() if m != 'direct') / totals['direct'])
@@ -147,7 +140,6 @@ def main():
         for label, pairs in comparisons:
             ratios = [geo(t[f'v{a}']['gpu'] / t[f'v{b}']['gpu'] for a, b in pairs) for t in subset]
             contrasts[f'{rhs}:{label}'] = dict(ratio=geo(ratios), minimum=min(ratios), maximum=max(ratios))
-            # Ranges aggregate the 3 process observations of each fixed instance.
             instances = {}
             for job, record in ablation.items():
                 if job[2] != rhs: continue
@@ -170,8 +162,6 @@ def main():
                 upgrades[f'{rhs}:{size}'] = dict(ratio=geo(values), minimum=min(values), maximum=max(values))
                 upgrade_rows.append([rhs, size, f'{geo(values):.3f}', f'{min(values):.3f}', f'{max(values):.3f}'])
         table(args.output, 'kernel-upgrade', 'rrrrr', ['RHS', 'Block rows', 'Ratio', 'Min', 'Max'], upgrade_rows)
-    # Retain per-instance factorial interactions and every method median, so
-    # the marginal effects in the compact table can be checked and disaggregated.
     result = dict(native_processes=len(native), ablation_processes=len(ablation),
                   native_bsr_ratio=geo(native_ratios), contrasts=contrasts, upgrades=upgrades,
                   lifecycle=lifecycle_summary,
@@ -192,7 +182,6 @@ def main():
     (args.output / 'supplement-macros.tex').write_text(''.join(
         '\\newcommand{\\' + name + '}{' + f'{value:.3f}' + '}\n' for name, value in macro_values.items()))
     print(json.dumps({k: v for k, v in result.items() if k not in ('native', 'ablation')}, indent=2))
-
 
 if __name__ == '__main__':
     main()

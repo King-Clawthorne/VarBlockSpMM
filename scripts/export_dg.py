@@ -15,11 +15,9 @@ args = parser.parse_args()
 data = analyze(args.input)
 OUT = ROOT / 'research/generated'
 
-
 def gm(values):
     values = list(values)
     return math.exp(sum(map(math.log, values)) / len(values))
-
 
 rows = []
 for record in data['summary']:
@@ -42,9 +40,6 @@ structures = {(r['distinct'], r['launches'], r['operator_bytes']) for r in data[
 if len(structures) != 1:
     raise ValueError('Structure differs across transport cases')
 distinct, launches, operator_bytes = structures.pop()
-# The plan also holds batch pointer arrays, which grow with the element count,
-# and the alternating trace holds one plan per direction. Report the factor
-# against everything the timed implementation keeps, not one plan's operators.
 macros = dict(DgDistinctOperators=distinct, DgLaunches=launches,
               DgOperatorKiB=f'{operator_bytes / 1024:.1f}',
               DgPlanKiB=f'{large["storage_bytes"] / 1024:.1f}',
@@ -58,8 +53,6 @@ macros = dict(DgDistinctOperators=distinct, DgLaunches=launches,
               DgSpecializedWins=sum(r['wins'] for r in data['summary']),
               DgProcesses=data['processes'])
 
-# The fused comparator is reported as a speedup over direct execution, which is
-# the direction that reads correctly when it wins.
 fused = [r['fused'] for r in data['summary']]
 fused_speedups = [1 / value for value in fused]
 narrow_large = next(r for r in data['summary'] if r['elements'] == 4096 and r['rhs'] == 8)
@@ -70,14 +63,12 @@ macros.update(DgFusedLarge=f'{1 / large["fused"]:.3f}',
               DgFusedMax=f'{max(fused_speedups):.3f}',
               DgFusedWins=sum(3 - r['fused_wins'] for r in data['summary']),
               DgFusedNarrowLarge=f'{1 / narrow_large["fused"]:.3f}',
-              # The matched control: identical kernel, private operator copies.
               DgSharingLarge=f'{large["sharing"]:.3f}',
               DgSharingNarrowLarge=f'{narrow_large["sharing"]:.3f}',
               DgSharingSmallMin=f'{min(r["sharing"] for r in small):.3f}',
               DgSharingSmallMax=f'{max(r["sharing"] for r in small):.3f}',
               DgCopiesLarge=f'{large["fused_copies"]:.3f}',
               DgCopiesNarrowLarge=f'{narrow_large["fused_copies"]:.3f}',
-              # Direct execution's throughput as a fraction of the fused kernel's.
               DgDirectShareMin=f'{min(r["fused"] for r in data["summary"]) * 100:.0f}',
               DgDirectShareMax=f'{max(r["fused"] for r in data["summary"]) * 100:.0f}',
               DgDirectShareLarge=f'{large["fused"] * 100:.0f}')

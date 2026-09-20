@@ -3,9 +3,8 @@ import hashlib
 import argparse
 import itertools
 import random
-import time
 from pathlib import Path
-from benchmark_runs import ROOT, archive_runs, run_process, save_manifest, source_hashes, source_paths
+from benchmark_runs import archive_runs, run_process, save_manifest, source_hashes, source_paths
 from build_verified import verified_build
 
 

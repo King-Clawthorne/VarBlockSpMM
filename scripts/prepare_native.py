@@ -14,7 +14,6 @@ from prepare_application import write_vector
 ROOT = Path(__file__).resolve().parents[1]
 DEST = ROOT / 'data/native'
 
-
 def build(name, count, geometry, seed):
     start = time.perf_counter()
     rng = np.random.default_rng(seed)
@@ -30,8 +29,6 @@ def build(name, count, geometry, seed):
         if len(indices) <= 8 or (len(indices) <= 64 and np.linalg.norm(extent) <= 0.18):
             leaves.append(indices)
             return
-        # Eight-point granularity is an explicit input restriction of this model.
-        # No points or scalar entries are padded or dropped.
         axis = int(np.argmax(extent))
         order = indices[np.argsort(cloud[:, axis], kind='stable')]
         middle = max(8, min(len(order) - 8, (len(order) // 16) * 8))
@@ -48,7 +45,6 @@ def build(name, count, geometry, seed):
     diameters = np.linalg.norm(upper - lower, axis=1)
     gap = np.maximum(0, np.maximum(lower[:, None] - upper[None, :], lower[None, :] - upper[:, None]))
     distance = np.linalg.norm(gap, axis=2)
-    # Boukaram et al. Eq. (1), eta=0.5. Keep inadmissible leaf pairs.
     near = (diameters[:, None] + diameters[None, :]) * 0.5 > 0.5 * distance
     np.fill_diagonal(near, True)
     assert np.array_equal(near, near.T)
@@ -71,8 +67,6 @@ def build(name, count, geometry, seed):
     packed = np.concatenate(blocks)
     assembly_ms = (time.perf_counter() - start) * 1000
     scalar_start = time.perf_counter()
-    # Independently enumerate scalar rows and recompute the kernel. Do not expand
-    # packed block values to build the reference representation.
     owner = np.repeat(np.arange(len(sizes)), sizes)
     cp, ci, cv = [0], [], []
     for row in range(count):
@@ -120,12 +114,9 @@ def build(name, count, geometry, seed):
         saved = json.loads(metadata_path.read_text())
         if saved['binary_sha256'] != meta['binary_sha256']:
             raise ValueError('Regenerated native input differs from its recorded checksum')
-        # Preserve the archived CPU assembly observation when only reconstructing
-        # ignored binary inputs for paper validation. Fresh directories remeasure it.
     else:
         metadata_path.write_text(json.dumps(meta, indent=2))
     print(name, meta['shape_counts'], 'degree', meta['mean_degree'], flush=True)
-
 
 if __name__ == '__main__':
     import argparse

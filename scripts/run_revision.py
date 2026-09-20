@@ -17,7 +17,6 @@ PANEL_WIDTHS = (8, 16, 32, 64)
 SYNTHETIC_METHODS = ["direct", "csr_default", "csr_alg1_pre", "csr_alg2", "csr_alg3_pre",
                      "grouped_cached", "grouped_changing", "direct_changing", "bsr8"]
 
-
 class SyntheticCase(NamedTuple):
     rows: int
     degree: int
@@ -34,7 +33,6 @@ class SyntheticCase(NamedTuple):
     def methods(self) -> list[str]:
         return SYNTHETIC_METHODS + (["bsr32"] if self.distribution == "uniform" else [])
 
-
 def build_cases() -> list[SyntheticCase]:
     cases = [SyntheticCase(4096, degree, rhs, distribution, locality)
              for distribution, locality, degree, rhs in itertools.product(
@@ -46,7 +44,6 @@ def build_cases() -> list[SyntheticCase]:
             cases.append(case)
     return cases
 
-
 def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, default=ROOT / "data/revision")
@@ -56,7 +53,6 @@ def parse_arguments():
     if args.processes < 1 or args.reps < 2:
         parser.error("at least one process and two repetitions are required")
     return args
-
 
 def main():
     args = parse_arguments()
@@ -77,7 +73,6 @@ def main():
     start = time.monotonic()
     for index, (case, process) in enumerate(jobs):
         stem = case.stem(process)
-        # Consume the same random draw even when resuming a completed job.
         order_seed = rng.randrange(2**31)
         command = [str(executable), str(case.rows), str(case.degree), str(case.rhs),
                    case.distribution, case.locality, str(case.seed), str(order_seed),
@@ -93,7 +88,6 @@ def main():
     if not (args.output / "runs.zip").exists():
         archive_runs(args.output)
     print("Complete", flush=True)
-
 
 if __name__ == "__main__":
     main()

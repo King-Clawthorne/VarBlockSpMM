@@ -1,7 +1,7 @@
 import sys
 import argparse
 from pathlib import Path
-import json, math, statistics
+import json, math
 from collections import defaultdict
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'scripts'))
@@ -37,8 +37,6 @@ def by_configuration(records, metric=best):
     return dict(sorted(grouped.items()))
 def configurations(records, metric=best):
     return [gm(values) for values in by_configuration(records,metric).values()]
-# A practical deployment margin. A configuration counts only when its own
-# repeated observations clear it, not when a width aggregate does.
 MARGIN=1.05
 def margin_wins(records, metric=best):
     return sum(gm(v)>MARGIN for v in by_configuration(records,metric).values())
@@ -148,13 +146,12 @@ summary=dict(macros=macros,contrasts=contrasts,updates=ut,transport_rows=transpo
 (OUT/'relevance-summary.json').write_text(json.dumps(summary,indent=2))
 print(json.dumps(dict(macros=macros,contrasts=contrasts,updates=ut),indent=2))
 
-# Replace the main width plot with the follow-up that includes MAGMA.
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter, NullLocator
 fig,axes=plt.subplots(1,2,figsize=(7.2,3.1),sharey=True)
-for ax,fn,title in zip(axes,(lambda r:ratio(r,'bsr8'),best),('Padding-free BSR8','Fastest tested library, including MAGMA')):
+for ax,fn,title in zip(axes,(lambda r:ratio(r,'bsr8'),best),('Padding-free BSR8','Fastest tested library, including MAGMA'),strict=False):
     means=[]
     for i,rhs in enumerate((8,16,32,64)):
         vals=sorted(configurations([r for r in core if r['args'][2]==rhs],fn))

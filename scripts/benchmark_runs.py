@@ -14,7 +14,6 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 CSV_FIELDS = ["method", "position", "iteration", "gpu_ms", "host_ms"]
 
-
 @dataclass(frozen=True)
 class RunRecord:
     stem: str
@@ -26,7 +25,6 @@ class RunRecord:
         if reader.fieldnames != CSV_FIELDS:
             raise ValueError(f"Unexpected timing columns in {self.stem}")
         return list(reader)
-
 
 def read_runs(directory: Path):
     """Read either an in-progress directory or a completed immutable archive."""
@@ -61,7 +59,6 @@ def read_runs(directory: Path):
         yield RunRecord(path.stem, path.read_text(encoding="utf-8"),
                         json.loads(path.with_suffix(".json").read_text(encoding="utf-8")))
 
-
 def archive_runs(directory: Path) -> None:
     """Verify a complete archive before removing the individual source records."""
     directory = directory.resolve()
@@ -92,11 +89,9 @@ def archive_runs(directory: Path) -> None:
                 raise ValueError(f"Archive byte verification failed: {name}")
     temporary.replace(destination)
     for path in files:
-        # Refuse to remove a file modified while the archive was being written.
         if path.read_bytes() != contents[path.name]:
             raise ValueError(f"Run changed during archiving: {path}")
         path.unlink()
-
 
 def validate_run(record: RunRecord, methods: list[str], repetitions: int) -> None:
     if record.metadata.get("returncode") != 0:
@@ -123,7 +118,6 @@ def validate_run(record: RunRecord, methods: list[str], repetitions: int) -> Non
             if not math.isfinite(value) or value <= 0:
                 raise ValueError(f"Invalid {field}: {record.stem}")
 
-
 def run_process(output: Path, stem: str, command: list[str], methods: list[str],
                 repetitions: int, metadata_field: str) -> None:
     result = subprocess.run(command, capture_output=True, text=True, timeout=180)
@@ -139,7 +133,6 @@ def run_process(output: Path, stem: str, command: list[str], methods: list[str],
     temporary.write_text(result.stdout, encoding="utf-8")
     temporary.replace(output / (stem + ".csv"))
 
-
 def source_paths(runner: str) -> list[Path]:
     """Include shared headers and helpers as well as executable entry points."""
     patterns = ("src/**/*.cu", "src/**/*.cuh", "src/**/*.cpp", "include/**/*.hpp",
@@ -150,14 +143,11 @@ def source_paths(runner: str) -> list[Path]:
                   ROOT / "scripts/benchmark_runs.py", ROOT / "scripts/prepare_application.py"))
     return sorted(paths)
 
-
 def source_hashes(paths: list[Path]) -> dict[str, str]:
     return {path.relative_to(ROOT).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
             for path in paths}
 
-
 def save_manifest(output: Path, manifest: dict, sources: list[Path]) -> None:
-    # Normalize tuples and named tuples to their on-disk JSON representation.
     manifest = json.loads(json.dumps(manifest))
     path = output / "manifest.json"
     if path.exists():

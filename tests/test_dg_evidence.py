@@ -17,7 +17,6 @@ from run_dg import analyze, structure
 
 SOURCE = ROOT / 'data/dg'
 
-
 @unittest.skipUnless((SOURCE / 'manifest.json').exists(), 'campaign archive not present')
 class DgEvidenceTests(unittest.TestCase):
     def test_process_aggregation_matches_raw_trial_products(self):
@@ -84,7 +83,6 @@ class DgEvidenceTests(unittest.TestCase):
             self.copy(destination)
             data = analyze(destination)
         self.assertEqual(data['processes'], 18)
-        # Every process must agree that direct execution won its trace.
         self.assertTrue(all(row['wins'] == 3 for row in data['summary']))
 
     def test_changed_design_is_rejected(self):
@@ -107,7 +105,6 @@ class DgEvidenceTests(unittest.TestCase):
             structure({'environment': 'identity_negative_control,rejected\n'})
 
     def test_implausible_structure_record_is_rejected(self):
-        # Operators as large as the assembled matrix would mean no reuse.
         line = 'specialized_structure,8,10,4096,4096,8192,16384\n'
         with self.assertRaisesRegex(ValueError, 'Implausible specialized structure'):
             structure({'environment': line})
@@ -123,8 +120,6 @@ class DgEvidenceTests(unittest.TestCase):
             structure({'environment': line})
 
     def test_trace_allocation_must_cover_both_plans(self):
-        # The timed trace builds one plan per direction, so a record claiming a
-        # single plan's bytes would understate what the comparator retains.
         line = 'specialized_structure,8,10,34560,35389440,231168,231168\n'
         with self.assertRaisesRegex(ValueError, 'Implausible specialized structure'):
             structure({'environment': line})
@@ -213,7 +208,6 @@ class DgEvidenceTests(unittest.TestCase):
                     archive.writestr(name, payload)
             with self.assertRaisesRegex(ValueError, 'checksum mismatch'):
                 analyze(destination)
-
 
 if __name__ == '__main__':
     unittest.main()

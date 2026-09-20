@@ -17,20 +17,17 @@ ROOT = Path(__file__).resolve().parents[1]
 GENERATED = ROOT / 'research/generated'
 PATTERN = re.compile(r'(\d+)_(\d+)_(\d+)_(uniform|low|high|bimodal)_(local|random)_s(\d+)_i([01])_p(\d+)')
 
-
 def geomean(values):
     values = list(values)
     if not values or not all(x > 0 and math.isfinite(x) for x in values):
         raise ValueError('Invalid ratio population')
     return math.exp(statistics.mean(map(math.log, values)))
 
-
 def library_digest(manifest):
     sources = {p: h for p, h in manifest['sources'].items() if p.startswith(('src/', 'include/'))}
     if not sources:
         raise ValueError('Missing library sources')
     return hashlib.sha256(json.dumps(sources, sort_keys=True).encode()).hexdigest()
-
 
 def read_timings(path, methods):
     validate_run(path, methods, 20)
@@ -43,14 +40,12 @@ def read_timings(path, methods):
         for method in methods
     }
 
-
 def table(filename, header, rows, columns):
     text = '\\begin{tabular}{' + columns + '}\n\\toprule\n'
     text += ' & '.join(header) + r' \\' + '\n\\midrule\n'
     text += '\n'.join(' & '.join(map(str, row)) + r' \\' for row in rows)
     text += '\n\\bottomrule\n\\end{tabular}\n'
     (GENERATED / filename).write_text(text, encoding='utf-8', newline='\n')
-
 
 def ratio(methods, comparator, clock='gpu'):
     direct = 'direct_changing' if comparator == 'grouped_changing' else 'direct'
@@ -66,16 +61,13 @@ def ratio(methods, comparator, clock='gpu'):
         numerator = methods[comparator][clock]
     return numerator / methods[direct][clock]
 
-
 def summarize(records, comparator, clock='gpu'):
-    # Equal configuration weights, then equal weights for the three process medians.
     per_case = {key: geomean(ratio(methods, comparator, clock) for methods in processes.values())
                 for key, processes in records.items()}
     per_process = [geomean(ratio(processes[p], comparator, clock) for processes in records.values()) for p in range(3)]
     return dict(geomean=geomean(per_case.values()), minimum=min(per_case.values()),
                 wins=sum(x > 1 for x in per_case.values()), count=len(per_case),
                 process_range=[min(per_process), max(per_process)])
-
 
 def main():
     global GENERATED
@@ -271,7 +263,6 @@ def main():
     (GENERATED / 'figure-data.json').write_text(json.dumps(chart_data, indent=2), newline='\n')
     render_figures(GENERATED, chart_data)
     print(json.dumps(summary, indent=2))
-
 
 if __name__ == '__main__':
     main()
