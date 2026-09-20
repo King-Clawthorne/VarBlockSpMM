@@ -7,7 +7,7 @@ function Assert-PaperPunctuation([string]$Path) {
         }
     }
 }
-$projectRoot = [IO.Path]::GetFullPath("$PSScriptRoot/..")
+$projectRoot = [IO.Path]::GetFullPath("$PSScriptRoot")
 $output = Join-Path $projectRoot 'build/paper'
 New-Item -ItemType Directory -Force $output | Out-Null
 Assert-PaperPunctuation (Join-Path $projectRoot 'research/paper.tex')
