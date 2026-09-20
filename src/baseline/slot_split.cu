@@ -7,7 +7,7 @@
 #include <string>
 #include <utility>
 
-#include "varblockspmm/vbsr.hpp"
+#include "vbsr.hpp"
 
 namespace vbsr {
 __global__ void refresh_grouped_pointers(const float* input, float* output,

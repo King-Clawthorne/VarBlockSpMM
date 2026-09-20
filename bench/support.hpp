@@ -1,6 +1,6 @@
 #pragma once
 
-#include "varblockspmm/vbsr.hpp"
+#include "vbsr.hpp"
 #include <cuda_runtime.h>
 
 #include <charconv>

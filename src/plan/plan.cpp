@@ -2,7 +2,7 @@
 #include <numeric>
 #include <stdexcept>
 
-#include "varblockspmm/vbsr.hpp"
+#include "vbsr.hpp"
 namespace vbsr {
 namespace {
 void check(cudaError_t status) {

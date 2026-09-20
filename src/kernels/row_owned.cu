@@ -3,7 +3,7 @@
 
 #include <stdexcept>
 
-#include "varblockspmm/vbsr.hpp"
+#include "vbsr.hpp"
 
 namespace vbsr {
 namespace {

@@ -12,7 +12,7 @@
 #include <utility>
 #include <vector>
 
-#include "varblockspmm/vbsr.hpp"
+#include "vbsr.hpp"
 
 namespace {
 

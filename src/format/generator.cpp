@@ -2,7 +2,7 @@
 #include <random>
 #include <stdexcept>
 
-#include "varblockspmm/vbsr.hpp"
+#include "vbsr.hpp"
 namespace vbsr {
 HostMatrix generate(const GeneratorOptions& options) {
     if (options.degree < 1 || options.degree > 16 || options.block_rows < 1 ||
