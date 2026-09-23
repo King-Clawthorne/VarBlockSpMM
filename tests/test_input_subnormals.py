@@ -83,7 +83,7 @@ class InputSubnormalTests(unittest.TestCase):
   def test_published_inputs_have_none(self):
     paths = sorted((ROOT / 'data/application').glob('*.bin'))
     if not paths:
-      self.skipTest('application binaries are not present')
+      self.skipTest('application binaries are not present; run prepare_application.py')
     self.assertEqual({p.stem for p in paths}, {'bcsstk13', 'bcsstk14', 'bcsstk15'})
     for path in paths:
       with self.subTest(path.name):

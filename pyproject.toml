@@ -1,4 +1,4 @@
-# Python research tools. The CUDA library is built and installed by CMake.
+# Python tools for regenerating and validating the paper's results.
 [project]
 name = "varblockspmm-research-tools"
 version = "1.0.0"

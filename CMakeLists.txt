@@ -9,8 +9,6 @@ set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_EXTENSIONS OFF)
 # CUDA 12.6 includes both grouped GEMM and generic BSR SpMM. Measurements use 13.4.
 find_package(CUDAToolkit 12.6 REQUIRED)
-include(GNUInstallDirs)
-include(CMakePackageConfigHelpers)
 include(CTest)
 option(VARBLOCKSPMM_BUILD_BENCHMARKS "Build research benchmark executables" ON)
 set(VARBLOCKSPMM_MAGMA_SOURCE "" CACHE PATH "Optional pinned MAGMA source checkout for comparison")
@@ -23,9 +21,7 @@ add_library(varblockspmm
   src/baseline/slot_split.cu
   src/plan/plan.cpp)
 add_library(VarBlockSpMM::varblockspmm ALIAS varblockspmm)
-target_include_directories(varblockspmm PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+target_include_directories(varblockspmm PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_compile_features(varblockspmm PUBLIC cxx_std_20)
 target_link_libraries(varblockspmm PUBLIC CUDA::cudart CUDA::cusparse CUDA::cublas)
 set_target_properties(varblockspmm PROPERTIES CUDA_SEPARABLE_COMPILATION OFF)
@@ -51,16 +47,12 @@ add_test(NAME vbsr_tests COMMAND vbsr_tests)
 add_executable(vbsr_numeric_range tests/test_numeric_range.cpp)
 target_link_libraries(vbsr_numeric_range PRIVATE varblockspmm)
 add_test(NAME vbsr_numeric_range COMMAND vbsr_numeric_range)
-add_executable(vbsr_probe_accum tests/test_probe_accum.cpp)
-target_link_libraries(vbsr_probe_accum PRIVATE varblockspmm)
 add_executable(vbsr_dg_tests tests/test_dg_runtime.cpp)
 target_link_libraries(vbsr_dg_tests PRIVATE vbsr_dg_support)
 add_test(NAME vbsr_dg_tests COMMAND vbsr_dg_tests)
 endif()
 
 if(VARBLOCKSPMM_BUILD_BENCHMARKS)
-add_executable(vbsr_benchmark bench/benchmark.cpp)
-target_link_libraries(vbsr_benchmark PRIVATE varblockspmm)
 add_library(vbsr_benchmark_support STATIC
   bench/support.cpp
   bench/application_data.cpp
@@ -83,20 +75,3 @@ if(VARBLOCKSPMM_MAGMA_SOURCE)
   include(cmake/MagmaComparison.cmake)
 endif()
 endif()
-
-configure_package_config_file(cmake/VarBlockSpMMConfig.cmake.in
-  ${CMAKE_CURRENT_BINARY_DIR}/VarBlockSpMMConfig.cmake
-  INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/VarBlockSpMM)
-write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/VarBlockSpMMConfigVersion.cmake
-  VERSION ${PROJECT_VERSION} COMPATIBILITY SameMajorVersion)
-install(TARGETS varblockspmm EXPORT VarBlockSpMMTargets
-  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-install(EXPORT VarBlockSpMMTargets NAMESPACE VarBlockSpMM::
-  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/VarBlockSpMM)
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/VarBlockSpMMConfig.cmake
-  ${CMAKE_CURRENT_BINARY_DIR}/VarBlockSpMMConfigVersion.cmake
-  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/VarBlockSpMM)
-install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-install(FILES LICENSE DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/VarBlockSpMM)

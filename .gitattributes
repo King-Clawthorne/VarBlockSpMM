@@ -23,5 +23,4 @@
 # Keep generated evidence distinguishable from authored implementation changes.
 data/** linguist-generated=true
 research/generated/** linguist-generated=true
-research/validation/** linguist-generated=true
 research/archive/** linguist-generated=true

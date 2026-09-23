@@ -30,6 +30,8 @@ def main():
                                                        build_receipt=receipt), indent=2))
     result.check_returncode()
   for script, args in [
+      ('prepare_application.py', []),
+      ('prepare_native.py', []),
       ('run_revision.py', ['--output', str(root / 'synthetic')]),
       ('run_application.py', ['--output', str(root / 'published')]),
       ('run_supplement.py', ['native', '--output', str(root / 'native')]),
