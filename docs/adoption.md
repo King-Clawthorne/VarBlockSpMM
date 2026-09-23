@@ -14,7 +14,18 @@ The verified Python builder uses Visual Studio 2022 on Windows and CMake's defau
 
 `examples/consumer` uses only `find_package(VarBlockSpMM CONFIG REQUIRED)` and the exported target. It uploads a matrix and dense input, executes the installed direct plan, waits for completion, and compares every scalar output against a CPU reference. It can be configured outside the source checkout using only the installed prefix.
 
-The installed consumer was configured, built, and executed successfully, including its full CPU comparison. See the README for the install and consumer commands. The benchmark targets can be disabled with `VARBLOCKSPMM_BUILD_BENCHMARKS=OFF`, and the test target with `BUILD_TESTING=OFF`.
+The installed consumer was configured, built, and executed successfully, including its full CPU comparison. Install and build the consumer:
+
+```powershell
+cmake -S . -B build/package -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_ARCHITECTURES=native -DVARBLOCKSPMM_BUILD_BENCHMARKS=OFF -DBUILD_TESTING=OFF
+cmake --build build/package --config Release
+cmake --install build/package --config Release --prefix "$PWD/build/install"
+cmake -S examples/consumer -B build/consumer -DCMAKE_BUILD_TYPE=Release "-DCMAKE_PREFIX_PATH=$PWD/build/install"
+cmake --build build/consumer --config Release
+ctest --test-dir build/consumer -C Release --output-on-failure
+```
+
+Consumers link `VarBlockSpMM::varblockspmm`. The benchmark targets can be disabled with `VARBLOCKSPMM_BUILD_BENCHMARKS=OFF`, and the test target with `BUILD_TESTING=OFF`.
 
 ## Paper environment
 

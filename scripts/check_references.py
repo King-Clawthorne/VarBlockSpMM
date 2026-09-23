@@ -31,64 +31,64 @@ SOURCE_PATTERNS = [
 
 
 def pdf_text(path: Path) -> str:
-    try:
-        import fitz  # PyMuPDF
-    except ImportError:
-        pass
-    else:
-        with fitz.open(path) as doc:
-            return '\n'.join(page.get_text() for page in doc)
-    result = subprocess.run(['pdftotext', str(path), '-'],
-                            capture_output=True, text=True)
-    if result.returncode != 0:
-        raise RuntimeError('no PDF text extractor available (install PyMuPDF '
-                           'or pdftotext) for ' + str(path))
-    return result.stdout
+  try:
+    import fitz  # PyMuPDF
+  except ImportError:
+    pass
+  else:
+    with fitz.open(path) as doc:
+      return '\n'.join(page.get_text() for page in doc)
+  result = subprocess.run(['pdftotext', str(path), '-'],
+                          capture_output=True, text=True)
+  if result.returncode != 0:
+    raise RuntimeError('no PDF text extractor available (install PyMuPDF '
+                       'or pdftotext) for ' + str(path))
+  return result.stdout
 
 
 def check_sources(paths):
-    failures = []
-    for path in paths:
-        raw = path.read_bytes().decode('utf-8', 'replace')
-        # Normalize whole-file line endings so only stray in-line CRs are flagged.
-        text = raw.replace('\r\n', '\n')
-        for number, line in enumerate(text.split('\n'), 1):
-            for pattern, message in SOURCE_PATTERNS:
-                if re.search(pattern, line):
-                    failures.append('{}:{}: {}'.format(path, number, message))
-    return failures
+  failures = []
+  for path in paths:
+    raw = path.read_bytes().decode('utf-8', 'replace')
+    # Normalize whole-file line endings so only stray in-line CRs are flagged.
+    text = raw.replace('\r\n', '\n')
+    for number, line in enumerate(text.split('\n'), 1):
+      for pattern, message in SOURCE_PATTERNS:
+        if re.search(pattern, line):
+          failures.append('{}:{}: {}'.format(path, number, message))
+  return failures
 
 
 def check_pdfs(paths):
-    failures = []
-    for path in paths:
-        text = pdf_text(path)
-        for pattern, message in PAGE_PATTERNS:
-            for match in re.finditer(pattern, text):
-                start = max(0, match.start() - 60)
-                context = ' '.join(text[start:match.end() + 60].split())
-                failures.append('{}: {} near "{}"'.format(path, message, context))
-    return failures
+  failures = []
+  for path in paths:
+    text = pdf_text(path)
+    for pattern, message in PAGE_PATTERNS:
+      for match in re.finditer(pattern, text):
+        start = max(0, match.start() - 60)
+        context = ' '.join(text[start:match.end() + 60].split())
+        failures.append('{}: {} near "{}"'.format(path, message, context))
+  return failures
 
 
 def main() -> int:
-    root = Path(__file__).resolve().parent.parent
-    sources = sorted((root / 'research').glob('*.tex'))
-    sources += sorted((root / 'research' / 'generated').glob('*.tex'))
-    pdfs = [p for p in ((root / 'build/paper/paper.pdf'),
-                        (root / 'build/paper/supplement.pdf')) if p.exists()]
-    if not pdfs:
-        print('No built PDF found under build/paper', file=sys.stderr)
-        return 1
-    failures = check_sources(sources) + check_pdfs(pdfs)
-    if failures:
-        for failure in failures:
-            print('Reference check failed: ' + failure, file=sys.stderr)
-        return 1
-    print('Reference check passed for {} sources and {} PDFs'
-          .format(len(sources), len(pdfs)))
-    return 0
+  root = Path(__file__).resolve().parent.parent
+  sources = sorted((root / 'research').glob('*.tex'))
+  sources += sorted((root / 'research' / 'generated').glob('*.tex'))
+  pdfs = [p for p in ((root / 'build/paper/paper.pdf'),
+                      (root / 'build/paper/supplement.pdf')) if p.exists()]
+  if not pdfs:
+    print('No built PDF found under build/paper', file=sys.stderr)
+    return 1
+  failures = check_sources(sources) + check_pdfs(pdfs)
+  if failures:
+    for failure in failures:
+      print('Reference check failed: ' + failure, file=sys.stderr)
+    return 1
+  print('Reference check passed for {} sources and {} PDFs'
+        .format(len(sources), len(pdfs)))
+  return 0
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+  sys.exit(main())

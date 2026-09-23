@@ -17,18 +17,18 @@ OUT = ROOT / 'research/generated'
 
 
 def gm(values):
-    values = list(values)
-    return math.exp(sum(map(math.log, values)) / len(values))
+  values = list(values)
+  return math.exp(sum(map(math.log, values)) / len(values))
 
 
 rows = []
 for record in data['summary']:
-    rows.append([f'{record["elements"]:,}', record['rhs'], record['steps'],
-                 f'{record["direct_ms"]:.3f}', f'{record["specialized"]:.3f}',
-                 f'{record["fused_ms"]:.3f}', f'{record["fused"]:.3f}',
-                 f'{record["fused_copies"]:.3f}',
-                 f'{record["sharing"]:.3f}',
-                 f'{record["sharing_min"]:.3f} to {record["sharing_max"]:.3f}'])
+  rows.append([f'{record["elements"]:,}', record['rhs'], record['steps'],
+               f'{record["direct_ms"]:.3f}', f'{record["specialized"]:.3f}',
+               f'{record["fused_ms"]:.3f}', f'{record["fused"]:.3f}',
+               f'{record["fused_copies"]:.3f}',
+               f'{record["sharing"]:.3f}',
+               f'{record["sharing_min"]:.3f} to {record["sharing_max"]:.3f}'])
 text = ('\\begin{tabular}{rrrrrrrrrr}\n\\toprule\n'
         'Elements & RHS & Steps & Direct ms & Batched & Fused ms & Fused & Copies'
         ' & Sharing & Sharing range\\\\\n'
@@ -40,7 +40,7 @@ large = next(r for r in data['summary'] if r['elements'] == 4096 and r['rhs'] ==
 ratios = [r['specialized'] for r in data['summary']]
 structures = {(r['distinct'], r['launches'], r['operator_bytes']) for r in data['summary']}
 if len(structures) != 1:
-    raise ValueError('Structure differs across transport cases')
+  raise ValueError('Structure differs across transport cases')
 distinct, launches, operator_bytes = structures.pop()
 # The plan also holds batch pointer arrays, which grow with the element count,
 # and the alternating trace holds one plan per direction. Report the factor
