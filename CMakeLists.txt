@@ -11,12 +11,12 @@ set(CMAKE_CUDA_EXTENSIONS OFF)
 find_package(CUDAToolkit 12.6 REQUIRED)
 
 add_library(varblockspmm
-  src/format/vbsr.cpp
-  src/format/generator.cpp
-  src/kernels/row_owned.cu
-  src/plan/plan.cpp)
+  src/vbsr.cpp
+  src/generator.cpp
+  src/row_owned.cu
+  src/plan.cpp)
 add_library(VarBlockSpMM::varblockspmm ALIAS varblockspmm)
-target_include_directories(varblockspmm PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(varblockspmm PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_compile_features(varblockspmm PUBLIC cxx_std_20)
 target_link_libraries(varblockspmm PUBLIC CUDA::cudart)
 target_compile_options(varblockspmm PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--use_fast_math>)

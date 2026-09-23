@@ -2,7 +2,7 @@
 param(
   [ValidateSet("Debug", "Release", "RelWithDebInfo", "MinSizeRel")]
   [string]$Configuration = "Release",
-  [string]$BuildDirectory = "$PSScriptRoot\..\build",
+  [string]$BuildDirectory = "$PSScriptRoot\build",
   [string]$Generator = "Visual Studio 17 2022",
   [string]$Architecture = "x64",
   [string]$CudaArchitectures = "native"
@@ -10,7 +10,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$projectRoot = (Resolve-Path -LiteralPath "$PSScriptRoot\..").Path
+$projectRoot = (Resolve-Path -LiteralPath $PSScriptRoot).Path
 $buildPath = [System.IO.Path]::GetFullPath($BuildDirectory)
 
 Write-Host "Configuring VarBlockSpMM in $buildPath"

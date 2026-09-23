@@ -2,7 +2,7 @@
 #include <random>
 #include <stdexcept>
 
-#include "varblockspmm/vbsr.hpp"
+#include "vbsr.hpp"
 namespace vbsr {
 HostMatrix generate(const GeneratorOptions& options) {
   if (options.degree < 1 || options.degree > 16 || options.block_rows < 1 ||
@@ -34,14 +34,9 @@ HostMatrix generate(const GeneratorOptions& options) {
   matrix.block_cols = options.block_cols;
   matrix.row_size.resize(options.block_rows);
   matrix.col_size.resize(options.block_cols);
-  for (int& row_size : matrix.row_size) {
-    row_size = random_block_size();
-  }
-  for (int& column_size : matrix.col_size) {
-    column_size = random_block_size();
-  }
+  std::generate(matrix.row_size.begin(), matrix.row_size.end(), random_block_size);
+  std::generate(matrix.col_size.begin(), matrix.col_size.end(), random_block_size);
 
-  // Prefix sums map variable-sized block coordinates to scalar coordinates.
   matrix.row_scalar_off = {0};
   for (int row_size : matrix.row_size) {
     matrix.row_scalar_off.push_back(matrix.row_scalar_off.back() + row_size);
@@ -55,8 +50,7 @@ HostMatrix generate(const GeneratorOptions& options) {
   matrix.value_off = {0};
   std::uniform_real_distribution<float> random_value(-1.0f, 1.0f);
   for (int block_row = 0; block_row < options.block_rows; ++block_row) {
-    // Sample without replacement so each block row contains exactly `degree`
-    // blocks.
+
     std::vector<int> selected_columns;
     while (int(selected_columns.size()) < options.degree) {
       const int block_column = options.local_columns

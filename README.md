@@ -2,7 +2,7 @@
 
 VarBlockSpMM is a CUDA library for multiplying a sparse matrix stored as dense, variable-sized blocks by a dense matrix: `C = A * B`.
 
-The public API is in [`include/varblockspmm/vbsr.hpp`](include/varblockspmm/vbsr.hpp). It provides validated host matrices, device matrix storage, deterministic matrix generation, a CPU reference, and reusable execution plans for the row-owned CUDA kernel.
+The public API is in [`src/vbsr.hpp`](src/vbsr.hpp). It provides validated host matrices, device matrix storage, deterministic matrix generation, a CPU reference, and reusable execution plans for the row-owned CUDA kernel.
 
 ## Requirements
 
@@ -17,4 +17,4 @@ cmake -S . -B build -DCMAKE_CUDA_ARCHITECTURES=native
 cmake --build build --config Release --parallel
 ```
 
-The CMake target is `VarBlockSpMM::varblockspmm` (also available as `varblockspmm`). Include `varblockspmm/vbsr.hpp` and link the target from a CMake consumer project.
+The CMake target is `VarBlockSpMM::varblockspmm` (also available as `varblockspmm`). Include `vbsr.hpp` and link the target from a CMake consumer project.

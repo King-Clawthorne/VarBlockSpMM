@@ -1,23 +1,27 @@
-#include <stdexcept>
 #include <algorithm>
 #include <numeric>
+#include <stdexcept>
 
-#include "varblockspmm/vbsr.hpp"
+#include "vbsr.hpp"
 namespace vbsr {
 namespace {
 void check(cudaError_t status) {
-  if (status != cudaSuccess) throw std::runtime_error(cudaGetErrorString(status));
+  if (status != cudaSuccess)
+    throw std::runtime_error(cudaGetErrorString(status));
 }
-template<class T> std::vector<T> read_metadata(const T* source, size_t count) {
-  if (count && !source) throw std::invalid_argument("null device metadata");
+template <class T> std::vector<T> read_metadata(const T* source, size_t count) {
+  if (count && !source)
+    throw std::invalid_argument("null device metadata");
   std::vector<T> result(count);
-  if (count) check(cudaMemcpy(result.data(), source, count * sizeof(T), cudaMemcpyDeviceToHost));
+  if (count)
+    check(cudaMemcpy(result.data(), source, count * sizeof(T), cudaMemcpyDeviceToHost));
   return result;
 }
-}
+} // namespace
 Plan::Plan(DeviceMatrix matrix, PlanOptions options, cudaStream_t stream)
     : a_(matrix), options_(options) {
-  if (options.rhs_width != 8 && options.rhs_width != 16 && options.rhs_width != 32 && options.rhs_width != 64)
+  if (options.rhs_width != 8 && options.rhs_width != 16 && options.rhs_width != 32 &&
+      options.rhs_width != 64)
     throw std::invalid_argument("rhs_width must be 8,16,32,64");
   if (options.kernel != Kernel::Auto && options.kernel != Kernel::RowOwned)
     throw std::invalid_argument("unsupported kernel");
@@ -41,14 +45,16 @@ Plan::Plan(DeviceMatrix matrix, PlanOptions options, cudaStream_t stream)
     throw std::invalid_argument("device scalar dimensions disagree with metadata");
   std::vector<int32_t> order(matrix.block_rows);
   std::iota(order.begin(), order.end(), 0);
-  auto split = std::stable_partition(order.begin(), order.end(), [&](int r) { return host.row_size[r] <= 16; });
+  auto split = std::stable_partition(order.begin(), order.end(),
+                                     [&](int r) { return host.row_size[r] <= 16; });
   small_row_count_ = int(split - order.begin());
   large_row_count_ = matrix.block_rows - small_row_count_;
   int32_t* allocation = nullptr;
   check(cudaMalloc(reinterpret_cast<void**>(&allocation), order.size() * sizeof(int32_t)));
   owned_row_shape_order_ = std::shared_ptr<int32_t>(allocation, [](int32_t* p) { cudaFree(p); });
-  check(cudaMemcpy(allocation, order.data(), order.size() * sizeof(int32_t), cudaMemcpyHostToDevice));
-  // The caller's stream may not wait for this default-stream upload.
+  check(
+      cudaMemcpy(allocation, order.data(), order.size() * sizeof(int32_t), cudaMemcpyHostToDevice));
+
   check(cudaStreamSynchronize(nullptr));
   row_shape_order_ = allocation;
 }
@@ -61,9 +67,7 @@ Plan::Plan(const Matrix& matrix, PlanOptions options)
     throw std::invalid_argument("rhs_width must be 8,16,32,64");
   }
   if (options.kernel != Kernel::Auto && options.kernel != Kernel::RowOwned) {
-    throw std::invalid_argument(
-        "split-row was not justified by the 1.0 regime map; use RowOwned or "
-        "GroupedGemmPlan");
+    throw std::invalid_argument("unsupported kernel selection");
   }
 }
 void Plan::execute(const float* input, float* output, cudaStream_t stream) const {

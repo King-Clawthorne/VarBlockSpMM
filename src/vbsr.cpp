@@ -1,4 +1,4 @@
-#include "varblockspmm/vbsr.hpp"
+#include "vbsr.hpp"
 
 #include <cuda_runtime.h>
 
@@ -31,12 +31,9 @@ template <class T> T* copy_to_device(const std::vector<T>& source) {
 
 } // namespace
 
-void HostMatrix::validate() const {
-  validate_structure(values.size());
-}
+void HostMatrix::validate() const { validate_structure(values.size()); }
 void HostMatrix::validate_structure(size_t value_count) const {
-  // Validate the structure from coarse dimensions down to individual block
-  // payloads.
+
   if (block_rows <= 0 || block_cols <= 0) {
     throw std::invalid_argument("positive block dimensions required");
   }
@@ -54,8 +51,8 @@ void HostMatrix::validate_structure(size_t value_count) const {
   if (row_ptr.front() != 0 || row_ptr.back() < 0 || size_t(row_ptr.back()) != block_col.size()) {
     throw std::invalid_argument("bad row_ptr");
   }
-  if (value_off.size() != block_col.size() + 1 || value_off.front() != 0 ||
-      value_off.back() < 0 || size_t(value_off.back()) != value_count) {
+  if (value_off.size() != block_col.size() + 1 || value_off.front() != 0 || value_off.back() < 0 ||
+      size_t(value_off.back()) != value_count) {
     throw std::invalid_argument("bad value offsets");
   }
 
@@ -78,8 +75,6 @@ void HostMatrix::validate_structure(size_t value_count) const {
     }
   }
 
-  // row_ptr is monotonic, so one forward cursor identifies the owner of every
-  // block.
   int block_row = 0;
   int64_t expected_value_offset = 0;
   for (size_t block_index = 0; block_index < block_col.size(); ++block_index) {
@@ -109,10 +104,6 @@ Matrix::Matrix(const HostMatrix& host) {
   cols_ = host.scalar_cols();
   value_count_ = host.values.size();
 
-  // RHS-32 kernels use a lighter synchronous CTA for rows up to 16 scalars
-  // high and double-buffered 256-thread CTAs for rows with more reuse.
-  // Keeping each shape class contiguous permits two homogeneous launches
-  // without changing VBSR order.
   std::vector<int32_t> row_shape_order(host.block_rows);
   std::iota(row_shape_order.begin(), row_shape_order.end(), int32_t{0});
   const auto large_begin =
@@ -131,8 +122,7 @@ Matrix::Matrix(const HostMatrix& host) {
     value_off_ = copy_to_device(host.value_off);
     values_ = copy_to_device(host.values);
     row_shape_order_ = copy_to_device(row_shape_order);
-    // Pageable uploads may return before device completion. A new matrix
-    // must be ready for an immediate launch on a nonblocking stream.
+
     check_cuda(cudaStreamSynchronize(nullptr));
   } catch (...) {
     release();
@@ -205,7 +195,8 @@ void Matrix::update_values(const float* source, size_t count, cudaStream_t strea
   if (count != value_count_ || (count && (!source || !values_)))
     throw std::invalid_argument("value update size or pointer mismatch");
   if (count && source != values_)
-    check_cuda(cudaMemcpyAsync(values_, source, count * sizeof(float), cudaMemcpyDeviceToDevice, stream));
+    check_cuda(
+        cudaMemcpyAsync(values_, source, count * sizeof(float), cudaMemcpyDeviceToDevice, stream));
 }
 size_t Matrix::storage_bytes() const {
   int64_t count = 0;
@@ -220,8 +211,6 @@ std::vector<float> cpu_reference(const HostMatrix& matrix, const std::vector<flo
     throw std::invalid_argument("B size");
   }
 
-  // The reference mirrors the packed block layout but accumulates each dot
-  // product in double, including contributions from different blocks.
   std::vector<float> output(matrix.scalar_rows() * rhs_width, 0.0f);
   for (int block_row = 0; block_row < matrix.block_rows; ++block_row) {
     const int row_height = matrix.row_size[block_row];
@@ -241,7 +230,7 @@ std::vector<float> cpu_reference(const HostMatrix& matrix, const std::vector<flo
           }
         }
         const auto output_index = matrix.row_scalar_off[block_row] + local_row +
-                                   int64_t(rhs_column) * matrix.scalar_rows();
+                                  int64_t(rhs_column) * matrix.scalar_rows();
         output[output_index] = float(sum);
       }
     }

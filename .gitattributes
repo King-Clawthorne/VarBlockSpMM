@@ -1,7 +1,5 @@
-# Normalize source files to LF across Windows and Unix checkouts.
 * text=auto eol=lf
 
-# Native Windows command scripts use CRLF.
 *.ps1 text eol=crlf
 *.bat text eol=crlf
 *.cmd text eol=crlf
