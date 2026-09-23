@@ -18,11 +18,4 @@ plan.execute(device_B, device_C, stream);          // C = A * B
 
 Build it with `scripts/build.ps1`. The build needs CUDA 12.6 or newer and CMake 3.25 or newer.
 
-## Learn more
-
-- [Results in detail](docs/results.md)
-- [API reference](docs/api.md)
-- [How it works](docs/design.md)
-- [Reproduce the paper](docs/reproducing.md)
-
 MIT licensed. See [LICENSE](LICENSE).
