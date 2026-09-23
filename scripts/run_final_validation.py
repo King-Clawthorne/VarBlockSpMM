@@ -37,7 +37,6 @@ def main():
       ('run_supplement.py', ['native', '--output', str(root / 'native')]),
       ('run_supplement.py', ['ablation', '--output', str(root / 'ablation')]),
       ('run_robustness.py', ['--output', str(root / 'robustness')]),
-      ('prepare_magma.py', []),
       ('prepare_transport.py', ['--all']),
       ('build_relevance.py', []),
       ('run_relevance.py', ['--output', str(root / 'relevance')]),

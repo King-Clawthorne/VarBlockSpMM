@@ -3,12 +3,32 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 from build_verified import compiled_hashes
-from run_relevance import sha
-from prepare_magma import COMMIT, DEST
+import hashlib
 
 ROOT=Path(__file__).resolve().parents[1]
 BUILD=ROOT/'build/relevance'
+COMMIT = 'c3de65f855dd24cdbe44649a146286558f528087'
+DEST = ROOT / 'build/deps/magma'
+
+
+def sha(path):
+  return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def prepare_magma():
+  if not DEST.exists():
+    subprocess.run(['git','clone','--no-checkout','--depth','1','https://github.com/icl-utk-edu/magma.git',str(DEST)],check=True)
+    subprocess.run(['git','fetch','--depth','1','origin',COMMIT],cwd=DEST,check=True)
+    subprocess.run(['git','checkout','--detach',COMMIT],cwd=DEST,check=True)
+  head=subprocess.check_output(['git','rev-parse','HEAD'],cwd=DEST,text=True).strip()
+  if head != COMMIT:
+    raise RuntimeError(f'MAGMA checkout is {head}, expected {COMMIT}. Use a separate checkout at the pinned commit.')
+  headers=[p.relative_to(DEST).as_posix() for p in sorted((DEST/'include').glob('*.h'))]
+  subprocess.run([sys.executable,'tools/codegen.py',*headers],cwd=DEST,check=True)
+
+
 def inputs():
   result=compiled_hashes()
   for folder in ('include','control','magmablas','interface_cuda'):
@@ -17,8 +37,7 @@ def inputs():
   return result
 
 if __name__=='__main__':
-  if subprocess.check_output(['git','rev-parse','HEAD'],cwd=DEST,text=True).strip()!=COMMIT:
-    raise RuntimeError('Wrong MAGMA revision')
+  prepare_magma()
   before=inputs()
   toolkit=os.environ.get('CUDAToolkit_ROOT') or os.environ.get('CUDA_PATH')
   configure=['cmake','-S',str(ROOT),'-B',str(BUILD),'-DCMAKE_CUDA_ARCHITECTURES=native',

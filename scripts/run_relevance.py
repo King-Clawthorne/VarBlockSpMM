@@ -11,7 +11,7 @@ import statistics
 import subprocess
 import time
 import zipfile
-from prepare_magma import COMMIT
+from build_relevance import COMMIT
 from prepare_transport import INPUT_DIRECTORY, transport_steps
 from archive_inputs import input_zip, split_inputs
 
