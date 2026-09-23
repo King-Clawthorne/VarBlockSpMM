@@ -2,6 +2,17 @@
 
 The full measurements are in the [paper](../research/paper.pdf) and [supplement](../research/supplement.pdf). This page summarizes them.
 
+## Key findings
+
+- **Faster than the libraries overall.** Across 128 benchmark configurations, direct execution is 1.139x faster (geometric mean) than the fastest tested library, winning 105 of 128.
+- **Wider right-hand sides benefit most.** At RHS width 64 it wins all 32 configurations, 1.398x faster than the fastest library.
+- **Real solver speedup.** In a discontinuous Galerkin transport solver (4,096 elements, RHS 64), it is 1.439x faster than the fastest library and 1.833x faster than MAGMA.
+- **Cheap to start.** Starting from prepared blocks, setup plus one product is 3.953 times faster than the best library alternative, and scalar CSR needs 1.948 times the device storage.
+- **Not always the winner.** A hand-written kernel specialized to one operator beats it on every transport trace. On the generated covariance inputs, BSR8 is faster in steady state.
+- **Use something else for other shapes.** For scattered scalar nonzeros use CSR. For nearly dense matrices use dense SGEMM.
+
+The sections below give the full details and protocols.
+
 ## Headline results and when to use it
 
 The comparison including **MAGMA variable-size batched GEMM** gives a **1.139x geometric-mean speedup over the fastest tested library**, with 105/128 direct wins on the full core grid. It tests both slot-based MAGMA and batched products followed by reduction. The replacement campaign crosses seeds 2, 3, and 5 with three fresh processes per seed and both single-product and eight-product queued timings. Each method receives twenty samples per process. Headline ratios average paired log ratios over all seeds and processes in single-product mode. Eight-product queued execution gives 1.131x and 101/128 configuration wins.
