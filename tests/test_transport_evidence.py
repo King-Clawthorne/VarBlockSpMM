@@ -82,10 +82,6 @@ class TransportEvidenceTests(unittest.TestCase):
     with self.assertRaisesRegex(ValueError,'metadata differs'):
       validate_inputs(self.root,broken)
 
-  def test_legacy_archive_requires_explicit_opt_in(self):
-    with self.assertRaisesRegex(ValueError,'Legacy campaign'):
-      analyze(Path(__file__).resolve().parents[1]/'data/relevance')
-
   def test_core_crosses_seed_process_and_queue_mode(self):
     jobs=[j for j in design() if j['kind']=='core']
     self.assertEqual(len(jobs),2304)

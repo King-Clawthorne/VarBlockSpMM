@@ -1,4 +1,4 @@
-"""Bounded follow-up campaign. Never runs the historical ablation sweep."""
+"""MAGMA comparison, characteristic transport, factor-control, and update campaign."""
 import argparse
 import csv
 import hashlib
@@ -18,21 +18,17 @@ from archive_inputs import input_zip, split_inputs
 ROOT=Path(__file__).resolve().parents[1]
 def sha(path): return hashlib.sha256(path.read_bytes()).hexdigest()
 
-def design(version=2):
+def design():
   jobs=[]
-  seeds, processes, batches = ((2,), (0,), (1,)) if version == 1 else ((2,3,5), (0,1,2), (1,8))
   for degree,rhs,shape,locality,seed,process,batch in itertools.product(
-          (2,4,8,16),(8,16,32,64),(-3,-2,-1,0),('local','random'),seeds,processes,batches):
-    args=[4096,degree,rhs,shape,seed,6 if version==1 else 20,0,'none',locality]
-    jobs.append(dict(kind='core',args=args) if version==1 else
-                dict(kind='core',process=process,batch=batch,args=args+[batch]))
+          (2,4,8,16),(8,16,32,64),(-3,-2,-1,0),('local','random'),(2,3,5),(0,1,2),(1,8)):
+    args=[4096,degree,rhs,shape,seed,20,0,'none',locality]
+    jobs.append(dict(kind='core',process=process,batch=batch,args=args+[batch]))
   # Full crossed control. Three process repetitions of matrix seed 11.
   for rows,degree,rhs,shape,process in itertools.product((128,512),(4,16,128),(8,64),(8,32),(0,1,2)):
     jobs.append(dict(kind='control',process=process,args=[rows,degree,rhs,shape,11,6,0,'none']))
   for elements,rhs,process in itertools.product((256,1024,4096),(8,64),(0,1,2)):
-    directory = 'build/transport-inputs' if version==1 else INPUT_DIRECTORY.as_posix()
-    steps = 32 if version==1 else transport_steps(elements)
-    jobs.append(dict(kind='transport',process=process,args=[f'{directory}/transport_e{elements}_n{rhs}',rhs,steps,6,0]))
+    jobs.append(dict(kind='transport',process=process,args=[f'{INPUT_DIRECTORY.as_posix()}/transport_e{elements}_n{rhs}',rhs,transport_steps(elements),6,0]))
   for process in range(3): jobs.append(dict(kind='updates',process=process,args=[]))
   rng=random.Random(20260910)
   for job in jobs:
@@ -101,12 +97,10 @@ def validate_input_archive(manifest, archive):
       raise ValueError('Convergence physical protocol mismatch')
 
 
-def analyze(dest, *, allow_legacy=False):
+def analyze(dest):
   m=json.loads((dest/'manifest.json').read_text())
-  version=m.get('schema',1)
-  if version!=2 and not (version==1 and allow_legacy):
-    raise ValueError('Legacy campaign lacks archived input validation. Use explicitly for historical review only')
-  if not m.get('complete') or m['jobs']!=design(version): raise ValueError('Incomplete or changed experiment design')
+  if m.get('schema')!=2: raise ValueError('Unsupported campaign schema')
+  if not m.get('complete') or m['jobs']!=design(): raise ValueError('Incomplete or changed experiment design')
   if len(m['records'])!=len(m['jobs']): raise ValueError('Missing process records')
   if any(m['sources'].get(p)!=h for p,h in m['build_receipt']['sources'].items()): raise ValueError('Build inputs disagree with archive')
   if any(m['build_receipt']['executables'].get(p)!=h for p,h in m['executables'].items()): raise ValueError('Build binaries disagree with manifest')
@@ -117,7 +111,7 @@ def analyze(dest, *, allow_legacy=False):
       raise ValueError('Source archive coverage mismatch')
     for name,digest in m['sources'].items():
       if hashlib.sha256(sources.read(name)).hexdigest()!=digest: raise ValueError('Source hash mismatch')
-  if version==2: validate_inputs(dest,m)
+  validate_inputs(dest,m)
   summaries=[]
   with zipfile.ZipFile(dest/'runs.zip') as runs:
     expected_files={f'{i}.{suffix}' for i in range(len(m['jobs'])) for suffix in ('csv','log')}
@@ -134,7 +128,7 @@ def analyze(dest, *, allow_legacy=False):
       if hashlib.sha256(raw).hexdigest()!=record['stdout_sha256']: raise ValueError('Raw checksum mismatch')
       err=runs.read(f'{index}.log')
       if hashlib.sha256(err).hexdigest()!=record['stderr_sha256']: raise ValueError('Log checksum mismatch')
-      if version==2 and job['kind']=='transport':
+      if job['kind']=='transport':
         log=err.decode()
         if 'identity_negative_control,rejected' not in log:
           raise ValueError('Missing transport negative control')

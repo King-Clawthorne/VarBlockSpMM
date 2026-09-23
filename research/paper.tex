@@ -27,7 +27,6 @@
 \fancyhead[R]{Cohen Brunner Thomas}
 \fancyfoot[C]{\thepage}
 \input{generated/macros.tex}
-\input{generated/kernel-macros.tex}
 \input{generated/supplement-macros.tex}
 \input{generated/robustness-macros.tex}
 \input{generated/relevance-macros.tex}
@@ -924,12 +923,6 @@ unresolved references and control sequences that reached the page as literal
 text. A successful compilation does not catch either defect.
 Regression tests in \path{tests/test_evidence.py}
 exercise corrupt timing records and stale source or binary receipts.
-The historical RHS-8 archive is validated separately for the supplement.
-The two seed-4 development archives are under \path{data/narrow-tuning/}
-and \path{data/narrow-tuning-2/}. Their 96 processes are validated by
-\path{scripts/analyze_tuning.py} and are excluded from evaluation averages.
-It predates build-linked receipts and is not used to generate current
-library ratios or matched mechanism effects.
 
 \section{Conclusion}
 VarBlockSpMM provides direct execution of packed variable blocks with one

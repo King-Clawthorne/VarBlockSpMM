@@ -1,5 +1,6 @@
 """Regression checks for rejecting altered focused-campaign provenance."""
 import json
+import os
 from pathlib import Path
 import shutil
 import sys
@@ -14,12 +15,13 @@ class RelevanceEvidenceTests(unittest.TestCase):
   def check_rejected(self, alter, error):
     with tempfile.TemporaryDirectory() as directory:
       dest=Path(directory)
-      for name in ('manifest.json','sources.zip','runs.zip'):
-        shutil.copyfile(ROOT/'data/relevance'/name,dest/name)
+      for source in (ROOT/'data/relevance-v2').iterdir():
+        if source.name=='manifest.json': shutil.copyfile(source,dest/source.name)
+        else: os.link(source,dest/source.name)  # Read-only; avoids copying 220 MB of inputs.
       manifest=json.loads((dest/'manifest.json').read_text())
       alter(manifest)
       (dest/'manifest.json').write_text(json.dumps(manifest))
-      with self.assertRaisesRegex(ValueError,error): analyze(dest, allow_legacy=True)
+      with self.assertRaisesRegex(ValueError,error): analyze(dest)
 
   def test_changed_command_is_rejected(self):
     self.check_rejected(lambda m:m['records'][0]['command'].append('unexpected'), 'command')

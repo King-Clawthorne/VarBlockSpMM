@@ -89,7 +89,7 @@ def main():
                 block_rows=len(row_sizes), block_cols=len(col_sizes),
                 fill_fraction=padded.nnz / len(packed),
                 row_partition_cycle=[8, 16, 32, 64], column_partition_cycle=[64, 32, 16, 8])
-    (DEST / (name + '.json')).write_text(json.dumps(meta, indent=2))
+    (DEST / (name + '.json')).write_text(json.dumps(meta, indent=2), newline='\n')
     print(name, original_shape, 'fill', round(meta['fill_fraction'], 4))
 
 

@@ -42,10 +42,6 @@ if ($mainSummary.provenance.kernel_sha256 -ne $supplementSummary.kernel_sha256) 
 if ($mainSummary.provenance.library_sha256 -ne $supplementSummary.library_sha256) {
   throw 'Main and supplementary campaigns use different library sources'
 }
-python "$PSScriptRoot/analyze_kernel.py"
-if ($LASTEXITCODE -ne 0) { throw 'Kernel result validation failed' }
-python "$PSScriptRoot/analyze_tuning.py"
-if ($LASTEXITCODE -ne 0) { throw 'Narrow development validation failed' }
 if ($ResultsRoot) {
   python "$PSScriptRoot/export_robustness.py" --input (Join-Path $ResultsRoot 'robustness')
 } else {
