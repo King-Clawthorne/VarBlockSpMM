@@ -19,6 +19,23 @@ No GPU needed. This validates the archived campaigns in [data/](data/), regenera
 powershell -File scripts/build_paper.ps1
 ```
 
+## Run the Python test suite
+
+After `uv sync`, run all Python evidence and workflow checks with:
+
+```powershell
+uv run python tests/test_suite.py
+```
+
+Run the CUDA and C++ correctness suite from an existing CMake build with:
+
+```powershell
+cmake --build build --config Release --target vbsr_tests
+ctest --test-dir build -C Release --output-on-failure
+```
+
+For a fresh build directory, add `-Configure`. Use `-BuildOnly` to compile the test targets without running them.
+
 ## Regenerate all data on your GPU
 
 This takes hours of GPU time. Run nothing else on the GPU while it runs.
@@ -40,4 +57,4 @@ powershell -File scripts/build_paper.ps1 -ResultsRoot build/rerun
 | [scripts/](scripts/) | Campaign runners (`run_*`, `prepare_*`) and analysis and exporters (`analyze_*`, `export_*`) |
 | [data/](data/) | Archived evidence behind the published numbers; see [data/README.md](data/README.md) |
 | [research/](research/) | Paper sources, generated macros and figures, and the built PDFs |
-| [tests/](tests/) | Kernel correctness and numerics (CTest), plus evidence validation (`python -m unittest discover tests`) |
+| [tests/](tests/) | Python suite (`uv run python tests/test_suite.py`) and C++/CUDA suite (`cmake --build build --config Release --target vbsr_tests`, then CTest) |

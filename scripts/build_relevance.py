@@ -43,7 +43,7 @@ if __name__=='__main__':
     raise RuntimeError('Comparison build must configure Release')
   binaries=BUILD/'Release' if cache.get('CMAKE_CONFIGURATION_TYPES') else BUILD
   suffix='.exe' if os.name=='nt' else ''
-  names=['vbsr_relevance','vbsr_transport','vbsr_updates','vbsr_tests','vbsr_magma_tests']
+  names=['vbsr_relevance','vbsr_transport','vbsr_updates','vbsr_tests']
   receipt=dict(sources=before,commands=commands,magma_commit=COMMIT,
                configuration='Release',generator=cache['CMAKE_GENERATOR'],
                build_type=cache['CMAKE_BUILD_TYPE'],

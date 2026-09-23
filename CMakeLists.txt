@@ -40,16 +40,10 @@ target_compile_options(vbsr_dg_support PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--use_
 endif()
 
 if(BUILD_TESTING)
-add_executable(vbsr_tests tests/test_main.cpp)
+add_executable(vbsr_tests tests/test_suite.cpp)
 target_link_libraries(vbsr_tests PRIVATE varblockspmm)
 add_test(NAME vbsr_tests COMMAND vbsr_tests)
-# Pins the flush-to-zero boundary that --use_fast_math introduces.
-add_executable(vbsr_numeric_range tests/test_numeric_range.cpp)
-target_link_libraries(vbsr_numeric_range PRIVATE varblockspmm)
-add_test(NAME vbsr_numeric_range COMMAND vbsr_numeric_range)
-add_executable(vbsr_dg_tests tests/test_dg_runtime.cpp)
-target_link_libraries(vbsr_dg_tests PRIVATE vbsr_dg_support)
-add_test(NAME vbsr_dg_tests COMMAND vbsr_dg_tests)
+target_link_libraries(vbsr_tests PRIVATE vbsr_dg_support)
 endif()
 
 if(VARBLOCKSPMM_BUILD_BENCHMARKS)
