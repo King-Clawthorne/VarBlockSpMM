@@ -34,7 +34,7 @@ cmake --build build --config Release --target vbsr_tests
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-For a fresh build directory, add `-Configure`. Use `-BuildOnly` to compile the test targets without running them.
+For a fresh build, first run `powershell -File scripts/build.ps1 -SkipTests`, then run the two commands above.
 
 ## Regenerate all data on your GPU
 
