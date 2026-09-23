@@ -51,4 +51,3 @@ The evaluation includes:
 - Native-input startup times, explicit device-array storage, and serial repeated-product cost models.
 
 The tables report each panel width and the full comparison grid. Numerical results come directly from validated raw records, with historical tuning results archived separately. Performance measurements cover one GPU.
-
