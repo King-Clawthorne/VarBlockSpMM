@@ -55,9 +55,7 @@ endif()
 if(VARBLOCKSPMM_BUILD_BENCHMARKS)
 add_library(vbsr_benchmark_support STATIC
   bench/support.cpp
-  bench/application_data.cpp
-  bench/dense.cpp
-  bench/compact_csr.cpp)
+  bench/application_data.cpp)
 target_link_libraries(vbsr_benchmark_support PUBLIC varblockspmm vbsr_dg_support)
 # The fused comparator must use the library's device math flags.
 target_compile_options(vbsr_benchmark_support PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--use_fast_math>)
