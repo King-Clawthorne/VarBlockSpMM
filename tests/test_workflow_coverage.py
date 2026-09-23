@@ -7,11 +7,16 @@ which is only discovered after hours of GPU time, so check it here.
 """
 from pathlib import Path
 import re
+import sys
+import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / 'scripts/build_paper.ps1'
 RUNNER = ROOT / 'scripts/run_final_validation.py'
+sys.path.insert(0, str(ROOT / 'scripts'))
+import run_final_validation
 
 
 def consumed():
@@ -49,6 +54,17 @@ class WorkflowCoverageTests(unittest.TestCase):
     # The specialized transport comparison is the most recent addition.
     self.assertIn('dg', consumed())
     self.assertIn('dg', produced())
+
+  def test_runner_prepares_and_collects_relevance(self):
+    with tempfile.TemporaryDirectory() as directory,          patch.object(sys, 'argv', ['run_final_validation.py', '--output-root', directory]),          patch.object(run_final_validation, 'verified_build', return_value=(Path('test.exe'), {})),          patch.object(run_final_validation, 'find_sanitizer', return_value=Path('sanitizer.exe')),          patch.object(run_final_validation.subprocess, 'run') as run:
+      run.return_value.returncode = 0
+      run_final_validation.main()
+      commands = [call.args[0] for call in run.call_args_list]
+      scripts = {Path(c[1]).name: c for c in commands if c[0] == sys.executable}
+      self.assertIn('prepare_magma.py', scripts)
+      self.assertIn('--all', scripts['prepare_transport.py'])
+      self.assertIn('build_relevance.py', scripts)
+      self.assertEqual(scripts['run_relevance.py'][-2:], ['--output', str(Path(directory) / 'relevance')])
 
 
 if __name__ == '__main__':
