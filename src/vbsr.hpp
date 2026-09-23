@@ -8,9 +8,15 @@
 namespace vbsr {
 
 struct HostMatrix {
-  int block_rows{}, block_cols{};
-  std::vector<int32_t> row_ptr, block_col, row_size, col_size;
-  std::vector<int64_t> row_scalar_off, col_scalar_off, value_off;
+  int block_rows{};
+  int block_cols{};
+  std::vector<int32_t> row_ptr;
+  std::vector<int32_t> block_col;
+  std::vector<int32_t> row_size;
+  std::vector<int32_t> col_size;
+  std::vector<int64_t> row_scalar_off;
+  std::vector<int64_t> col_scalar_off;
+  std::vector<int64_t> value_off;
   std::vector<float> values;
 
   int64_t scalar_rows() const { return row_scalar_off.empty() ? 0 : row_scalar_off.back(); }
@@ -23,10 +29,18 @@ struct HostMatrix {
 };
 
 struct DeviceMatrix {
-  int block_rows{}, block_cols{}, nnzb{};
-  int64_t scalar_rows{}, scalar_cols{};
-  const int32_t *row_ptr{}, *block_col{}, *row_size{}, *col_size{};
-  const int64_t *row_scalar_off{}, *col_scalar_off{}, *value_off{};
+  int block_rows{};
+  int block_cols{};
+  int nnzb{};
+  int64_t scalar_rows{};
+  int64_t scalar_cols{};
+  const int32_t* row_ptr{};
+  const int32_t* block_col{};
+  const int32_t* row_size{};
+  const int32_t* col_size{};
+  const int64_t* row_scalar_off{};
+  const int64_t* col_scalar_off{};
+  const int64_t* value_off{};
   const float* values{};
 };
 
@@ -40,19 +54,29 @@ public:
   Matrix& operator=(Matrix&&) noexcept;
 
   DeviceMatrix device_view() const;
-  int64_t scalar_rows() const { return rows_; }
-  int64_t scalar_cols() const { return cols_; }
+  int64_t scalar_rows() const { return scalar_rows_; }
+  int64_t scalar_cols() const { return scalar_cols_; }
   size_t storage_bytes() const;
 
   void update_values(const float* device_values, size_t value_count, cudaStream_t stream = 0);
 
 private:
   friend class Plan;
-  int block_rows_{}, block_cols_{}, nnzb_{};
-  int small_row_count_{}, large_row_count_{};
-  int64_t rows_{}, cols_{};
-  int32_t *row_ptr_{}, *block_col_{}, *row_size_{}, *col_size_{}, *row_shape_order_{};
-  int64_t *row_off_{}, *col_off_{}, *value_off_{};
+  int block_rows_{};
+  int block_cols_{};
+  int nnzb_{};
+  int small_row_count_{};
+  int large_row_count_{};
+  int64_t scalar_rows_{};
+  int64_t scalar_cols_{};
+  int32_t* row_ptr_{};
+  int32_t* block_col_{};
+  int32_t* row_size_{};
+  int32_t* col_size_{};
+  int32_t* row_shape_order_{};
+  int64_t* row_scalar_off_{};
+  int64_t* col_scalar_off_{};
+  int64_t* value_off_{};
   float* values_{};
   size_t value_count_{};
   void release();
@@ -61,7 +85,9 @@ private:
 enum class Distribution { Uniform, LowVariance, HighVariance, Bimodal };
 
 struct GeneratorOptions {
-  int block_rows = 1024, block_cols = 1024, degree = 4;
+  int block_rows = 1024;
+  int block_cols = 1024;
+  int degree = 4;
   int rhs_width = 32;
   Distribution distribution = Distribution::HighVariance;
   bool local_columns = true;
@@ -70,7 +96,8 @@ struct GeneratorOptions {
 
 HostMatrix generate(const GeneratorOptions&);
 
-std::vector<float> cpu_reference(const HostMatrix&, const std::vector<float>& B, int rhs);
+std::vector<float> cpu_reference(const HostMatrix& matrix, const std::vector<float>& input,
+                                 int rhs_width);
 
 enum class Kernel { Auto, RowOwned };
 
@@ -83,20 +110,22 @@ class Plan {
 public:
   Plan(const Matrix&, PlanOptions);
 
-  Plan(DeviceMatrix, PlanOptions, cudaStream_t stream = 0);
+  Plan(DeviceMatrix matrix, PlanOptions options, cudaStream_t stream = 0);
 
-  void execute(const float* B, float* C, cudaStream_t stream = 0) const;
+  void execute(const float* input, float* output, cudaStream_t stream = 0) const;
 
   int launch_count() const;
 
 private:
-  DeviceMatrix a_{};
+  DeviceMatrix matrix_{};
   const int32_t* row_shape_order_{};
-  int small_row_count_{}, large_row_count_{};
+  int small_row_count_{};
+  int large_row_count_{};
   PlanOptions options_{};
-  std::shared_ptr<int32_t> owned_row_shape_order_;
+  std::shared_ptr<int32_t> owned_row_order_;
 };
 
-void launch_row_owned(const DeviceMatrix&, const int32_t* row_shape_order, int small_row_count,
-                      int large_row_count, const float*, float*, int rhs, cudaStream_t);
-} // namespace vbsr
+void launch_row_owned(const DeviceMatrix& matrix, const int32_t* row_order, int small_row_count,
+                      int large_row_count, const float* input, float* output, int rhs_width,
+                      cudaStream_t stream);
+}

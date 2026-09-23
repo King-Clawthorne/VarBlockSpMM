@@ -28,6 +28,14 @@ HostMatrix generate(const GeneratorOptions& options) {
     }
     throw std::invalid_argument("unknown block-size distribution");
   };
+  auto random_block_column = [&](int block_row) {
+    if (!options.local_columns) {
+      return int(random_engine() % options.block_cols);
+    }
+    const int window_size = 2 * options.degree + 1;
+    const int offset = int(random_engine() % window_size) - options.degree;
+    return (block_row + offset + options.block_cols) % options.block_cols;
+  };
 
   HostMatrix matrix;
   matrix.block_rows = options.block_rows;
@@ -50,14 +58,9 @@ HostMatrix generate(const GeneratorOptions& options) {
   matrix.value_off = {0};
   std::uniform_real_distribution<float> random_value(-1.0f, 1.0f);
   for (int block_row = 0; block_row < options.block_rows; ++block_row) {
-
     std::vector<int> selected_columns;
     while (int(selected_columns.size()) < options.degree) {
-      const int block_column = options.local_columns
-                                   ? (block_row + int(random_engine() % (2 * options.degree + 1)) -
-                                      options.degree + options.block_cols) %
-                                         options.block_cols
-                                   : int(random_engine() % options.block_cols);
+      const int block_column = random_block_column(block_row);
       if (std::find(selected_columns.begin(), selected_columns.end(), block_column) ==
           selected_columns.end()) {
         selected_columns.push_back(block_column);
@@ -80,4 +83,4 @@ HostMatrix generate(const GeneratorOptions& options) {
   matrix.validate();
   return matrix;
 }
-} // namespace vbsr
+}
