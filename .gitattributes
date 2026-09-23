@@ -1,24 +1,7 @@
-# Normalize source and documentation to LF across Windows and Unix checkouts.
+# Normalize source files to LF across Windows and Unix checkouts.
 * text=auto eol=lf
 
 # Native Windows command scripts use CRLF.
 *.ps1 text eol=crlf
 *.bat text eol=crlf
 *.cmd text eol=crlf
-
-# Preserve archived measurements, application inputs, and rendered artifacts.
-*.zip binary
-*.gz binary
-*.bin binary
-*.pdf binary
-*.png binary
-*.jpg binary
-*.jpeg binary
-*.ncu-rep binary
-*.nsys-rep binary
-*.sqlite binary
-# These metadata files are byte-hashed inputs to the retained native campaign.
-/data/native/*.json -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
-
-# Keep generated evidence distinguishable from authored implementation changes.
-data/** linguist-generated=true

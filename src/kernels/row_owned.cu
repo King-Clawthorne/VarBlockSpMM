@@ -527,27 +527,6 @@ void launch_ablation(DeviceMatrix matrix, const int32_t* order, const float* inp
   check_kernel_launch();
 }
 
-void launch_row_owned_scalar(DeviceMatrix matrix, const float* input, float* output, int rhs_width,
-                             cudaStream_t stream) {
-  switch (rhs_width) {
-  case 8:
-    launch_scalar<8>(matrix, input, output, stream);
-    break;
-  case 16:
-    launch_scalar<16>(matrix, input, output, stream);
-    break;
-  case 32:
-    launch_scalar<32>(matrix, input, output, stream);
-    break;
-  case 64:
-    launch_scalar<64>(matrix, input, output, stream);
-    break;
-  default:
-    throw std::invalid_argument("unsupported rhs width");
-  }
-  check_kernel_launch();
-}
-
 void launch_row_owned(DeviceMatrix matrix, const int32_t* row_shape_order, int small_row_count,
                       int large_row_count, const float* input, float* output, int rhs_width,
                       cudaStream_t stream) {

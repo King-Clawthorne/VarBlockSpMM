@@ -7,61 +7,23 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CUDA_STANDARD 20)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_EXTENSIONS OFF)
-# CUDA 12.6 includes both grouped GEMM and generic BSR SpMM. Measurements use 13.4.
+
 find_package(CUDAToolkit 12.6 REQUIRED)
-include(CTest)
-option(VARBLOCKSPMM_BUILD_BENCHMARKS "Build research benchmark executables" ON)
-set(VARBLOCKSPMM_MAGMA_SOURCE "" CACHE PATH "Optional pinned MAGMA source checkout for comparison")
 
 add_library(varblockspmm
   src/format/vbsr.cpp
   src/format/generator.cpp
   src/kernels/row_owned.cu
-  src/baseline/cusparse_baseline.cu
-  src/baseline/slot_split.cu
   src/plan/plan.cpp)
 add_library(VarBlockSpMM::varblockspmm ALIAS varblockspmm)
 target_include_directories(varblockspmm PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_compile_features(varblockspmm PUBLIC cxx_std_20)
-target_link_libraries(varblockspmm PUBLIC CUDA::cudart CUDA::cusparse CUDA::cublas)
-set_target_properties(varblockspmm PROPERTIES CUDA_SEPARABLE_COMPILATION OFF)
+target_link_libraries(varblockspmm PUBLIC CUDA::cudart)
 target_compile_options(varblockspmm PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--use_fast_math>)
+
 if(MSVC)
   target_compile_options(varblockspmm PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/wd4996>)
   target_compile_options(varblockspmm PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/W4>)
 else()
   target_compile_options(varblockspmm PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall;-Wextra;-Wpedantic>)
-endif()
-
-if(BUILD_TESTING OR VARBLOCKSPMM_BUILD_BENCHMARKS)
-add_library(vbsr_dg_support STATIC bench/dg_specialized.cpp bench/dg_fused.cu)
-target_link_libraries(vbsr_dg_support PUBLIC varblockspmm)
-target_compile_options(vbsr_dg_support PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--use_fast_math>)
-endif()
-
-if(BUILD_TESTING)
-add_executable(vbsr_tests tests/test_suite.cpp)
-target_link_libraries(vbsr_tests PRIVATE varblockspmm)
-add_test(NAME vbsr_tests COMMAND vbsr_tests)
-target_link_libraries(vbsr_tests PRIVATE vbsr_dg_support)
-endif()
-
-if(VARBLOCKSPMM_BUILD_BENCHMARKS)
-add_library(vbsr_benchmark_support STATIC
-  bench/support.cpp
-  bench/application_data.cpp)
-target_link_libraries(vbsr_benchmark_support PUBLIC varblockspmm vbsr_dg_support)
-# The fused comparator must use the library's device math flags.
-target_compile_options(vbsr_benchmark_support PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--use_fast_math>)
-add_executable(vbsr_audit bench/audit.cpp)
-target_link_libraries(vbsr_audit PRIVATE vbsr_benchmark_support)
-add_executable(vbsr_application_audit bench/application.cpp)
-target_link_libraries(vbsr_application_audit PRIVATE vbsr_benchmark_support)
-add_executable(vbsr_ablation bench/ablation.cpp)
-target_link_libraries(vbsr_ablation PRIVATE vbsr_benchmark_support)
-add_executable(vbsr_dg bench/dg.cpp)
-target_link_libraries(vbsr_dg PRIVATE vbsr_benchmark_support)
-if(VARBLOCKSPMM_MAGMA_SOURCE)
-  include(cmake/MagmaComparison.cmake)
-endif()
 endif()

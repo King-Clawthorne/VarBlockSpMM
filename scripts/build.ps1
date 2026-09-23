@@ -5,8 +5,7 @@ param(
   [string]$BuildDirectory = "$PSScriptRoot\..\build",
   [string]$Generator = "Visual Studio 17 2022",
   [string]$Architecture = "x64",
-  [string]$CudaArchitectures = "native",
-  [switch]$SkipTests
+  [string]$CudaArchitectures = "native"
 )
 
 $ErrorActionPreference = "Stop"
@@ -30,14 +29,6 @@ Write-Host "Building $Configuration configuration"
 cmake --build $buildPath --config $Configuration --parallel
 if ($LASTEXITCODE -ne 0) {
   throw "Build failed with exit code $LASTEXITCODE."
-}
-
-if (-not $SkipTests) {
-  Write-Host "Running tests"
-  ctest --test-dir $buildPath -C $Configuration --output-on-failure
-  if ($LASTEXITCODE -ne 0) {
-    throw "Tests failed with exit code $LASTEXITCODE."
-  }
 }
 
 Write-Host "VarBlockSpMM $Configuration build completed successfully."

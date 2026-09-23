@@ -40,12 +40,8 @@ namespace vbsr {
  * Cancellation: accumulated error grows with the number of terms and with
  * cancellation between them, as in any uncompensated FP32 summation.
  *
- * What is verified, rather than guaranteed: on the tested workloads results
- * agree with a reference that accumulates in double and rounds once, within a
- * maximum absolute error at most 5e-4 and relative L2 error at most 5e-5, and
- * `tests/test_suite.cpp` pins each behavior above, including the
- * multi-contribution cases. This library is not a drop-in numerical
- * substitute for an IEEE 754 gradual-underflow implementation. Callers whose
+ * This library is not a drop-in numerical substitute for an IEEE 754
+ * gradual-underflow implementation. Callers whose
  * values or intermediates approach the subnormal range should rescale, or
  * rebuild without `--use_fast_math`.
  */
@@ -141,9 +137,8 @@ HostMatrix generate(const GeneratorOptions&);
  */
 std::vector<float> cpu_reference(const HostMatrix&, const std::vector<float>& B, int rhs);
 
-/** Direct-kernel selection. Split-row remains reserved and is rejected in
- * version 1.0. */
-enum class Kernel { Auto, RowOwned, SplitRow };
+/** Direct-kernel selection. */
+enum class Kernel { Auto, RowOwned };
 
 /** Configuration for a reusable direct execution plan. */
 struct PlanOptions {
@@ -185,68 +180,8 @@ private:
   std::shared_ptr<int32_t> owned_row_shape_order_;
 };
 
-/** Persistent cuSPARSE baseline using an expanded scalar CSR representation. */
-class ScalarCsrPlan {
-public:
-  /** Algorithm 0 preserves the historical default. Algorithms 1 to 3 select
-   * explicit CSR variants. Fixed BSR subdivides blocks into 8-by-8 or 32-by-32
-   * tiles without padding, and rejects partitions not divisible by that size.
-   * Scalar CSR requires the expanded entry count and columns to fit INT32_MAX.
-   * Preprocessing, when requested, happens on the first execute call.
-   */
-  ScalarCsrPlan(const HostMatrix&, int rhs_width, int algorithm = 0, bool preprocess = false,
-                bool fixed_bsr = false, int bsr_block_size = 32);
-  ~ScalarCsrPlan();
-  ScalarCsrPlan(const ScalarCsrPlan&) = delete;
-  /** Enqueues the baseline multiplication on `stream`. One plan must be ordered
-   * on one stream or externally synchronized across streams and host threads. */
-  void execute(const float* B, float* C, cudaStream_t stream = 0);
-  /** Returns persistent temporary storage allocated after the first execution.
-   */
-  size_t workspace_bytes() const;
-  size_t storage_bytes() const;
-
-private:
-  struct Impl;
-  std::unique_ptr<Impl> impl_;
-};
-
-/** Persistent cuBLAS baseline that groups equally shaped blocks into GEMM
- * batches. */
-class GroupedGemmPlan {
-public:
-  /** The default preserves the historical pointer-refresh baseline.
-   * Cached mode reuses pointer arrays for unchanged base addresses and skips
-   * the full output clear when no block row is empty. Calls on a plan must
-   * be ordered on one stream or externally synchronized across streams.
-   */
-  GroupedGemmPlan(const HostMatrix&, int rhs_width, bool cache_pointers = false);
-  ~GroupedGemmPlan();
-  GroupedGemmPlan(const GroupedGemmPlan&) = delete;
-  /** Enqueues all grouped GEMM batches on `stream`. */
-  void execute(const float* B, float* C, cudaStream_t stream = 0);
-  /** Returns sequential grouped GEMM calls, excluding pointer-refresh kernels
-   * and any internal library launches. Leading dimensions must fit INT32_MAX. */
-  int launch_count() const;
-  size_t workspace_bytes() const { return 0; }
-  size_t storage_bytes() const;
-
-private:
-  struct Impl;
-  std::unique_ptr<Impl> impl_;
-};
-
 /** Launches the optimized row-owned kernel, using width-specific ILP and
  * shared-memory input staging when beneficial. */
 void launch_row_owned(DeviceMatrix, const int32_t* row_shape_order, int small_row_count,
                       int large_row_count, const float*, float*, int rhs, cudaStream_t);
-/** Launches the scalar row-owned kernel for comparison and profiling. */
-void launch_row_owned_scalar(DeviceMatrix, const float*, float*, int rhs, cudaStream_t);
-
-/** One-shot, synchronizing cuSPARSE baseline. Prefer `ScalarCsrPlan` for
- * repeated work. */
-void cusparse_scalar_baseline(const HostMatrix&, const float* dB, float* dC, int rhs, cudaStream_t);
-/** One-shot, synchronizing grouped-cuBLAS baseline. Prefer `GroupedGemmPlan`
- * for reuse. */
-void slot_split_baseline(const HostMatrix&, const float* dB, float* dC, int rhs, cudaStream_t);
 } // namespace vbsr
