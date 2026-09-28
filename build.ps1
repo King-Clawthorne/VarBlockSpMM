@@ -1,6 +1,4 @@
 [CmdletBinding()]
-# Configure and build the library with the selected Visual Studio generator,
-# architecture, build configuration, and CUDA target architecture.
 param(
   [ValidateSet("Debug", "Release", "RelWithDebInfo", "MinSizeRel")]
   [string]$Configuration = "Release",
@@ -10,6 +8,8 @@ param(
   [string]$CudaArchitectures = "native"
 )
 
+# Configure and build the library with the selected Visual Studio generator,
+# architecture, build configuration, and CUDA target architecture.
 $ErrorActionPreference = "Stop"
 
 $projectRoot = (Resolve-Path -LiteralPath $PSScriptRoot).Path
