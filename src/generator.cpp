@@ -4,6 +4,8 @@
 #include "vbsr.hpp"
 
 namespace vbsr {
+  // Build a reproducible variable-block matrix with sorted unique block columns
+  // per row. Each dense block payload is emitted in column-major order.
   HostMatrix generate(const GeneratorOptions& options) {
     if (options.degree < 1 || options.degree > 16 || options.block_rows < 1 ||
         options.block_cols < 1 || options.degree > options.block_cols) {
@@ -11,6 +13,7 @@ namespace vbsr {
     }
 
     std::mt19937_64 random_engine(options.seed);
+    // Draw one legal block dimension from the selected shape distribution.
     auto random_block_size = [&]() {
       static constexpr int all_sizes[] = {8, 16, 24, 32, 40, 48, 56, 64};
       static constexpr int low_variance_sizes[] = {24, 32, 40};
@@ -30,6 +33,7 @@ namespace vbsr {
       throw std::invalid_argument("unknown block-size distribution");
     };
 
+    // Sample either globally or from a wrapped neighborhood of the block row.
     auto random_block_column = [&](int block_row) {
       if (!options.local_columns) return int(random_engine() % options.block_cols);
       const int window_size = 2 * options.degree + 1;
@@ -45,6 +49,7 @@ namespace vbsr {
     std::generate(matrix.row_size.begin(), matrix.row_size.end(), random_block_size);
     std::generate(matrix.col_size.begin(), matrix.col_size.end(), random_block_size);
 
+    // Prefix sums map block coordinates to scalar row and column coordinates.
     matrix.row_scalar_off = {0};
     for (int row_size : matrix.row_size) {
       matrix.row_scalar_off.push_back(matrix.row_scalar_off.back() + row_size);
@@ -55,6 +60,8 @@ namespace vbsr {
       matrix.col_scalar_off.push_back(matrix.col_scalar_off.back() + column_size);
     }
 
+    // Append each block row in sorted order and maintain a prefix sum over the
+    // column-major dense block payloads.
     matrix.row_ptr = {0};
     matrix.value_off = {0};
     std::uniform_real_distribution<float> random_value(-1.0f, 1.0f);

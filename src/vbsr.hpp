@@ -5,6 +5,11 @@
 #include <vector>
 
 namespace vbsr {
+  /// Host-side representation of a variable-block sparse matrix.
+  ///
+  /// Block payloads are stored contiguously in column-major order. The offset
+  /// arrays describe scalar coordinates and packed value positions; `row_ptr`
+  /// and `block_col` use the usual compressed sparse row layout at block level.
   struct HostMatrix {
     int block_rows{};
     int block_cols{};
@@ -17,13 +22,18 @@ namespace vbsr {
     std::vector<int64_t> value_off;
     std::vector<float> values;
 
+    /// Returns the total number of scalar rows, or zero when offsets are absent.
     int64_t scalar_rows() const { return row_scalar_off.empty() ? 0 : row_scalar_off.back(); }
+    /// Returns the total number of scalar columns, or zero when offsets are absent.
     int64_t scalar_cols() const { return col_scalar_off.empty() ? 0 : col_scalar_off.back(); }
 
+    /// Validates metadata and the host value payload, throwing on malformed input.
     void validate() const;
+    /// Validates metadata against a payload length without requiring host values.
     void validate_structure(size_t value_count) const;
   };
 
+  /// Non-owning view of matrix arrays resident on a CUDA device.
   struct DeviceMatrix {
     int block_rows{};
     int block_cols{};
@@ -42,18 +52,25 @@ namespace vbsr {
 
   class Matrix {
     public:
+      /// Validates and copies a host matrix and its metadata to the current device.
       explicit Matrix(const HostMatrix& host);
+      /// Releases the device allocations owned by this matrix.
       ~Matrix();
       Matrix(const Matrix&) = delete;
       Matrix& operator=(const Matrix&) = delete;
       Matrix(Matrix&&) noexcept;
       Matrix& operator=(Matrix&&) noexcept;
 
+      /// Returns a non-owning device view; the matrix must outlive its consumers.
       DeviceMatrix device_view() const;
       int64_t scalar_rows() const { return scalar_rows_; }
       int64_t scalar_cols() const { return scalar_cols_; }
+      /// Returns the logical device storage occupied by matrix arrays, in bytes.
       size_t storage_bytes() const;
 
+      /// Copies replacement values device-to-device on `stream`.
+      /// `device_values` must address a device buffer containing exactly the
+      /// same number of values as the matrix payload.
       void update_values(const float* device_values, size_t value_count, cudaStream_t stream = 0);
 
     private:
@@ -78,8 +95,10 @@ namespace vbsr {
       void release();
   };
 
+  /// Supported block-shape distributions for generated matrices.
   enum class Distribution { Uniform, LowVariance, HighVariance, Bimodal };
 
+  /// Parameters controlling deterministic synthetic matrix generation.
   struct GeneratorOptions {
     int block_rows = 1024;
     int block_cols = 1024;
@@ -90,10 +109,14 @@ namespace vbsr {
     uint64_t seed = 1;
   };
 
+  /// Creates a valid synthetic matrix using `seed` as the random engine seed.
   HostMatrix generate(const GeneratorOptions&);
+  /// Computes Y = A * X on the CPU; X and Y use column-major scalar matrices.
   std::vector<float> cpu_reference(const HostMatrix& matrix, const std::vector<float>& input, int rhs_width);
+  /// Kernel selection policy used by a plan.
   enum class Kernel { Auto, RowOwned };
 
+  /// Execution configuration for a sparse-dense multiplication plan.
   struct PlanOptions {
     int rhs_width = 32;
     Kernel kernel = Kernel::Auto;
@@ -101,9 +124,14 @@ namespace vbsr {
 
   class Plan {
     public:
+      /// Creates a plan using the row ordering owned by `matrix`.
       Plan(const Matrix&, PlanOptions);
+      /// Validates a device matrix view and creates an owned row-shape ordering.
+      /// Metadata is copied to the host during validation; values remain on device.
       Plan(DeviceMatrix matrix, PlanOptions options, cudaStream_t stream = 0);
+      /// Enqueues Y = A * X on `stream`. Input and output are device pointers.
       void execute(const float* input, float* output, cudaStream_t stream = 0) const;
+      /// Returns the number of CUDA kernel launches selected for this plan.
       int launch_count() const;
 
     private:
@@ -115,6 +143,7 @@ namespace vbsr {
       std::shared_ptr<int32_t> owned_row_order_;
   };
 
+  /// Dispatches the row-owned CUDA implementation for the requested RHS width.
   void launch_row_owned(const DeviceMatrix& matrix, const int32_t* row_order, int small_row_count,
                         int large_row_count, const float* input, float* output, int rhs_width,
                         cudaStream_t stream);

@@ -7,10 +7,13 @@
 
 namespace vbsr {
   namespace {
+    // Convert CUDA runtime failures into exceptions at the public API boundary.
     void check_cuda(cudaError_t status) {
       if (status != cudaSuccess) throw std::runtime_error(cudaGetErrorString(status));
     }
 
+    // Allocate a device array and copy a host vector into it. On copy failure,
+    // release the allocation before propagating the CUDA error.
     template <class T> T* copy_to_device(const std::vector<T>& source) {
       T* destination = nullptr;
       check_cuda(cudaMalloc(&destination, source.size() * sizeof(T)));
@@ -27,7 +30,12 @@ namespace vbsr {
 
   }
 
+  // Validate the complete host representation, including its value payload.
   void HostMatrix::validate() const { validate_structure(values.size()); }
+
+  // Check the CSR block structure, scalar offsets, block shapes, and packed
+  // payload offsets. This routine is also used to validate device metadata
+  // after the metadata arrays have been copied to temporary host vectors.
   void HostMatrix::validate_structure(size_t value_count) const {
 
     if (block_rows <= 0 || block_cols <= 0) throw std::invalid_argument("positive block dimensions required");
@@ -92,6 +100,8 @@ namespace vbsr {
     }
   }
 
+  // Own device copies of the matrix arrays and prepare a stable ordering that
+  // groups rows by shape for the specialized RHS=32 launch path.
   Matrix::Matrix(const HostMatrix& host) {
     host.validate();
     block_rows_ = host.block_rows;
@@ -124,6 +134,8 @@ namespace vbsr {
     }
   }
 
+  // Free every allocation owned by this object. cudaFree accepts null pointers,
+  // which keeps this safe for partially constructed and moved-from objects.
   void Matrix::release() {
     cudaFree(row_ptr_);
     cudaFree(block_col_);
@@ -146,7 +158,10 @@ namespace vbsr {
     row_shape_order_ = nullptr;
   }
 
+  // Destruction releases the device-side matrix storage.
   Matrix::~Matrix() { release(); }
+
+  // Transfer device ownership and leave `other` in a destructible empty state.
   Matrix::Matrix(Matrix&& other) noexcept { *this = std::move(other); }
 
   Matrix& Matrix::operator=(Matrix&& other) noexcept {
@@ -187,17 +202,21 @@ namespace vbsr {
     return *this;
   }
 
+  // Expose the owned arrays without transferring ownership.
   DeviceMatrix Matrix::device_view() const {
     return {block_rows_,     block_cols_, nnzb_,     scalar_rows_, scalar_cols_,
             row_ptr_,        block_col_,  row_size_, col_size_,    row_scalar_off_,
             col_scalar_off_, value_off_,  values_};
   }
 
+  // Replace only the numeric payload, preserving the matrix's sparsity pattern.
   void Matrix::update_values(const float* source, size_t count, cudaStream_t stream) {
     if (count != value_count_ || (count && (!source || !values_))) throw std::invalid_argument("value update size or pointer mismatch");
     if (count && source != values_) check_cuda(cudaMemcpyAsync(values_, source, count * sizeof(float), cudaMemcpyDeviceToDevice, stream));
   }
 
+  // Sum the packed values and all device metadata arrays. The final value
+  // offset stores the payload length, so read it from device metadata.
   size_t Matrix::storage_bytes() const {
     int64_t count = 0;
     check_cuda(cudaMemcpy(&count, value_off_ + nnzb_, sizeof(count), cudaMemcpyDeviceToHost));
@@ -206,6 +225,8 @@ namespace vbsr {
           (size_t(block_rows_) + block_cols_ + nnzb_ + 3) * sizeof(int64_t);
   }
 
+  // Reference implementation of Y = A * X using double-precision accumulation.
+  // The input and output are column-major with `rhs_width` dense columns.
   std::vector<float> cpu_reference(const HostMatrix& matrix, const std::vector<float>& input, int rhs_width) {
     if (input.size() != size_t(matrix.scalar_cols() * rhs_width)) {
       throw std::invalid_argument("input matrix has incorrect size");

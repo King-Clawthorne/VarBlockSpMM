@@ -5,6 +5,8 @@
 
 namespace vbsr {
   namespace {
+    // Reject unsupported configurations before inspecting matrix metadata or
+    // allocating any device-side plan state.
     void validate_options(PlanOptions options) {
       if (options.rhs_width != 8 && options.rhs_width != 16 && options.rhs_width != 32 && options.rhs_width != 64) {
         throw std::invalid_argument("rhs_width must be one of 8, 16, 32, or 64");
@@ -15,10 +17,13 @@ namespace vbsr {
       }
     }
 
+    // Convert CUDA runtime failures into exceptions at plan construction.
     void check(cudaError_t status) {
       if (status != cudaSuccess) throw std::runtime_error(cudaGetErrorString(status));
     }
 
+    // Copy device metadata to host memory for structural validation and row
+    // classification. Numeric matrix values are deliberately not copied.
     template <class T> std::vector<T> read_metadata(const T* source, size_t count) {
       if (count && !source) throw std::invalid_argument("null device metadata");
 
@@ -29,6 +34,9 @@ namespace vbsr {
     }
   }
 
+  // Validate an external non-owning view and allocate a device row ordering.
+  // Synchronization ensures prior writes to the metadata on `stream` complete
+  // before the synchronous metadata reads used by validation.
   Plan::Plan(DeviceMatrix matrix, PlanOptions options, cudaStream_t stream)
       : matrix_(matrix), options_(options) {
 
@@ -72,6 +80,7 @@ namespace vbsr {
     row_shape_order_ = allocation;
   }
 
+  // Reuse the matrix's owned row ordering; the Matrix must outlive this plan.
   Plan::Plan(const Matrix& matrix, PlanOptions options)
       : matrix_(matrix.device_view()), row_shape_order_(matrix.row_shape_order_),
         small_row_count_(matrix.small_row_count_), large_row_count_(matrix.large_row_count_),
@@ -79,10 +88,13 @@ namespace vbsr {
     validate_options(options);
   }
 
+  // Enqueue the selected CUDA kernel path. This method does not synchronize the
+  // stream, so output is ready only after the caller's stream has completed.
   void Plan::execute(const float* input, float* output, cudaStream_t stream) const {
     launch_row_owned(matrix_, row_shape_order_, small_row_count_, large_row_count_, input, output, options_.rhs_width, stream);
   }
 
+  // Mirror the dispatch decisions to report how many kernels execute.
   int Plan::launch_count() const {
     if (options_.rhs_width != 32) return 1;
     if (small_row_count_ != 0 && large_row_count_ != 0 && matrix_.nnzb < int64_t(8) * matrix_.block_rows) return 1;

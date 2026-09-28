@@ -5,6 +5,8 @@
 
 namespace vbsr {
   namespace {
+    // Simple fallback kernel: each thread computes one (scalar row, RHS column)
+    // output, traversing that block row's nonzero dense blocks.
     template <int RHS>
 
     __global__ void row_owned_scalar(DeviceMatrix matrix, const float* __restrict__ input, float* __restrict__ output) {
@@ -34,6 +36,8 @@ namespace vbsr {
       }
     }
 
+    // Stage one dense block's input slice for all RHS columns in shared memory.
+    // The padded shared stride avoids bank conflicts for the supported widths.
     template <int RHS>
     __device__ void stage_input_async(DeviceMatrix matrix, const float* __restrict__ input, int block_index, float* shared_input) {
       constexpr int max_block_width = 64;
@@ -52,6 +56,9 @@ namespace vbsr {
       __pipeline_commit();
     }
 
+    // Compute a block row using one shared-memory input buffer. A thread owns
+    // one scalar row and a small vector of RHS columns; IndirectRows enables
+    // launch over a precomputed shape-grouped row order.
     template <int RHS, int VectorWidth, int Threads, bool IndirectRows>
     __global__ void
     row_owned_single_buffered(DeviceMatrix matrix, const int32_t* __restrict__ row_order, const float* __restrict__ input, float* __restrict__ output) {
@@ -109,6 +116,8 @@ namespace vbsr {
       }
     }
 
+    // Double-buffer input staging so loading the next sparse block can overlap
+    // with arithmetic on the current block.
     template <int RHS, int VectorWidth, int Threads>
     __global__ __launch_bounds__(Threads) void row_owned_double_buffered(
         DeviceMatrix matrix, const int32_t* __restrict__ row_order, const float* __restrict__ input,
@@ -167,6 +176,8 @@ namespace vbsr {
       }
     }
 
+    // Split large RHS work into a two-dimensional grid when the scalar fallback
+    // would otherwise assign too many outputs to each block.
     template <int RHS>
     void launch_scalar(DeviceMatrix matrix, const float* input, float* output, cudaStream_t stream) {
       constexpr int threads = 256;
@@ -174,9 +185,12 @@ namespace vbsr {
       row_owned_scalar<RHS><<<dim3(matrix.block_rows, blocks_per_row), threads, 0, stream>>>(matrix, input, output);
     }
 
+    // Declare the generic launch helper before the shape-dispatch routine.
     template <int RHS, int VectorWidth>
     void launch_single_buffered(DeviceMatrix matrix, const float* input, float* output, cudaStream_t stream);
 
+    // Select row-shape-specific kernels for RHS=32. For low average degree,
+    // avoid the extra split-launch overhead and use one uniform kernel.
     template <int RHS, int VectorWidth>
     void launch_shape_dispatched(DeviceMatrix matrix, const int32_t* row_shape_order,
                                 int small_row_count, int large_row_count, const float* input,
@@ -198,17 +212,22 @@ namespace vbsr {
       }
     }
 
+    // Launch the single-buffer implementation over all block rows directly.
     template <int RHS, int VectorWidth>
     void launch_single_buffered(DeviceMatrix matrix, const float* input, float* output, cudaStream_t stream) {
       row_owned_single_buffered<RHS, VectorWidth, 256, false><<<matrix.block_rows, 256, 0, stream>>>(matrix, nullptr, input, output);
     }
 
+    // Check launch configuration errors without synchronizing execution.
     void check_kernel_launch() {
       const cudaError_t status = cudaGetLastError();
       if (status != cudaSuccess) throw std::runtime_error(cudaGetErrorString(status));
     }
   }
 
+  // Dispatch a supported dense width to its compile-time-specialized kernel.
+  // The caller owns input/output buffers and must keep the matrix alive until
+  // work submitted to `stream` has completed.
   void launch_row_owned(const DeviceMatrix& matrix, const int32_t* row_shape_order,
                         int small_row_count, int large_row_count, const float* input, float* output,
                         int rhs_width, cudaStream_t stream) {
