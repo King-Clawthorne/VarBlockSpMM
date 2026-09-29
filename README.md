@@ -5,8 +5,8 @@
 Sparse matrix multiplication can store nonzero values in dense blocks instead
 of treating every scalar entry independently. When block dimensions vary across
 the matrix, the representation can describe irregular data while still
-exploiting dense operations inside each block. VarBlockSpMM is a CUDA C++20
-library for multiplying such a matrix by a dense matrix:
+exploiting dense operations inside each block. VarBlockSpMM uses host C++26
+and CUDA C++23 to multiply such a matrix by a dense matrix:
 
 ```text
 C = A * B
@@ -36,14 +36,33 @@ provided CUDA stream.
 ### Requirements
 
 - CMake 3.25 or newer
-- CUDA Toolkit 12.6 or newer
-- A C++20 and CUDA C++20 compiler supported by the installed toolkit
+- CUDA Toolkit 13.3 or newer for CUDA C++23 device support
+- A C++26-capable host compiler supported by NVCC, such as GCC 14+ or Clang 18+ on Linux
+- The MSVC/NVCC toolchain is rejected because it cannot compile this project in CUDA C++23 mode
 
 ### Build
 
-```powershell
+For the requested host C++26 and CUDA C++23 modes, use Linux or WSL2 with a
+supported GCC or Clang host compiler and CUDA Toolkit 13.3 or newer:
+
+```bash
 cmake -S . -B build -DCMAKE_CUDA_ARCHITECTURES=native
-cmake --build build --config Release --parallel
+cmake --build build --parallel
+```
+
+On Windows, `build.ps1` delegates the build to the configured WSL distribution
+and micromamba environment. It expects micromamba at `~/.local/bin/micromamba`,
+its root at `~/micromamba`, and an environment named `vbsr-cuda134`. Create
+that environment in WSL with:
+
+```bash
+micromamba create -y -n vbsr-cuda134 -c nvidia -c conda-forge cuda=13.4 cmake=4.2
+```
+
+Override `-WslDistribution` or `-WslEnvironment` if your WSL names differ:
+
+```powershell
+.\build.ps1
 ```
 
 ## Result
