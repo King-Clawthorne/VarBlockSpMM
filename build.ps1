@@ -2,7 +2,7 @@
 param(
   [ValidateSet("Debug", "Release", "RelWithDebInfo", "MinSizeRel")]
   [string]$Configuration = "Release",
-  [string]$BuildDirectory = "$PSScriptRoot\build-wsl",
+  [string]$BuildDirectory = "$PSScriptRoot\build",
   [string]$WslDistribution = "Ubuntu",
   [string]$WslEnvironment = "vbsr-cuda134",
   [string]$CudaArchitectures = "native"

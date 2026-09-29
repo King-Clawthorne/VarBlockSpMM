@@ -37,3 +37,6 @@ target_compile_options(varblockspmm PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcompile
 
 # Keep compiler warnings scoped to host C++ translation units.
 target_compile_options(varblockspmm PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall;-Wextra;-Wpedantic>)
+
+add_executable(vbsr_benchmark benchmark.cpp)
+target_link_libraries(vbsr_benchmark PRIVATE VarBlockSpMM::varblockspmm)
