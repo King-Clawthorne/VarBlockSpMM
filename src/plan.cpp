@@ -1,6 +1,6 @@
 #include "vbsr.hpp"
 #include <algorithm>
-#include <numeric>
+#include <ranges>
 #include <stdexcept>
 
 namespace vbsr {
@@ -68,12 +68,11 @@ Plan::Plan(DeviceMatrix matrix, PlanOptions options, cudaStream_t stream)
   if (host.scalar_rows() != matrix.scalar_rows || host.scalar_cols() != matrix.scalar_cols)
     throw std::invalid_argument("device scalar dimensions disagree with metadata");
 
-  std::vector<int32_t> order(matrix.block_rows);
-  std::iota(order.begin(), order.end(), 0);
-  auto split = std::stable_partition(order.begin(), order.end(),
-                                     [&](int r) { return host.row_size[r] <= 16; });
+  auto order = std::views::iota(0, matrix.block_rows) | std::ranges::to<std::vector<int32_t>>();
+  auto split = std::ranges::stable_partition(
+      order, [&](int row) { return host.row_size[row] <= 16; });
 
-  small_row_count_ = int(split - order.begin());
+  small_row_count_ = int(split.begin() - order.begin());
   large_row_count_ = matrix.block_rows - small_row_count_;
 
   int32_t* allocation = nullptr;

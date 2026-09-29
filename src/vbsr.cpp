@@ -1,7 +1,7 @@
 #include "vbsr.hpp"
 #include <algorithm>
 #include <cuda_runtime.h>
-#include <numeric>
+#include <ranges>
 #include <stdexcept>
 #include <string>
 
@@ -65,23 +65,25 @@ void HostMatrix::validate_structure(size_t value_count) const {
     throw std::invalid_argument("value_off does not match packed values");
   }
 
-  int64_t expected_row_offset = 0;
-  for (int block_row = 0; block_row < block_rows; ++block_row) {
-    expected_row_offset += row_size[block_row];
-    if (row_ptr[block_row] > row_ptr[block_row + 1] || row_size[block_row] < 8 ||
-        row_size[block_row] > 64 || row_size[block_row] % 8 != 0 ||
-        row_scalar_off[block_row + 1] != expected_row_offset) {
-      throw std::invalid_argument("invalid block-row metadata");
-    }
-  }
+  // Concatenate both block-size arrays and enumerate them in one pass. Reset
+  // the prefix sum when the traversal moves from row dimensions to columns.
+  int64_t expected_offset = 0;
+  const auto dimensions = std::views::concat(row_size, col_size);
+  for (const auto& [dimension, block_size] : std::views::enumerate(dimensions)) {
+    const bool is_row_dimension = dimension < block_rows;
+    const auto block_index = is_row_dimension ? dimension : dimension - block_rows;
+    const auto& scalar_offsets = is_row_dimension ? row_scalar_off : col_scalar_off;
 
-  int64_t expected_col_offset = 0;
-  for (int block_column = 0; block_column < block_cols; ++block_column) {
-    expected_col_offset += col_size[block_column];
-    if (col_size[block_column] < 8 || col_size[block_column] > 64 ||
-        col_size[block_column] % 8 != 0 ||
-        col_scalar_off[block_column + 1] != expected_col_offset) {
-      throw std::invalid_argument("invalid block-column metadata");
+    if (block_index == 0)
+      expected_offset = 0;
+    expected_offset += block_size;
+
+    const bool invalid_row_structure =
+        is_row_dimension && row_ptr[block_index] > row_ptr[block_index + 1];
+    if (invalid_row_structure || block_size < 8 || block_size > 64 || block_size % 8 != 0 ||
+        scalar_offsets[block_index + 1] != expected_offset) {
+      throw std::invalid_argument(is_row_dimension ? "invalid block-row metadata"
+                                                   : "invalid block-column metadata");
     }
   }
 
@@ -118,12 +120,11 @@ Matrix::Matrix(const HostMatrix& host) {
   scalar_cols_ = host.scalar_cols();
   value_count_ = host.values.size();
 
-  std::vector<int32_t> row_shape_order(host.block_rows);
-  std::iota(row_shape_order.begin(), row_shape_order.end(), int32_t{0});
-  const auto large_begin =
-      std::stable_partition(row_shape_order.begin(), row_shape_order.end(),
-                            [&](int32_t block_row) { return host.row_size[block_row] <= 16; });
-  small_row_count_ = int(large_begin - row_shape_order.begin());
+  auto row_shape_order =
+      std::views::iota(0, host.block_rows) | std::ranges::to<std::vector<int32_t>>();
+  const auto large_begin = std::ranges::stable_partition(
+      row_shape_order, [&](int block_row) { return host.row_size[block_row] <= 16; });
+  small_row_count_ = int(large_begin.begin() - row_shape_order.begin());
   large_row_count_ = host.block_rows - small_row_count_;
 
   try {
@@ -239,7 +240,7 @@ size_t Matrix::storage_bytes() const {
 
 // Reference implementation of Y = A * X using double-precision accumulation.
 // The input and output are column-major with `rhs_width` dense columns.
-std::vector<float> cpu_reference(const HostMatrix& matrix, const std::vector<float>& input,
+std::vector<float> cpu_reference(const HostMatrix& matrix, std::span<const float> input,
                                  int rhs_width) {
   if (input.size() != size_t(matrix.scalar_cols() * rhs_width)) {
     throw std::invalid_argument("input matrix has incorrect size");
@@ -272,5 +273,11 @@ std::vector<float> cpu_reference(const HostMatrix& matrix, const std::vector<flo
   }
 
   return output;
+}
+
+// Preserve the original vector overload while sharing the span implementation.
+std::vector<float> cpu_reference(const HostMatrix& matrix, const std::vector<float>& input,
+                                 int rhs_width) {
+  return cpu_reference(matrix, std::span<const float>{input}, rhs_width);
 }
 }

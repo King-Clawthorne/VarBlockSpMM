@@ -1,13 +1,16 @@
 #include "vbsr.hpp"
 #include <algorithm>
+#include <array>
 #include <random>
+#include <span>
 #include <stdexcept>
 
 namespace vbsr {
 // Build a reproducible variable-block matrix with sorted unique block columns
 // per row. Each dense block payload is emitted in column-major order.
 HostMatrix generate(const GeneratorOptions& options) {
-  if (options.degree < 1 || options.degree > 16 || options.block_rows < 1 ||
+  constexpr int max_degree = 16;
+  if (options.degree < 1 || options.degree > max_degree || options.block_rows < 1 ||
       options.block_cols < 1 || options.degree > options.block_cols) {
     throw std::invalid_argument("invalid generator dimensions");
   }
@@ -67,18 +70,22 @@ HostMatrix generate(const GeneratorOptions& options) {
   matrix.value_off = {0};
   std::uniform_real_distribution<float> random_value(-1.0f, 1.0f);
   for (int block_row = 0; block_row < options.block_rows; ++block_row) {
-    std::vector<int> selected_columns;
-    while (int(selected_columns.size()) < options.degree) {
+    // The validated degree cap bounds this scratch space; avoid one heap
+    // allocation for every generated block row.
+    std::array<int, max_degree> selected_columns;
+    int selected_count = 0;
+    while (selected_count < options.degree) {
       const int block_column = random_block_column(block_row);
-      if (std::find(selected_columns.begin(), selected_columns.end(), block_column) ==
-          selected_columns.end()) {
-        selected_columns.push_back(block_column);
+      const auto selected = std::span{selected_columns}.first(selected_count);
+      if (!std::ranges::contains(selected, block_column)) {
+        selected_columns[selected_count++] = block_column;
       }
     }
 
-    std::sort(selected_columns.begin(), selected_columns.end());
+    const auto selected = std::span{selected_columns}.first(selected_count);
+    std::ranges::sort(selected);
 
-    for (int block_column : selected_columns) {
+    for (int block_column : selected) {
       matrix.block_col.push_back(block_column);
       const int64_t value_count =
           int64_t(matrix.row_size[block_row]) * matrix.col_size[block_column];

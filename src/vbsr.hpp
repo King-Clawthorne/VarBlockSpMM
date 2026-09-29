@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <cuda_runtime_api.h>
 #include <memory>
+#include <span>
 #include <vector>
 
 namespace vbsr {
@@ -112,6 +113,9 @@ struct GeneratorOptions {
 /// Creates a valid synthetic matrix using `seed` as the random engine seed.
 HostMatrix generate(const GeneratorOptions&);
 /// Computes Y = A * X on the CPU; X and Y use column-major scalar matrices.
+std::vector<float> cpu_reference(const HostMatrix& matrix, std::span<const float> input,
+                                 int rhs_width);
+/// Vector overload retained for callers of the original API.
 std::vector<float> cpu_reference(const HostMatrix& matrix, const std::vector<float>& input,
                                  int rhs_width);
 /// Kernel selection policy used by a plan.
