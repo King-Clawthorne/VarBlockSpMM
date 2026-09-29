@@ -22,14 +22,27 @@ reference implementation.
 ## Action
 
 Include `src/vbsr.hpp` and link the CMake target
-`VarBlockSpMM::varblockspmm` (or `varblockspmm`). A basic host-side setup is:
+`VarBlockSpMM::varblockspmm` (or `varblockspmm`). This example builds a valid
+one-block matrix with an 8-by-8 block. The same setup works with matrices loaded
+from a file or produced by your application:
 
 ```cpp
 #include <vector>
 #include "vbsr.hpp"
 
-// Populate a valid HostMatrix with the desired CSR metadata and block values.
-vbsr::HostMatrix host_matrix = load_matrix();
+vbsr::HostMatrix host_matrix;
+host_matrix.block_rows = 1;
+host_matrix.block_cols = 1;
+host_matrix.row_ptr = {0, 1};
+host_matrix.block_col = {0};
+host_matrix.row_size = {8};
+host_matrix.col_size = {8};
+host_matrix.row_scalar_off = {0, 8};
+host_matrix.col_scalar_off = {0, 8};
+host_matrix.value_off = {0, 64};
+host_matrix.values.assign(64, 1.0f); // One dense 8-by-8 block, column-major.
+host_matrix.validate();
+
 constexpr int rhs_width = 32;
 std::vector<float> input(host_matrix.scalar_cols() * rhs_width, 1.0f);
 std::vector<float> reference =
@@ -37,12 +50,18 @@ std::vector<float> reference =
 
 vbsr::Matrix matrix(host_matrix);
 vbsr::Plan plan(matrix, {.rhs_width = rhs_width});
+
+// Allocate device_input and device_output, copy `input` to device_input,
+// then call plan.execute(device_input, device_output). Copy the result back
+// only after the CUDA stream used for execution has completed.
 ```
 
-`cpu_reference` accepts `std::span<const float>`, so arrays and other
-contiguous input buffers can be passed without copying. The original vector
-overload remains available. `Plan::execute` accepts device pointers. Allocate
-and populate device input/output buffers before calling it.
+The example's reference result is computed on the CPU. For GPU execution,
+`Plan::execute` takes device pointers for input and output; allocate those
+buffers and copy `input` to the device before calling it. It enqueues work
+asynchronously, so copy the output back only after the execution stream has
+completed. `cpu_reference` also accepts `std::span<const float>`, allowing
+other contiguous input buffers to be passed without copying.
 
 ### Matrix and plan lifetime
 
