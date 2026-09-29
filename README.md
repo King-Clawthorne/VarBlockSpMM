@@ -121,6 +121,21 @@ The benchmark warms up the GPU, times repeated RHS-32 executions with CUDA
 events, and checks the output after timing. Its workload is a diagonal matrix
 with 4096 dense 8-by-8 blocks.
 
+#### Measured data
+
+Run on an NVIDIA GeForce RTX 5060 Ti with CUDA Toolkit 13.4.92:
+
+| Measurement | Result |
+| --- | ---: |
+| CUDA-event average, 10,000 iterations | 0.03718 ms per execution |
+| Nsight Systems kernel time, 200 launches | 32.65 μs average, 29.50 μs median |
+| Nsight Compute DRAM throughput, one profiled kernel | 31.70% |
+| Nsight Compute compute throughput, one profiled kernel | 19.03% |
+
+The Nsight Systems launch count includes 100 warmup launches and 100 timed
+launches. Nsight Compute profiles a replayed kernel, so its reported kernel
+duration is profiler-influenced and is not comparable to the CUDA-event timing.
+
 ## Result
 
 The library provides a reusable CUDA implementation of `Y = A * X`, along with
