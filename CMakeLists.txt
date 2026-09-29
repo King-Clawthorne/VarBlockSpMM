@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 4.2)
 project(VarBlockSpMM VERSION 1.0.0 LANGUAGES CXX CUDA)
 
 if(MSVC)
@@ -11,10 +11,7 @@ endif()
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-# CMake otherwise inherits the C++26 requirement for the CUDA language.
-# Keep its CUDA baseline at C++20, then override it with NVCC's C++23 flag
-# where the non-MSVC host compiler supports that mode.
-set(CMAKE_CUDA_STANDARD 20)
+set(CMAKE_CUDA_STANDARD 23)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_EXTENSIONS OFF)
 
@@ -33,11 +30,10 @@ target_include_directories(varblockspmm PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 # CUDA sources share this target with host sources. Keep the host dialect
 # scoped to C++ translation units rather than propagating it to CUDA.
 set_property(TARGET varblockspmm PROPERTY CXX_STANDARD ${CMAKE_CXX_STANDARD})
+set_property(TARGET varblockspmm PROPERTY CUDA_STANDARD ${CMAKE_CUDA_STANDARD})
 target_link_libraries(varblockspmm PUBLIC CUDA::cudart)
 target_compile_options(varblockspmm PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--use_fast_math>)
-# CMake does not yet identify CUDA C++23 for NVCC. Select it directly for
-# device compilation and use C++26 for GCC's host pass of the .cu file.
-target_compile_options(varblockspmm PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-std=c++23>)
+# GCC's host pass uses C++26; the CMake CUDA standard mapping emits CUDA C++23.
 target_compile_options(varblockspmm PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-std=c++2c>)
 
 # Keep compiler warnings scoped to host C++ translation units.

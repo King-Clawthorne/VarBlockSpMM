@@ -47,6 +47,7 @@ $configureArgs = $wslPrefix + @(
   "-S", $wslProjectRoot,
   "-B", $wslBuildPath,
   "-DCMAKE_BUILD_TYPE=$Configuration",
+  "-DCMAKE_PROJECT_INCLUDE_BEFORE=$wslProjectRoot/cmake/EnableCuda23.cmake",
   "-DCMAKE_CUDA_ARCHITECTURES=$CudaArchitectures"
 )
 & wsl.exe @configureArgs
