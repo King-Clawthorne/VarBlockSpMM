@@ -78,15 +78,25 @@ without requiring a vector.
 CUDA translation units use CUDA C++23. NVCC's host pass for the `.cu` source
 uses C++26 mode as well.
 
+The NVIDIA CUDA compiler module shipped with CMake 4.2 does not register the
+CUDA C++23 dialect, even though NVCC 13.3 and newer support it. The Windows
+`build.ps1` configure step loads `cmake/EnableCuda23.cmake` before `project()`
+to add CMake's missing CUDA23 standard-option mapping. This lets the project
+set `CUDA_STANDARD 23` and generate one `-std=c++23` option without a manual
+compiler-flag override.
+
 ### Requirements
 
-- CMake 3.25 or newer
+- CMake 4.2 or newer
 - CUDA Toolkit 13.3 or newer
 - A host compiler and standard library supported by NVCC with C++26
   `std::views::concat` and C++23 ranges support. The WSL build is verified with
   GCC 15.3 and CUDA Toolkit 13.4.92.
 - WSL2 on Windows. The MSVC/NVCC toolchain is rejected because it cannot compile
   this project in CUDA C++23 mode.
+- On Linux, load `cmake/EnableCuda23.cmake` before `project()` (for example,
+  with `-DCMAKE_PROJECT_INCLUDE_BEFORE=/path/to/VarBlockSpMM/cmake/EnableCuda23.cmake`)
+  to supply CMake 4.2's missing NVIDIA CUDA23 mapping.
 
 ### Build on Linux
 
