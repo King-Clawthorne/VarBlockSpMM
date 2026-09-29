@@ -21,7 +21,6 @@ find_package(CUDAToolkit 13.3 REQUIRED)
 # CUDA kernel implementation sources.
 add_library(varblockspmm
   src/vbsr.cpp
-  src/generator.cpp
   src/row_owned.cu
   src/plan.cpp)
 add_library(VarBlockSpMM::varblockspmm ALIAS varblockspmm)

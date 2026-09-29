@@ -96,22 +96,6 @@ private:
   void release();
 };
 
-/// Supported block-shape distributions for generated matrices.
-enum class Distribution { Uniform, LowVariance, HighVariance, Bimodal };
-
-/// Parameters controlling deterministic synthetic matrix generation.
-struct GeneratorOptions {
-  int block_rows = 1024;
-  int block_cols = 1024;
-  int degree = 4;
-  int rhs_width = 32;
-  Distribution distribution = Distribution::HighVariance;
-  bool local_columns = true;
-  uint64_t seed = 1;
-};
-
-/// Creates a valid synthetic matrix using `seed` as the random engine seed.
-HostMatrix generate(const GeneratorOptions&);
 /// Computes Y = A * X on the CPU; X and Y use column-major scalar matrices.
 std::vector<float> cpu_reference(const HostMatrix& matrix, std::span<const float> input,
                                  int rhs_width);

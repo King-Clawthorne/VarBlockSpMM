@@ -16,8 +16,8 @@ many columns are multiplied together.
 ## Task
 
 The library validates matrix structure, owns device copies of matrix data, and
-dispatches row-owned CUDA kernels. It also provides deterministic matrix
-generation and a double-precision CPU reference implementation.
+dispatches row-owned CUDA kernels. It also provides a double-precision CPU
+reference implementation.
 
 ## Action
 
@@ -28,20 +28,15 @@ Include `src/vbsr.hpp` and link the CMake target
 #include <vector>
 #include "vbsr.hpp"
 
-vbsr::GeneratorOptions options;
-options.block_rows = 128;
-options.block_cols = 128;
-options.degree = 4;
-options.rhs_width = 32;
-options.seed = 7;
-
-vbsr::HostMatrix host_matrix = vbsr::generate(options);
-std::vector<float> input(host_matrix.scalar_cols() * options.rhs_width, 1.0f);
+// Populate a valid HostMatrix with the desired CSR metadata and block values.
+vbsr::HostMatrix host_matrix = load_matrix();
+constexpr int rhs_width = 32;
+std::vector<float> input(host_matrix.scalar_cols() * rhs_width, 1.0f);
 std::vector<float> reference =
-    vbsr::cpu_reference(host_matrix, input, options.rhs_width);
+    vbsr::cpu_reference(host_matrix, input, rhs_width);
 
 vbsr::Matrix matrix(host_matrix);
-vbsr::Plan plan(matrix, {.rhs_width = options.rhs_width});
+vbsr::Plan plan(matrix, {.rhs_width = rhs_width});
 ```
 
 `cpu_reference` accepts `std::span<const float>`, so arrays and other
@@ -70,10 +65,8 @@ The host sources use C++26. The validation code uses C++26
 C++23 `std::views::enumerate` keeps each dimension paired with its index, and
 `std::ranges::contains` and `std::ranges::sort` handle generated block-column
 selection. C++23 `std::ranges::to` builds row-order vectors directly from
-sized `iota` views in both plan construction paths. The generator stores its
-bounded per-row selection in a fixed `std::array`, avoiding a heap allocation
-per row. The CPU reference API uses `std::span` to accept contiguous inputs
-without requiring a vector.
+sized `iota` views in both plan construction paths. The CPU reference API uses
+`std::span` to accept contiguous inputs without requiring a vector.
 
 CUDA translation units use CUDA C++23. NVCC's host pass for the `.cu` source
 uses C++26 mode as well.
