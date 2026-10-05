@@ -230,12 +230,12 @@ void Matrix::update_values(const float* source, size_t count, cudaStream_t strea
         cudaMemcpyAsync(values_, source, count * sizeof(float), cudaMemcpyDeviceToDevice, stream));
 }
 
-// Sum the packed values and all device metadata arrays. The final value
-// offset stores the payload length, so read it from device metadata.
+// Sum the owned payload and metadata sizes without a device transfer or
+// stream synchronization. Moving a matrix transfers all its allocations.
 size_t Matrix::storage_bytes() const {
-  int64_t count = 0;
-  check_cuda(cudaMemcpy(&count, value_off_ + nnzb_, sizeof(count), cudaMemcpyDeviceToHost));
-  return size_t(count) * sizeof(float) +
+  if (!value_off_)
+    return 0;
+  return value_count_ * sizeof(float) +
          (size_t(block_rows_) * 3 + 1 + block_cols_ + nnzb_) * sizeof(int32_t) +
          (size_t(block_rows_) + block_cols_ + nnzb_ + 3) * sizeof(int64_t);
 }
