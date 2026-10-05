@@ -30,40 +30,6 @@ is asynchronous, so keep the buffers alive until its CUDA stream has completed.
 `cpu_reference` accepts `std::span<const float>`, allowing contiguous inputs to
 be passed without copying.
 
-### Matrix and plan lifetime
-
-- `HostMatrix` owns the host-side CSR metadata and packed block values.
-- `Matrix` validates the host matrix and owns device copies of all arrays.
-- A `Plan` created from `Matrix` reuses the matrix's row ordering, so the
-  `Matrix` must outlive the plan.
-- A `Plan` created from a `DeviceMatrix` view copies metadata to host memory
-  for validation, creates its own device row ordering, and does not copy the
-  numerical values. The external device allocations must remain valid while
-  the plan uses them.
-- `Plan::execute` enqueues work on the supplied CUDA stream and returns before
-  the result is ready. Keep input, output, and matrix allocations alive until
-  that stream has completed.
-
-### C++ features used
-
-The host sources use C++26. The validation code uses C++26
-`std::views::concat` to check row and column block dimensions in one pass.
-C++23 `std::views::enumerate` keeps each dimension paired with its index, and
-`std::ranges::contains` and `std::ranges::sort` handle generated block-column
-selection. C++23 `std::ranges::to` builds row-order vectors directly from
-sized `iota` views in both plan construction paths. The CPU reference API uses
-`std::span` to accept contiguous inputs without requiring a vector.
-
-CUDA translation units use CUDA C++23. NVCC's host pass for the `.cu` source
-uses C++26 mode as well.
-
-The NVIDIA CUDA compiler module shipped with CMake 4.2 does not register the
-CUDA C++23 dialect, even though NVCC 13.3 and newer support it. The Windows
-`build.ps1` configure step loads `cmake/EnableCuda23.cmake` before `project()`
-to add CMake's missing CUDA23 standard-option mapping. This lets the project
-set `CUDA_STANDARD 23` and generate one `-std=c++23` option without a manual
-compiler-flag override.
-
 ### Requirements
 
 - CMake 4.2 or newer
@@ -80,7 +46,9 @@ compiler-flag override.
 ### Build on Linux
 
 ```bash
-cmake -S . -B build -DCMAKE_CUDA_ARCHITECTURES=native
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_CUDA_ARCHITECTURES=native \
+  -DCMAKE_PROJECT_INCLUDE_BEFORE="$PWD/cmake/EnableCuda23.cmake"
 cmake --build build --parallel
 ```
 
@@ -104,37 +72,6 @@ Then run this in PowerShell:
 Use `-WslDistribution` or `-WslEnvironment` to select different names.
 `-Configuration` selects the CMake build type, and `-CudaArchitectures` selects
 the CUDA target architecture.
-
-### Benchmark
-
-From WSL in the `vbsr-cuda134` environment, build the `vbsr_benchmark` target
-with `cmake --build build --parallel`, then run it with an optional
-iteration count (default `10000`):
-
-```bash
-./build/vbsr_benchmark 10000
-/opt/nvidia/nsight-systems/2025.6.3/bin/nsys profile --stats=true --output build/vbsr-nsys ./build/vbsr_benchmark 100
-ncu --set basic --launch-count 1 --export build/vbsr-ncu ./build/vbsr_benchmark 100
-```
-
-The benchmark warms up the GPU, times repeated RHS-32 executions with CUDA
-events, and checks the output after timing. Its workload is a diagonal matrix
-with 4096 dense 8-by-8 blocks.
-
-#### Measured data
-
-Run on an NVIDIA GeForce RTX 5060 Ti with CUDA Toolkit 13.4.92:
-
-| Measurement | Result |
-| --- | ---: |
-| CUDA-event average, 10,000 iterations | 0.03718 ms per execution |
-| Nsight Systems kernel time, 200 launches | 32.65 μs average, 29.50 μs median |
-| Nsight Compute DRAM throughput, one profiled kernel | 31.70% |
-| Nsight Compute compute throughput, one profiled kernel | 19.03% |
-
-The Nsight Systems launch count includes 100 warmup launches and 100 timed
-launches. Nsight Compute profiles a replayed kernel, so its reported kernel
-duration is profiler-influenced and is not comparable to the CUDA-event timing.
 
 ## Result
 

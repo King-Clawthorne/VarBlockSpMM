@@ -81,6 +81,7 @@ private:
   int nnzb_{};
   int small_row_count_{};
   int large_row_count_{};
+  int max_column_width_{64};
   int64_t scalar_rows_{};
   int64_t scalar_cols_{};
   int32_t* row_ptr_{};
@@ -117,6 +118,7 @@ public:
   Plan(const Matrix&, PlanOptions);
   /// Validates a device matrix view and creates an owned row-shape ordering.
   /// Metadata is copied to the host during validation; values remain on device.
+  /// Keep metadata unchanged and all device allocations alive while using the plan.
   Plan(DeviceMatrix matrix, PlanOptions options, cudaStream_t stream = 0);
   /// Enqueues Y = A * X on `stream`. Input and output are device pointers.
   void execute(const float* input, float* output, cudaStream_t stream = 0) const;
@@ -128,6 +130,7 @@ private:
   const int32_t* row_shape_order_{};
   int small_row_count_{};
   int large_row_count_{};
+  int max_column_width_{64};
   PlanOptions options_{};
   std::shared_ptr<int32_t> owned_row_order_;
 };
@@ -136,4 +139,10 @@ private:
 void launch_row_owned(const DeviceMatrix& matrix, const int32_t* row_order, int small_row_count,
                       int large_row_count, const float* input, float* output, int rhs_width,
                       cudaStream_t stream);
+namespace detail {
+// Plan dispatch uses the cached, validated bound on block-column widths.
+void launch_row_owned(const DeviceMatrix& matrix, const int32_t* row_order, int small_row_count,
+                      int large_row_count, const float* input, float* output, int rhs_width,
+                      cudaStream_t stream, int max_column_width);
+}
 }

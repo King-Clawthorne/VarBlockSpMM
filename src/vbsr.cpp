@@ -119,6 +119,7 @@ Matrix::Matrix(const HostMatrix& host) {
   scalar_rows_ = host.scalar_rows();
   scalar_cols_ = host.scalar_cols();
   value_count_ = host.values.size();
+  max_column_width_ = std::ranges::max(host.col_size);
 
   auto row_shape_order =
       std::views::iota(0, host.block_rows) | std::ranges::to<std::vector<int32_t>>();
@@ -182,6 +183,7 @@ Matrix& Matrix::operator=(Matrix&& other) noexcept {
     nnzb_ = other.nnzb_;
     small_row_count_ = other.small_row_count_;
     large_row_count_ = other.large_row_count_;
+    max_column_width_ = other.max_column_width_;
     scalar_rows_ = other.scalar_rows_;
     scalar_cols_ = other.scalar_cols_;
     value_count_ = other.value_count_;

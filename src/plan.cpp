@@ -68,9 +68,10 @@ Plan::Plan(DeviceMatrix matrix, PlanOptions options, cudaStream_t stream)
   if (host.scalar_rows() != matrix.scalar_rows || host.scalar_cols() != matrix.scalar_cols)
     throw std::invalid_argument("device scalar dimensions disagree with metadata");
 
+  max_column_width_ = std::ranges::max(host.col_size);
   auto order = std::views::iota(0, matrix.block_rows) | std::ranges::to<std::vector<int32_t>>();
-  auto split = std::ranges::stable_partition(
-      order, [&](int row) { return host.row_size[row] <= 16; });
+  auto split =
+      std::ranges::stable_partition(order, [&](int row) { return host.row_size[row] <= 16; });
 
   small_row_count_ = int(split.begin() - order.begin());
   large_row_count_ = matrix.block_rows - small_row_count_;
@@ -89,15 +90,15 @@ Plan::Plan(DeviceMatrix matrix, PlanOptions options, cudaStream_t stream)
 Plan::Plan(const Matrix& matrix, PlanOptions options)
     : matrix_(matrix.device_view()), row_shape_order_(matrix.row_shape_order_),
       small_row_count_(matrix.small_row_count_), large_row_count_(matrix.large_row_count_),
-      options_(options) {
+      max_column_width_(matrix.max_column_width_), options_(options) {
   validate_options(options);
 }
 
 // Enqueue the selected CUDA kernel path. This method does not synchronize the
 // stream, so output is ready only after the caller's stream has completed.
 void Plan::execute(const float* input, float* output, cudaStream_t stream) const {
-  launch_row_owned(matrix_, row_shape_order_, small_row_count_, large_row_count_, input, output,
-                   options_.rhs_width, stream);
+  detail::launch_row_owned(matrix_, row_shape_order_, small_row_count_, large_row_count_, input,
+                           output, options_.rhs_width, stream, max_column_width_);
 }
 
 // Mirror the dispatch decisions to report how many kernels execute.
