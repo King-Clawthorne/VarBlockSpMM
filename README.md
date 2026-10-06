@@ -45,12 +45,16 @@ be passed without copying.
 
 ### Build on Linux
 
+From Linux or WSL with the required CUDA Toolkit and host compiler available,
+configure and build with the checked-in CMake preset:
+
 ```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_CUDA_ARCHITECTURES=native \
-  -DCMAKE_PROJECT_INCLUDE_BEFORE="$PWD/cmake/EnableCuda23.cmake"
-cmake --build build --parallel
+cmake --preset wsl-release
+cmake --build --preset wsl-release
 ```
+
+The preset uses a Release configuration, targets the locally detected CUDA
+architecture, and loads `cmake/EnableCuda23.cmake` before `project()`.
 
 ### Build on Windows through WSL
 

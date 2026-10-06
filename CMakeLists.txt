@@ -5,7 +5,7 @@ if(MSVC)
   message(FATAL_ERROR
     "VarBlockSpMM requires host C++26 and CUDA C++23. The MSVC/NVCC toolchain "
     "cannot compile CUDA C++23; configure this project with Linux/WSL2, GCC "
-    "or Clang, and CUDA Toolkit 13.3 or newer.")
+    "or Clang, and CUDA Toolkit 13.4 or newer.")
 endif()
 
 set(CMAKE_CXX_STANDARD 26)
@@ -15,7 +15,7 @@ set(CMAKE_CUDA_STANDARD 23)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_EXTENSIONS OFF)
 
-find_package(CUDAToolkit 13.3 REQUIRED)
+find_package(CUDAToolkit 13.4 REQUIRED)
 
 # Build the public library from host-side storage, planning, generation, and
 # CUDA kernel implementation sources.

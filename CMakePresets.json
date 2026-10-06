@@ -1,0 +1,36 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 4,
+    "minor": 2,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "hidden": true,
+      "name": "wsl-base",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_CUDA_ARCHITECTURES": "native",
+        "CMAKE_PROJECT_INCLUDE_BEFORE": "${sourceDir}/cmake/EnableCuda23.cmake"
+      }
+    },
+    {
+      "inherits": "wsl-base",
+      "name": "wsl-release",
+      "displayName": "WSL2 Release",
+      "description": "Release build with CUDA C++23 enabled for the WSL2 toolchain.",
+      "binaryDir": "${sourceDir}/build/wsl-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "wsl-release",
+      "configurePreset": "wsl-release",
+      "jobs": 0
+    }
+  ]
+}
