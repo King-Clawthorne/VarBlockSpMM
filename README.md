@@ -25,7 +25,7 @@ Include `src/vbsr.hpp` and link the CMake target
 `VarBlockSpMM::varblockspmm` (or `varblockspmm`). The complete host-side
 example constructs a `HostMatrix`, uploads it, creates a `Plan`, runs the GPU
 operation, and checks the output in [`benchmark.cpp`](benchmark.cpp). The
-benchmark uses device input and output buffers with `Plan::execute`; that call
+benchmark uses device input and output buffers with `Plan::execute`. That call
 is asynchronous, so keep the buffers alive until its CUDA stream has completed.
 `cpu_reference` accepts `std::span<const float>`, allowing contiguous inputs to
 be passed without copying.
@@ -33,10 +33,12 @@ be passed without copying.
 ### Requirements
 
 - CMake 4.2 or newer
-- CUDA Toolkit 13.3 or newer
+- CUDA Toolkit 13.4 or newer
 - A host compiler and standard library supported by NVCC with C++26
   `std::views::concat` and C++23 ranges support. The WSL build is verified with
   GCC 15.3 and CUDA Toolkit 13.4.92.
+- Doxygen 1.13.2 and LLVM clang/clang-tools 22.1.8, which provide `doxygen`,
+  `clang`, `clang-format`, `clang-tidy`, and `run-clang-tidy`.
 - WSL2 on Windows. The MSVC/NVCC toolchain is rejected because it cannot compile
   this project in CUDA C++23 mode.
 - On Linux, load `cmake/EnableCuda23.cmake` before `project()` (for example,
@@ -67,15 +69,23 @@ in WSL with:
 micromamba create -y -n vbsr-cuda134 -c nvidia -c conda-forge cuda=13.4 cmake=4.2
 ```
 
+The `build.ps1` script also requires Doxygen, clang, and clang-tools in that environment:
+
+```bash
+micromamba install -y -n vbsr-cuda134 -c conda-forge doxygen=1.13.2 clang-tools=22.1.8 clang=22.1.8
+```
+
 Then run this in PowerShell:
 
 ```powershell
 .\build.ps1
 ```
 
-Use `-WslDistribution` or `-WslEnvironment` to select different names.
-`-Configuration` selects the CMake build type, and `-CudaArchitectures` selects
-the CUDA target architecture.
+The script formats the project's C and C++ sources, generates Doxygen HTML in
+`build/docs/html`, and runs clang-tidy on every translation unit in parallel
+using all available CPU cores before building. Use `-WslDistribution` or
+`-WslEnvironment` to select different names. `-Configuration` selects the CMake
+build type, and `-CudaArchitectures` selects the CUDA target architecture.
 
 ## Result
 

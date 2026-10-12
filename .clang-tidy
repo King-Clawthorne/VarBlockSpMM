@@ -1,14 +1,6 @@
----
-Checks: >-
+Checks: >
   -*,
-  clang-analyzer-*,
-  bugprone-*,
   performance-*,
-  portability-*,
-  -bugprone-easily-swappable-parameters,
-  -bugprone-narrowing-conversions
-WarningsAsErrors: ''
 HeaderFilterRegex: '(^|[/\\])src[/\\].*'
 SystemHeaders: false
-FormatStyle: file
-InheritParentConfig: false
+WarningsAsErrors: '*'

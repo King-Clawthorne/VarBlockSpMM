@@ -1,0 +1,24 @@
+DOXYFILE_ENCODING      = UTF-8
+PROJECT_NAME           = VarBlockSpMM
+PROJECT_BRIEF          = "Variable-block sparse matrix multiplication for CUDA"
+OUTPUT_DIRECTORY       = build/docs
+
+INPUT                  = README.md benchmark.cpp src
+INPUT_ENCODING         = UTF-8
+RECURSIVE              = YES
+FILE_PATTERNS          = *.md *.cpp *.hpp *.cu *.cuh
+EXTENSION_MAPPING      = cu=C++ cuh=C++
+USE_MDFILE_AS_MAINPAGE  = README.md
+
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = NO
+WARN_IF_UNDOCUMENTED   = NO
+WARN_IF_DOC_ERROR      = YES
+QUIET                  = YES
+
+GENERATE_HTML          = YES
+HTML_OUTPUT            = html
+GENERATE_LATEX         = NO
+SOURCE_BROWSER         = YES
+INLINE_SOURCES         = NO
