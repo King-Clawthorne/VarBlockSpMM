@@ -23,7 +23,9 @@ namespace vbsr {
 		}
 	}
 
-	Plan::Plan(DeviceMatrix matrix, PlanOptions options, cudaStream_t stream) : matrix_(matrix), options_(options) {
+	Plan::Plan(DeviceMatrix matrix, PlanOptions options, cudaStream_t stream)
+		: matrix_(matrix)
+		, options_(options) {
 		validate_options(options);
 		if (matrix.block_rows <= 0 || matrix.block_cols <= 0 || matrix.nnzb < 0) throw std::invalid_argument("invalid device matrix dimensions");
 		check(cudaStreamSynchronize(stream));

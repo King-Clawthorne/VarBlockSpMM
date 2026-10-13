@@ -102,7 +102,8 @@ namespace vbsr {
 	/// Vector overload retained for callers of the original API.
 	std::vector<float> cpu_reference(const HostMatrix& matrix, const std::vector<float>& input, int rhs_width);
 	/// Kernel selection policy used by a plan.
-	enum class Kernel : std::uint8_t { Auto, RowOwned };
+	enum class Kernel : std::uint8_t { Auto,
+		RowOwned };
 
 	/// Execution configuration for a sparse-dense multiplication plan.
 	struct PlanOptions {

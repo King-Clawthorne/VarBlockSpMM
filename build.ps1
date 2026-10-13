@@ -50,7 +50,6 @@ $wslProjectRoot = (& wsl.exe --distribution $WslDistribution --exec wslpath -a $
 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($wslProjectRoot)) { throw "Could not translate project path to WSL: $projectRoot" }
 $wslBuildPath = (& wsl.exe --distribution $WslDistribution --exec wslpath -a $buildPath).Trim()
 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($wslBuildPath)) { throw "Could not translate build path to WSL: $buildPath" }
-
 $sourceExtensions = @(".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".cu", ".cuh")
 $sourceFiles = [System.Collections.Generic.List[System.IO.FileInfo]]::new()
 $directoriesToScan = [System.Collections.Generic.Stack[string]]::new()
@@ -84,13 +83,11 @@ $wslPrefix = @(
 	"run", "-n", $WslEnvironment
 )
 
-$toolCheckArgs = $wslPrefix + @(
-	"bash", "-c",
-	'for tool in cmake make doxygen clang clang-format clang-tidy run-clang-tidy. Do command -v "$tool" >/dev/null || exit 1. Done'
-)
-& wsl.exe @toolCheckArgs
-if ($LASTEXITCODE -ne 0) {
-	throw "The WSL environment '$WslEnvironment' must provide CMake, GNU Make, Doxygen, and LLVM clang/clang-tools."
+$requiredTools = @("cmake", "make", "nproc", "doxygen", "clang", "clang-format", "clang-tidy", "run-clang-tidy")
+foreach ($tool in $requiredTools) {
+	$toolCheckArgs = $wslPrefix + @("bash", "-c", 'command -v "$1" >/dev/null', "build.ps1", $tool)
+	& wsl.exe @toolCheckArgs
+	if ($LASTEXITCODE -ne 0) { throw "The WSL environment '$WslEnvironment' is missing required tool '$tool'." }
 }
 
 Write-Host "Formatting $($sourceFiles.Count) C and C++ files"
@@ -112,9 +109,7 @@ $configureArgs = $wslPrefix + @(
 & wsl.exe @configureArgs
 if ($LASTEXITCODE -ne 0) { throw "WSL CMake configuration failed with exit code $LASTEXITCODE." }
 $compileCommandsPath = Join-Path $buildPath "compile_commands.json"
-if (-not (Test-Path -LiteralPath $compileCommandsPath -PathType Leaf)) {
-	throw "CMake did not generate compile_commands.json at $compileCommandsPath."
-}
+if (-not (Test-Path -LiteralPath $compileCommandsPath -PathType Leaf)) { throw "CMake did not generate compile_commands.json at $compileCommandsPath." }
 $compileCommands = @(Get-Content -LiteralPath $compileCommandsPath -Raw | ConvertFrom-Json)
 $cudaCompileCommands = @($compileCommands | Where-Object { $_.file -match '\.cu$' })
 if ($compileCommands.Count -eq 0 -or $cudaCompileCommands.Count -eq 0) {
@@ -161,8 +156,11 @@ $tidyArgs += '.*\.(c|cc|cpp|cxx|cu)$'
 & wsl.exe @tidyArgs
 if ($LASTEXITCODE -ne 0) { throw "clang-tidy failed with exit code $LASTEXITCODE." }
 
-Write-Host "Building $Configuration configuration in WSL"
-$buildArgs = $wslPrefix + @("cmake", "--build", $wslBuildPath, "--parallel")
+$jobCountArgs = $wslPrefix + @("nproc")
+$wslJobCount = (& wsl.exe @jobCountArgs).Trim()
+if ($LASTEXITCODE -ne 0 -or $wslJobCount -notmatch '^[1-9][0-9]*$') { throw "Could not determine the WSL processor count for the parallel build." }
+Write-Host "Building $Configuration configuration in WSL with $wslJobCount GNU Make jobs"
+$buildArgs = $wslPrefix + @("make", "-j$wslJobCount", "-C", $wslBuildPath)
 & wsl.exe @buildArgs
 if ($LASTEXITCODE -ne 0) { throw "WSL build failed with exit code $LASTEXITCODE." }
 
