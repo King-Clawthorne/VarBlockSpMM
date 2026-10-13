@@ -87,6 +87,38 @@ using all available CPU cores before building. Use `-WslDistribution` or
 `-WslEnvironment` to select different names. `-Configuration` selects the CMake
 build type, and `-CudaArchitectures` selects the CUDA target architecture.
 
+## Benchmark results
+
+The default benchmark was run on 2026-10-13 under WSL2 on an NVIDIA GeForce
+RTX 5060 Ti with driver 617.42. The build used GNU 15.3.0 and CUDA Toolkit
+13.4.92. Run it from the repository root with:
+
+```bash
+./build/vbsr_benchmark
+```
+
+| Setting | Value |
+| --- | --- |
+| Profile | `small8` |
+| Block rows | 4096 |
+| Nonzero blocks per row | 1 |
+| Right-hand-side width | 32 |
+| Matrix and input values | All ones |
+| Warmup executions | 100 |
+| Iterations per timing batch | 10000 |
+| CUDA event batches | 3 |
+| Median time per execution | 0.016613776 ms |
+
+The time is the median of the per-execution averages from three CUDA event
+batches. It is a result from this GPU and setup, so performance can vary on
+other systems.
+
+This case performs about 8.4 million multiply-adds (16.8 million floating-point
+operations) in 16.6 μs, roughly 1.01 TFLOP/s when counting two operations per
+multiply-add. It provides a baseline for this workload. More profiles and GPUs
+are needed to judge how performance changes with block size, sparsity, and
+hardware.
+
 ## Result
 
 The library provides a reusable CUDA implementation of `Y = A * X`, along with

@@ -5,6 +5,15 @@
 
 namespace vbsr {
 	namespace {
+		/// @brief Computes one small block row for a fixed row height.
+		/// @tparam RHS Number of dense right-hand-side columns.
+		/// @tparam RowHeight Number of scalar rows in the block row.
+		/// @tparam MaxColumnWidth Shared input tile width, or zero for direct loads.
+		/// @param matrix Device matrix arrays.
+		/// @param block_row Block row assigned to this warp.
+		/// @param input Device dense input matrix.
+		/// @param output Device result matrix.
+		/// @param shared_input Optional shared input tile for wide blocks.
 		template <int RHS, int RowHeight, int MaxColumnWidth = 0>
 		__device__ void compute_small_row(DeviceMatrix matrix, int block_row, const float* __restrict__ input, float* __restrict__ output, float* shared_input = nullptr) {
 			constexpr int rhs_groups = 32 / RowHeight;
@@ -50,6 +59,11 @@ namespace vbsr {
 			for (int vector_index = 0; vector_index < vector_width; ++vector_index) output[matrix.row_scalar_off[block_row] + local_row + int64_t(first_rhs_column + vector_index) * matrix.scalar_rows] = accumulators[vector_index];
 		}
 
+		/// @brief Runs the small-row kernel with one warp assigned to each block row.
+		/// @tparam RHS Number of dense right-hand-side columns.
+		/// @param matrix Device matrix arrays.
+		/// @param input Device dense input matrix.
+		/// @param output Device result matrix.
 		template <int RHS>
 		__global__ void row_owned_small(DeviceMatrix matrix, const float* __restrict__ input, float* __restrict__ output) {
 			constexpr int warps_per_block = 4;
@@ -59,11 +73,23 @@ namespace vbsr {
 			else compute_small_row<RHS, 16>(matrix, block_row, input, output);
 		}
 
+		/// @brief Launches the direct-load small-row kernel.
+		/// @tparam RHS Number of dense right-hand-side columns.
+		/// @param matrix Device matrix arrays.
+		/// @param input Device dense input matrix.
+		/// @param output Device result matrix.
+		/// @param stream CUDA stream for the kernel launch.
 		template <int RHS>
 		void launch_small(DeviceMatrix matrix, const float* input, float* output, cudaStream_t stream) {
 			row_owned_small<RHS><<<(matrix.block_rows + 3) / 4, 128, 0, stream>>>(matrix, input, output);
 		}
 
+		/// @brief Runs the small-row kernel with a shared input tile.
+		/// @tparam RHS Number of dense right-hand-side columns.
+		/// @tparam MaxColumnWidth Maximum column block width in the shared tile.
+		/// @param matrix Device matrix arrays.
+		/// @param input Device dense input matrix.
+		/// @param output Device result matrix.
 		template <int RHS, int MaxColumnWidth>
 		__global__ void row_owned_small_shared(DeviceMatrix matrix, const float* __restrict__ input, float* __restrict__ output) {
 			__shared__ float shared_input[4][RHS * (MaxColumnWidth + 1)];
@@ -74,11 +100,23 @@ namespace vbsr {
 			else compute_small_row<RHS, 16, MaxColumnWidth>(matrix, block_row, input, output, shared_input[warp]);
 		}
 
+		/// @brief Launches the shared-input small-row kernel.
+		/// @tparam RHS Number of dense right-hand-side columns.
+		/// @tparam MaxColumnWidth Maximum column block width in the shared tile.
+		/// @param matrix Device matrix arrays.
+		/// @param input Device dense input matrix.
+		/// @param output Device result matrix.
+		/// @param stream CUDA stream for the kernel launch.
 		template <int RHS, int MaxColumnWidth>
 		void launch_small_shared(DeviceMatrix matrix, const float* input, float* output, cudaStream_t stream) {
 			row_owned_small_shared<RHS, MaxColumnWidth><<<(matrix.block_rows + 3) / 4, 128, 0, stream>>>(matrix, input, output);
 		}
 
+		/// @brief Computes a block row with one scalar accumulator per thread.
+		/// @tparam RHS Number of dense right-hand-side columns.
+		/// @param matrix Device matrix arrays.
+		/// @param input Device dense input matrix.
+		/// @param output Device result matrix.
 		template <int RHS>
 		__global__ void row_owned_scalar(DeviceMatrix matrix, const float* __restrict__ input, float* __restrict__ output) {
 			const int block_row = blockIdx.x;
@@ -105,6 +143,13 @@ namespace vbsr {
 			}
 		}
 
+		/// @brief Copies one block's dense input tile into shared memory asynchronously.
+		/// @tparam RHS Number of dense right-hand-side columns.
+		/// @tparam MaxColumnWidth Maximum column block width in the shared tile.
+		/// @param matrix Device matrix arrays.
+		/// @param input Device dense input matrix.
+		/// @param block_index Index of the sparse block whose input tile is staged.
+		/// @param shared_input Shared memory destination for the tile.
 		template <int RHS, int MaxColumnWidth>
 		__device__ void stage_input_async(DeviceMatrix matrix, const float* __restrict__ input, int block_index, float* shared_input) {
 			constexpr int shared_stride = MaxColumnWidth + 1;
@@ -121,6 +166,16 @@ namespace vbsr {
 			__pipeline_commit();
 		}
 
+		/// @brief Runs the single-buffered kernel for one block row.
+		/// @tparam RHS Number of dense right-hand-side columns.
+		/// @tparam VectorWidth Number of output columns held by each thread.
+		/// @tparam Threads Number of threads in the CUDA block.
+		/// @tparam IndirectRows Whether block rows are read from row_order.
+		/// @tparam MaxColumnWidth Maximum column block width in the shared tile.
+		/// @param matrix Device matrix arrays.
+		/// @param row_order Optional ordering of block rows.
+		/// @param input Device dense input matrix.
+		/// @param output Device result matrix.
 		template <int RHS, int VectorWidth, int Threads, bool IndirectRows, int MaxColumnWidth>
 		__global__ void row_owned_single_buffered(DeviceMatrix matrix, const int32_t* __restrict__ row_order,
 			const float* __restrict__ input, float* __restrict__ output) {
@@ -171,6 +226,15 @@ namespace vbsr {
 			}
 		}
 
+		/// @brief Runs a double-buffered kernel with asynchronous input staging.
+		/// @tparam RHS Number of dense right-hand-side columns.
+		/// @tparam VectorWidth Number of output columns held by each thread.
+		/// @tparam Threads Number of threads in the CUDA block.
+		/// @tparam MaxColumnWidth Maximum column block width in the shared tile.
+		/// @param matrix Device matrix arrays.
+		/// @param row_order Ordering of block rows assigned to the grid.
+		/// @param input Device dense input matrix.
+		/// @param output Device result matrix.
 		template <int RHS, int VectorWidth, int Threads, int MaxColumnWidth>
 		__global__ __launch_bounds__(Threads) void row_owned_double_buffered(DeviceMatrix matrix, const int32_t* __restrict__ row_order, const float* __restrict__ input, float* __restrict__ output) {
 			constexpr int shared_stride = MaxColumnWidth + 1;
@@ -219,6 +283,12 @@ namespace vbsr {
 			}
 		}
 
+		/// @brief Launches the scalar fallback kernel for all block rows.
+		/// @tparam RHS Number of dense right-hand-side columns.
+		/// @param matrix Device matrix arrays.
+		/// @param input Device dense input matrix.
+		/// @param output Device result matrix.
+		/// @param stream CUDA stream for the kernel launch.
 		template <int RHS>
 		void launch_scalar(DeviceMatrix matrix, const float* input, float* output, cudaStream_t stream) {
 			constexpr int threads = 256;
@@ -226,9 +296,28 @@ namespace vbsr {
 			row_owned_scalar<RHS><<<dim3(matrix.block_rows, blocks_per_row), threads, 0, stream>>>(matrix, input, output);
 		}
 
+		/// @brief Launches the single-buffered kernel over all block rows.
+		/// @tparam RHS Number of dense right-hand-side columns.
+		/// @tparam VectorWidth Number of output columns held by each thread.
+		/// @tparam MaxColumnWidth Maximum column block width in the shared tile.
+		/// @param matrix Device matrix arrays.
+		/// @param input Device dense input matrix.
+		/// @param output Device result matrix.
+		/// @param stream CUDA stream for the kernel launch.
 		template <int RHS, int VectorWidth, int MaxColumnWidth>
 		void launch_single_buffered(DeviceMatrix matrix, const float* input, float* output, cudaStream_t stream);
 
+		/// @brief Selects a buffered kernel based on row shapes and matrix density.
+		/// @tparam RHS Number of dense right-hand-side columns.
+		/// @tparam VectorWidth Number of output columns held by each thread.
+		/// @tparam MaxColumnWidth Maximum column block width in the shared tile.
+		/// @param matrix Device matrix arrays.
+		/// @param row_shape_order Ordering of block rows grouped by height.
+		/// @param small_row_count Number of block rows with height at most sixteen.
+		/// @param large_row_count Number of block rows with height greater than sixteen.
+		/// @param input Device dense input matrix.
+		/// @param output Device result matrix.
+		/// @param stream CUDA stream for the kernel launch.
 		template <int RHS, int VectorWidth, int MaxColumnWidth>
 		void launch_shape_dispatched(DeviceMatrix matrix, const int32_t* row_shape_order,
 			int small_row_count, int large_row_count, const float* input,
@@ -245,11 +334,30 @@ namespace vbsr {
 			if (large_row_count != 0) row_owned_double_buffered<RHS, VectorWidth, 256, MaxColumnWidth><<<large_row_count, 256, 0, stream>>>(matrix, row_shape_order + small_row_count, input, output);
 		}
 
+		/// @brief Launches a single-buffered kernel with direct row indexing.
+		/// @tparam RHS Number of dense right-hand-side columns.
+		/// @tparam VectorWidth Number of output columns held by each thread.
+		/// @tparam MaxColumnWidth Maximum column block width in the shared tile.
+		/// @param matrix Device matrix arrays.
+		/// @param input Device dense input matrix.
+		/// @param output Device result matrix.
+		/// @param stream CUDA stream for the kernel launch.
 		template <int RHS, int VectorWidth, int MaxColumnWidth>
 		void launch_single_buffered(DeviceMatrix matrix, const float* input, float* output, cudaStream_t stream) {
 			row_owned_single_buffered<RHS, VectorWidth, 256, false, MaxColumnWidth><<<matrix.block_rows, 256, 0, stream>>>(matrix, nullptr, input, output);
 		}
 
+		/// @brief Selects a shared-memory kernel for the right-hand-side width and tile size.
+		/// @tparam MaxColumnWidth Maximum column block width in the shared tile.
+		/// @param matrix Device matrix arrays.
+		/// @param row_shape_order Ordering of block rows grouped by height.
+		/// @param small_row_count Number of block rows with height at most sixteen.
+		/// @param large_row_count Number of block rows with height greater than sixteen.
+		/// @param input Device dense input matrix.
+		/// @param output Device result matrix.
+		/// @param rhs_width Number of dense right-hand-side columns.
+		/// @param stream CUDA stream for the kernel launch.
+		/// @throws std::invalid_argument If the right-hand-side width is unsupported.
 		template <int MaxColumnWidth>
 		void launch_shared(DeviceMatrix matrix, const int32_t* row_shape_order, int small_row_count,
 			int large_row_count, const float* input, float* output, int rhs_width,
@@ -282,18 +390,41 @@ namespace vbsr {
 			}
 		}
 
+		/// @brief Checks the status of the most recently launched CUDA kernel.
+		/// @throws std::runtime_error If the CUDA launch failed.
 		void check_kernel_launch() {
 			const cudaError_t status = cudaGetLastError();
 			if (status != cudaSuccess) throw std::runtime_error(cudaGetErrorString(status));
 		}
 	}
 
+	/// @brief Dispatches the row-owned CUDA implementation with the default tile width.
+	/// @param matrix Device matrix arrays.
+	/// @param row_shape_order Ordering of block rows grouped by height.
+	/// @param small_row_count Number of block rows with height at most sixteen.
+	/// @param large_row_count Number of block rows with height greater than sixteen.
+	/// @param input Device dense input matrix.
+	/// @param output Device result matrix.
+	/// @param rhs_width Number of dense right-hand-side columns.
+	/// @param stream CUDA stream for kernel launches.
 	void launch_row_owned(const DeviceMatrix& matrix, const int32_t* row_shape_order,
 		int small_row_count, int large_row_count, const float* input, float* output,
 		int rhs_width, cudaStream_t stream) {
 		detail::launch_row_owned(matrix, row_shape_order, small_row_count, large_row_count, input, output, rhs_width, stream, 64);
 	}
 
+	/// @brief Selects and launches row-owned kernels for the matrix shapes and width.
+	/// @param matrix Device matrix arrays.
+	/// @param row_shape_order Ordering of block rows grouped by height.
+	/// @param small_row_count Number of block rows with height at most sixteen.
+	/// @param large_row_count Number of block rows with height greater than sixteen.
+	/// @param input Device dense input matrix.
+	/// @param output Device result matrix.
+	/// @param rhs_width Number of dense right-hand-side columns.
+	/// @param stream CUDA stream for kernel launches.
+	/// @param max_column_width Maximum column block width supported by the selected kernel.
+	/// @throws std::invalid_argument If the tile width or right-hand-side width is unsupported.
+	/// @throws std::runtime_error If a CUDA kernel launch fails.
 	void detail::launch_row_owned(const DeviceMatrix& matrix, const int32_t* row_shape_order, int small_row_count, int large_row_count, const float* input, float* output, int rhs_width, cudaStream_t stream, int max_column_width) {
 		if (max_column_width < 8 || max_column_width > 64 || max_column_width % 8 != 0) throw std::invalid_argument("invalid maximum block-column width");
 		const bool enough_small_work = rhs_width != 8 || matrix.nnzb >= int64_t(4) * matrix.block_rows;

@@ -20,10 +20,17 @@
 #include <vector>
 
 namespace {
+	/// @brief Converts a CUDA status into an exception when an operation fails.
+	/// @param status Status returned by the CUDA runtime.
+	/// @throws std::runtime_error If the status is not cudaSuccess.
 	void check(cudaError_t status) {
 		if (status != cudaSuccess) throw std::runtime_error(cudaGetErrorString(status));
 	}
 
+	/// @brief Parses a nonnegative base ten integer.
+	/// @param text Text to parse.
+	/// @return The parsed integer.
+	/// @throws std::invalid_argument If the text is invalid, negative, or out of range.
 	int nonnegative_integer(std::string_view text) {
 		int value { };
 		const auto result = std::from_chars(text.data(), text.data() + text.size(), value);
@@ -31,6 +38,10 @@ namespace {
 		return value;
 	}
 
+	/// @brief Parses a positive base ten integer.
+	/// @param text Text to parse.
+	/// @return The parsed integer.
+	/// @throws std::invalid_argument If the text is invalid, zero, negative, or out of range.
 	int positive_integer(std::string_view text) {
 		const int value = nonnegative_integer(text);
 		if (!value) throw std::invalid_argument("expected a positive integer: " + std::string(text));

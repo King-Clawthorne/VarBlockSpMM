@@ -5,15 +5,28 @@
 
 namespace vbsr {
 	namespace {
+		/// @brief Checks that plan options use a supported width and kernel.
+		/// @param options Plan configuration to check.
+		/// @throws std::invalid_argument If the width or kernel is unsupported.
 		void validate_options(PlanOptions options) {
 			if (options.rhs_width != 8 && options.rhs_width != 16 && options.rhs_width != 32 && options.rhs_width != 64) throw std::invalid_argument("rhs_width must be one of 8, 16, 32, or 64");
 			if (options.kernel != Kernel::Auto && options.kernel != Kernel::RowOwned) throw std::invalid_argument("unsupported kernel selection");
 		}
 
+		/// @brief Converts a CUDA status into an exception when an operation fails.
+		/// @param status Status returned by the CUDA runtime.
+		/// @throws std::runtime_error If the status is not cudaSuccess.
 		void check(cudaError_t status) {
 			if (status != cudaSuccess) throw std::runtime_error(cudaGetErrorString(status));
 		}
 
+		/// @brief Copies a device metadata array into a host vector.
+		/// @tparam T Element type stored in the metadata array.
+		/// @param source Device pointer to the metadata array.
+		/// @param count Number of elements to read.
+		/// @return Host copy of the metadata array.
+		/// @throws std::invalid_argument If a nonempty array has a null source pointer.
+		/// @throws std::runtime_error If the device to host copy fails.
 		template <class T>
 		std::vector<T> read_metadata(const T* source, size_t count) {
 			if (count && !source) throw std::invalid_argument("null device metadata");
@@ -23,6 +36,13 @@ namespace vbsr {
 		}
 	}
 
+	/// @brief Creates a plan from a non-owning device matrix view.
+	/// @details Copies and validates matrix metadata on the host, then creates a row ordering owned by the plan.
+	/// @param matrix Device matrix arrays used by the plan.
+	/// @param options Execution settings including the right-hand-side width.
+	/// @param stream Stream used to synchronize the matrix before validation.
+	/// @throws std::invalid_argument If matrix metadata or options are invalid.
+	/// @throws std::runtime_error If a CUDA operation fails.
 	Plan::Plan(DeviceMatrix matrix, PlanOptions options, cudaStream_t stream)
 		: matrix_(matrix)
 		, options_(options) {
@@ -60,6 +80,10 @@ namespace vbsr {
 		row_shape_order_ = allocation;
 	}
 
+	/// @brief Creates a plan that uses a matrix's owned row ordering.
+	/// @param matrix Matrix supplying the device view and row ordering.
+	/// @param options Execution settings including the right-hand-side width.
+	/// @throws std::invalid_argument If the options are unsupported.
 	Plan::Plan(const Matrix& matrix, PlanOptions options)
 		: matrix_(matrix.device_view())
 		, row_shape_order_(matrix.row_shape_order_)
@@ -70,10 +94,16 @@ namespace vbsr {
 		validate_options(options);
 	}
 
+	/// @brief Enqueues sparse matrix multiplication on a CUDA stream.
+	/// @param input Device buffer containing the column-major dense input matrix.
+	/// @param output Device buffer receiving the column-major result matrix.
+	/// @param stream CUDA stream used for the kernel launch.
 	void Plan::execute(const float* input, float* output, cudaStream_t stream) const {
 		detail::launch_row_owned(matrix_, row_shape_order_, small_row_count_, large_row_count_, input, output, options_.rhs_width, stream, max_column_width_);
 	}
 
+	/// @brief Reports the number of kernel launches selected for each execution.
+	/// @return Number of CUDA kernel launches.
 	int Plan::launch_count() const {
 		if (options_.rhs_width != 32) return 1;
 		if (small_row_count_ != 0 && large_row_count_ != 0 && matrix_.nnzb < int64_t(8) * matrix_.block_rows) return 1;

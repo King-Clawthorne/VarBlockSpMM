@@ -7,10 +7,18 @@
 
 namespace vbsr {
 	namespace {
+		/// @brief Converts a CUDA status into an exception when an operation fails.
+		/// @param status Status returned by the CUDA runtime.
+		/// @throws std::runtime_error If the status is not cudaSuccess.
 		void check_cuda(cudaError_t status) {
 			if (status != cudaSuccess) throw std::runtime_error(cudaGetErrorString(status));
 		}
 
+		/// @brief Allocates device storage and copies a host vector into it.
+		/// @tparam T Element type stored in the vector.
+		/// @param source Host vector to copy.
+		/// @return Pointer to the new device allocation, owned by the caller.
+		/// @throws std::runtime_error If a CUDA allocation or copy fails.
 		template <class T>
 		T* copy_to_device(const std::vector<T>& source) {
 			T* destination = nullptr;
@@ -28,8 +36,15 @@ namespace vbsr {
 
 	}
 
-	void HostMatrix::validate() const { validate_structure(values.size()); }
+	/// @brief Validates matrix metadata and the host value payload.
+	/// @throws std::invalid_argument If validation detects malformed matrix data.
+	void HostMatrix::validate() const {
+		validate_structure(values.size());
+	}
 
+	/// @brief Validates matrix structure against the expected packed value count.
+	/// @param value_count Number of values in the packed matrix payload.
+	/// @throws std::invalid_argument If detected dimensions, offsets, or block entries are inconsistent.
 	void HostMatrix::validate_structure(size_t value_count) const {
 		if (block_rows <= 0 || block_cols <= 0) throw std::invalid_argument("positive block dimensions required");
 		if (row_ptr.size() != size_t(block_rows) + 1 || row_size.size() != size_t(block_rows) || col_size.size() != size_t(block_cols)) std::invalid_argument("metadata size mismatch");
@@ -66,6 +81,10 @@ namespace vbsr {
 		}
 	}
 
+	/// @brief Validates a host matrix and uploads its arrays to the active CUDA device.
+	/// @param host Host matrix data to upload.
+	/// @throws std::invalid_argument If host matrix validation fails.
+	/// @throws std::runtime_error If a CUDA operation fails.
 	Matrix::Matrix(const HostMatrix& host) {
 		host.validate();
 		block_rows_ = host.block_rows;
@@ -97,6 +116,7 @@ namespace vbsr {
 		}
 	}
 
+	/// @brief Frees the device arrays owned by this matrix and clears their pointers.
 	void Matrix::release() {
 		cudaFree(row_ptr_);
 		cudaFree(block_col_);
@@ -119,9 +139,20 @@ namespace vbsr {
 		row_shape_order_ = nullptr;
 	}
 
-	Matrix::~Matrix() { release(); }
-	Matrix::Matrix(Matrix&& other) noexcept { *this = std::move(other); }
+	/// @brief Releases the device arrays owned by this matrix.
+	Matrix::~Matrix() {
+		release();
+	}
 
+	/// @brief Takes ownership of the device arrays from another matrix.
+	/// @param other Matrix whose resources are transferred.
+	Matrix::Matrix(Matrix&& other) noexcept {
+		*this = std::move(other);
+	}
+
+	/// @brief Releases current resources and takes ownership of another matrix's resources.
+	/// @param other Matrix whose resources are transferred.
+	/// @return Reference to this matrix.
 	Matrix& Matrix::operator=(Matrix&& other) noexcept {
 		if (this != &other) {
 			release();
@@ -161,20 +192,36 @@ namespace vbsr {
 		return *this;
 	}
 
+	/// @brief Returns a non-owning view of the matrix's CUDA arrays.
+	/// @return Device view that remains valid while this matrix owns its arrays.
 	DeviceMatrix Matrix::device_view() const {
 		return { block_rows_, block_cols_, nnzb_, scalar_rows_, scalar_cols_, row_ptr_, block_col_, row_size_, col_size_, row_scalar_off_, col_scalar_off_, value_off_, values_ };
 	}
 
+	/// @brief Copies replacement values to this matrix on a CUDA stream.
+	/// @param source Device pointer to replacement values.
+	/// @param count Number of values to copy.
+	/// @param stream CUDA stream used for the asynchronous copy.
+	/// @throws std::invalid_argument If the count or source pointer does not match the matrix payload.
+	/// @throws std::runtime_error If the CUDA copy fails.
 	void Matrix::update_values(const float* source, size_t count, cudaStream_t stream) {
 		if (count != value_count_ || (count && (!source || !values_))) throw std::invalid_argument("value update size or pointer mismatch");
 		if (count && source != values_) check_cuda(cudaMemcpyAsync(values_, source, count * sizeof(float), cudaMemcpyDeviceToDevice, stream));
 	}
 
+	/// @brief Returns the storage size of the matrix's CUDA arrays in bytes.
+	/// @return Number of bytes, or zero when this matrix owns no device storage.
 	size_t Matrix::storage_bytes() const {
 		if (!value_off_) return 0;
 		return value_count_ * sizeof(float) + (size_t(block_rows_) * 3 + 1 + block_cols_ + nnzb_) * sizeof(int32_t) + (size_t(block_rows_) + block_cols_ + nnzb_ + 3) * sizeof(int64_t);
 	}
 
+	/// @brief Computes a host reference result with double precision accumulation.
+	/// @param matrix Variable-block sparse matrix.
+	/// @param input Column-major dense input matrix.
+	/// @param rhs_width Number of columns in the dense input matrix.
+	/// @return Column-major output matrix stored as single precision values.
+	/// @throws std::invalid_argument If the input size does not match the matrix and right-hand-side width.
 	std::vector<float> cpu_reference(const HostMatrix& matrix, std::span<const float> input,
 		int rhs_width) {
 		if (input.size() != size_t(matrix.scalar_cols() * rhs_width)) throw std::invalid_argument("input matrix has incorrect size");
@@ -204,6 +251,12 @@ namespace vbsr {
 		return output;
 	}
 
+	/// @brief Computes a host reference result from a vector input.
+	/// @param matrix Variable-block sparse matrix.
+	/// @param input Column-major dense input matrix.
+	/// @param rhs_width Number of columns in the dense input matrix.
+	/// @return Column-major output matrix stored as single precision values.
+	/// @throws std::invalid_argument If the input size does not match the matrix and right-hand-side width.
 	std::vector<float> cpu_reference(const HostMatrix& matrix, const std::vector<float>& input, int rhs_width) {
 		return cpu_reference(matrix, std::span<const float> { input }, rhs_width);
 	}
