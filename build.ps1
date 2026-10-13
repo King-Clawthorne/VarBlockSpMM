@@ -3,9 +3,9 @@
 Builds and analyzes VarBlockSpMM in the configured WSL environment.
 
 .DESCRIPTION
-Formats the C and C++ sources, configures CMake, generates Doxygen documentation,
-runs clang-tidy, and builds the selected configuration. It verifies that the
-compile_commands.json file contains translation units, including CUDA sources.
+Formats the C and C++ sources, configures CMake with Unix Makefiles, generates
+Doxygen documentation, runs clang-tidy, and builds the selected configuration.
+It verifies that compile_commands.json includes CUDA translation units.
 
 .PARAMETER Configuration
 Selects the CMake build configuration. Defaults to Release.
@@ -86,11 +86,11 @@ $wslPrefix = @(
 
 $toolCheckArgs = $wslPrefix + @(
 	"bash", "-c",
-	'for tool in doxygen clang clang-format clang-tidy run-clang-tidy; do command -v "$tool" >/dev/null || exit 1; done'
+	'for tool in cmake make doxygen clang clang-format clang-tidy run-clang-tidy. Do command -v "$tool" >/dev/null || exit 1. Done'
 )
 & wsl.exe @toolCheckArgs
 if ($LASTEXITCODE -ne 0) {
-	throw "The WSL environment '$WslEnvironment' must provide Doxygen and LLVM clang/clang-tools (clang, clang-format, clang-tidy, and run-clang-tidy)."
+	throw "The WSL environment '$WslEnvironment' must provide CMake, GNU Make, Doxygen, and LLVM clang/clang-tools."
 }
 
 Write-Host "Formatting $($sourceFiles.Count) C and C++ files"
@@ -98,9 +98,10 @@ $formatArgs = $wslPrefix + @("clang-format", "--style=file", "-i") + $wslSourceF
 & wsl.exe @formatArgs
 if ($LASTEXITCODE -ne 0) { throw "clang-format failed with exit code $LASTEXITCODE." }
 
-Write-Host "Configuring host C++26 and CUDA C++23 in $wslBuildPath"
+Write-Host "Configuring host C++26 and CUDA C++23 with Unix Makefiles in $wslBuildPath"
 $configureArgs = $wslPrefix + @(
 	"cmake", "--fresh",
+	"-G", "Unix Makefiles",
 	"-S", $wslProjectRoot,
 	"-B", $wslBuildPath,
 	"-DCMAKE_BUILD_TYPE=$Configuration",
@@ -156,7 +157,6 @@ $tidyArgs = $wslPrefix + @(
 	"-extra-arg=-I$wslToolkitPath/targets/x86_64-linux/include",
 	"-extra-arg=-I$wslToolkitPath/targets/x86_64-linux/include/cccl"
 )
-# Keep the CUDA translation units in scope alongside the host C and C++ files.
 $tidyArgs += '.*\.(c|cc|cpp|cxx|cu)$'
 & wsl.exe @tidyArgs
 if ($LASTEXITCODE -ne 0) { throw "clang-tidy failed with exit code $LASTEXITCODE." }

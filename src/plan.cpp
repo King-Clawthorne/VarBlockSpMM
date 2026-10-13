@@ -14,7 +14,8 @@ namespace vbsr {
 			if (status != cudaSuccess) throw std::runtime_error(cudaGetErrorString(status));
 		}
 
-		template <class T> std::vector<T> read_metadata(const T* source, size_t count) {
+		template <class T>
+		std::vector<T> read_metadata(const T* source, size_t count) {
 			if (count && !source) throw std::invalid_argument("null device metadata");
 			std::vector<T> result(count);
 			if (count) check(cudaMemcpy(result.data(), source, count * sizeof(T), cudaMemcpyDeviceToHost));

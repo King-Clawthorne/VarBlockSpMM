@@ -11,7 +11,8 @@ namespace vbsr {
 			if (status != cudaSuccess) throw std::runtime_error(cudaGetErrorString(status));
 		}
 
-		template <class T> T* copy_to_device(const std::vector<T>& source) {
+		template <class T>
+		T* copy_to_device(const std::vector<T>& source) {
 			T* destination = nullptr;
 			check_cuda(cudaMalloc(&destination, source.size() * sizeof(T)));
 

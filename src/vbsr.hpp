@@ -9,8 +9,8 @@ namespace vbsr {
 	/// Host-side representation of a variable-block sparse matrix.
 	///
 	/// Block payloads are stored contiguously in column-major order. The offset
-	/// arrays describe scalar coordinates and packed value positions; `row_ptr`
-	/// and `block_col` use the usual compressed sparse row layout at block level.
+	/// arrays describe scalar coordinates and packed value positions. The `row_ptr`
+	/// and `block_col` arrays use the usual compressed sparse row layout at block level.
 	struct HostMatrix {
 		int block_rows { };
 		int block_cols { };
@@ -62,7 +62,7 @@ namespace vbsr {
 		Matrix(Matrix&&) noexcept;
 		Matrix& operator=(Matrix&&) noexcept;
 
-		/// Returns a non-owning device view; the matrix must outlive its consumers.
+		/// Returns a non-owning device view. The matrix must outlive its consumers.
 		DeviceMatrix device_view() const;
 		int64_t scalar_rows() const { return scalar_rows_; }
 		int64_t scalar_cols() const { return scalar_cols_; }
@@ -97,7 +97,7 @@ namespace vbsr {
 		void release();
 	};
 
-	/// Computes Y = A * X on the CPU; X and Y use column-major scalar matrices.
+	/// Computes Y = A * X on the CPU. X and Y use column-major scalar matrices.
 	std::vector<float> cpu_reference(const HostMatrix& matrix, std::span<const float> input, int rhs_width);
 	/// Vector overload retained for callers of the original API.
 	std::vector<float> cpu_reference(const HostMatrix& matrix, const std::vector<float>& input, int rhs_width);
@@ -115,7 +115,7 @@ namespace vbsr {
 		/// Creates a plan using the row ordering owned by `matrix`.
 		Plan(const Matrix&, PlanOptions);
 		/// Validates a device matrix view and creates an owned row-shape ordering.
-		/// Metadata is copied to the host during validation; values remain on device.
+		/// Metadata is copied to the host during validation. Values remain on device.
 		/// Keep metadata unchanged and all device allocations alive while using the plan.
 		Plan(DeviceMatrix matrix, PlanOptions options, cudaStream_t stream = 0);
 		/// Enqueues Y = A * X on `stream`. Input and output are device pointers.

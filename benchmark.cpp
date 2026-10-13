@@ -20,7 +20,9 @@
 #include <vector>
 
 namespace {
-	void check(cudaError_t status) { if (status != cudaSuccess) throw std::runtime_error(cudaGetErrorString(status)); }
+	void check(cudaError_t status) {
+		if (status != cudaSuccess) throw std::runtime_error(cudaGetErrorString(status));
+	}
 
 	int nonnegative_integer(std::string_view text) {
 		int value { };
@@ -45,7 +47,8 @@ namespace {
 
 	/// @brief Owns a contiguous allocation in CUDA device memory.
 	/// @tparam T Element type stored in the allocation.
-	template <class T> class DeviceBuffer {
+	template <class T>
+	class DeviceBuffer {
 	public:
 		explicit DeviceBuffer(size_t count) { check(cudaMalloc(&data_, count * sizeof(T))); }
 		~DeviceBuffer() { cudaFree(data_); }
@@ -75,7 +78,7 @@ namespace {
 		/// Block dimensions used to construct a benchmark matrix.
 		std::string_view name;
 		/// Row block heights, repeated cyclically for the requested row count.
-		std::vector<int32_t> sizes;=
+		std::vector<int32_t> sizes;
 		/// Optional column block widths, with row heights used when this is empty.
 		std::vector<int32_t> col_sizes { };
 	};
@@ -115,7 +118,8 @@ namespace {
 	/// @brief Generates deterministic pseudo-random values for benchmark data.
 	class Random {
 	public:
-		explicit Random(uint32_t seed) : state_(seed) { }
+		explicit Random(uint32_t seed)
+			: state_(seed) { }
 		float signed_value() {
 			state_ = state_ * 1664525u + 1013904223u;
 			return float(state_ >> 8) / 8388608.0f - 1.0f;
@@ -184,8 +188,7 @@ namespace {
 	/// @param ones Whether the matrix and input were initialized to one.
 	/// @return Number of output values checked.
 	/// @throws std::runtime_error If an output is nonfinite or fails the expected-value check.
-	size_t verify(const vbsr::HostMatrix& host, std::span<const float> input,
-		std::span<const float> output, int rhs_width, bool ones) {
+	size_t verify(const vbsr::HostMatrix& host, std::span<const float> input, std::span<const float> output, int rhs_width, bool ones) {
 		for (float value : output)
 			if (!std::isfinite(value)) throw std::runtime_error("nonfinite output value");
 		if (ones) {
@@ -243,8 +246,7 @@ namespace {
 	/// @param ones If true, initialize matrix values and input values to one.
 	/// @return Median per-execution time and associated throughput and validation metrics.
 	/// @throws std::runtime_error If CUDA operations or output validation fail.
-	Result run_case(const Profile& profile, int rows, int degree, int rhs_width, int iterations,
-		TimingOptions timing, bool ones = false) {
+	Result run_case(const Profile& profile, int rows, int degree, int rhs_width, int iterations, TimingOptions timing, bool ones = false) {
 		const auto host = make_matrix(profile, rows, degree, ones);
 		vbsr::Matrix matrix(host);
 		vbsr::Plan plan(matrix, { .rhs_width = rhs_width });
