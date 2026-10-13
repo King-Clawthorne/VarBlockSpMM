@@ -55,7 +55,7 @@ cmake --preset wsl-release
 cmake --build --preset wsl-release
 ```
 
-The preset uses a Release configuration, targets the locally detected CUDA
+The preset uses Ninja with automatic parallelism and a Release configuration, targets the locally detected CUDA
 architecture, and loads `cmake/EnableCuda23.cmake` before `project()`.
 
 ### Build on Windows through WSL
@@ -66,7 +66,7 @@ environment. It expects micromamba at `~/.local/bin/micromamba`, its root at
 in WSL with:
 
 ```bash
-micromamba create -y -n vbsr-cuda134 -c nvidia -c conda-forge cuda=13.4 cmake=4.2
+micromamba create -y -n vbsr-cuda134 -c nvidia -c conda-forge cuda=13.4 cmake=4.2 ninja
 ```
 
 The `build.ps1` script also requires Doxygen, clang, and clang-tools in that environment:
@@ -83,9 +83,12 @@ Then run this in PowerShell:
 
 The script formats the project's C and C++ sources, generates Doxygen HTML in
 `build/docs/html`, and runs clang-tidy on every translation unit in parallel
-using all available CPU cores before building. Use `-WslDistribution` or
+using all available CPU cores before building with Ninja via
+`cmake --build --parallel`, also using all available CPU cores. Use `-WslDistribution` or
 `-WslEnvironment` to select different names. `-Configuration` selects the CMake
 build type, and `-CudaArchitectures` selects the CUDA target architecture.
+The script preserves the CMake cache and incremental build state. When all
+build outputs are up to date, Ninja prints `ninja: no work to do.`.
 
 ## Benchmark results
 

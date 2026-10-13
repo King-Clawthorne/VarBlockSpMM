@@ -3,7 +3,7 @@
 Builds and analyzes VarBlockSpMM in the configured WSL environment.
 
 .DESCRIPTION
-Formats the C and C++ sources, configures CMake with Unix Makefiles, generates
+Formats the C and C++ sources, configures CMake with Ninja, generates
 Doxygen documentation, runs clang-tidy, and builds the selected configuration.
 It verifies that compile_commands.json includes CUDA translation units.
 
@@ -83,7 +83,7 @@ $wslPrefix = @(
 	"run", "-n", $WslEnvironment
 )
 
-$requiredTools = @("cmake", "make", "nproc", "doxygen", "clang", "clang-format", "clang-tidy", "run-clang-tidy")
+$requiredTools = @("cmake", "ninja", "nproc", "doxygen", "clang", "clang-format", "clang-tidy", "run-clang-tidy")
 foreach ($tool in $requiredTools) {
 	$toolCheckArgs = $wslPrefix + @("bash", "-c", 'command -v "$1" >/dev/null', "build.ps1", $tool)
 	& wsl.exe @toolCheckArgs
@@ -95,10 +95,10 @@ $formatArgs = $wslPrefix + @("clang-format", "--style=file", "-i") + $wslSourceF
 & wsl.exe @formatArgs
 if ($LASTEXITCODE -ne 0) { throw "clang-format failed with exit code $LASTEXITCODE." }
 
-Write-Host "Configuring host C++26 and CUDA C++23 with Unix Makefiles in $wslBuildPath"
+Write-Host "Configuring host C++26 and CUDA C++23 with Ninja in $wslBuildPath"
 $configureArgs = $wslPrefix + @(
-	"cmake", "--fresh",
-	"-G", "Unix Makefiles",
+	"cmake",
+	"-G", "Ninja",
 	"-S", $wslProjectRoot,
 	"-B", $wslBuildPath,
 	"-DCMAKE_BUILD_TYPE=$Configuration",
@@ -159,8 +159,8 @@ if ($LASTEXITCODE -ne 0) { throw "clang-tidy failed with exit code $LASTEXITCODE
 $jobCountArgs = $wslPrefix + @("nproc")
 $wslJobCount = (& wsl.exe @jobCountArgs).Trim()
 if ($LASTEXITCODE -ne 0 -or $wslJobCount -notmatch '^[1-9][0-9]*$') { throw "Could not determine the WSL processor count for the parallel build." }
-Write-Host "Building $Configuration configuration in WSL with $wslJobCount GNU Make jobs"
-$buildArgs = $wslPrefix + @("make", "-j$wslJobCount", "-C", $wslBuildPath)
+Write-Host "Building $Configuration configuration in WSL with $wslJobCount Ninja jobs"
+$buildArgs = $wslPrefix + @("cmake", "--build", $wslBuildPath, "--parallel", $wslJobCount)
 & wsl.exe @buildArgs
 if ($LASTEXITCODE -ne 0) { throw "WSL build failed with exit code $LASTEXITCODE." }
 

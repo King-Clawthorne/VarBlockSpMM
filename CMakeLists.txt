@@ -15,6 +15,9 @@ endif()
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+# Sources use headers rather than C++ modules; avoid Ninja's module scanning
+# and GCC module flags that clang-tidy cannot consume.
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 set(CMAKE_CUDA_STANDARD 23)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_EXTENSIONS OFF)
