@@ -4,6 +4,7 @@ TabWidth: 4
 UseTab: Always
 
 IncludeBlocks: Merge
+IndentCaseLabels: True
 NamespaceIndentation: All
 
 BreakArrays: False

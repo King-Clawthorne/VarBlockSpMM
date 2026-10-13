@@ -98,14 +98,11 @@ namespace vbsr {
 	};
 
 	/// Computes Y = A * X on the CPU; X and Y use column-major scalar matrices.
-	std::vector<float> cpu_reference(const HostMatrix& matrix, std::span<const float> input,
-		int rhs_width);
+	std::vector<float> cpu_reference(const HostMatrix& matrix, std::span<const float> input, int rhs_width);
 	/// Vector overload retained for callers of the original API.
-	std::vector<float> cpu_reference(const HostMatrix& matrix, const std::vector<float>& input,
-		int rhs_width);
+	std::vector<float> cpu_reference(const HostMatrix& matrix, const std::vector<float>& input, int rhs_width);
 	/// Kernel selection policy used by a plan.
-	enum class Kernel : std::uint8_t { Auto,
-		RowOwned };
+	enum class Kernel : std::uint8_t { Auto, RowOwned };
 
 	/// Execution configuration for a sparse-dense multiplication plan.
 	struct PlanOptions {
@@ -137,13 +134,8 @@ namespace vbsr {
 	};
 
 	/// Dispatches the row-owned CUDA implementation for the requested RHS width.
-	void launch_row_owned(const DeviceMatrix& matrix, const int32_t* row_order, int small_row_count,
-		int large_row_count, const float* input, float* output, int rhs_width,
-		cudaStream_t stream);
+	void launch_row_owned(const DeviceMatrix& matrix, const int32_t* row_order, int small_row_count, int large_row_count, const float* input, float* output, int rhs_width, cudaStream_t stream);
 	namespace detail {
-		// Plan dispatch uses the cached, validated bound on block-column widths.
-		void launch_row_owned(const DeviceMatrix& matrix, const int32_t* row_order, int small_row_count,
-			int large_row_count, const float* input, float* output, int rhs_width,
-			cudaStream_t stream, int max_column_width);
+		void launch_row_owned(const DeviceMatrix& matrix, const int32_t* row_order, int small_row_count, int large_row_count, const float* input, float* output, int rhs_width, cudaStream_t stream, int max_column_width);
 	}
 }

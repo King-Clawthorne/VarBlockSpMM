@@ -1,0 +1,18 @@
+/// @file CMakeLists.txt
+/// @brief Configures the VarBlockSpMM library and benchmark targets.
+///
+/// Requires a host compiler with C++26 support, CUDA C++23 support, and CUDA
+/// Toolkit 13.4 or newer. The project rejects the MSVC/NVCC toolchain.
+///
+/// @par Source
+/// @verbinclude CMakeLists.txt
+
+/// @file build.ps1
+/// @brief Runs the WSL based format, configure, documentation, analysis, and build workflow.
+///
+/// The script accepts configuration, build directory, WSL distribution,
+/// micromamba environment, and CUDA architecture parameters. It verifies that
+/// compile_commands.json includes the project's CUDA translation unit.
+///
+/// @par Source
+/// @verbinclude build.ps1

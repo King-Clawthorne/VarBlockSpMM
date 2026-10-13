@@ -3,11 +3,12 @@ PROJECT_NAME           = VarBlockSpMM
 PROJECT_BRIEF          = "Variable-block sparse matrix multiplication for CUDA"
 OUTPUT_DIRECTORY       = build/docs
 
-INPUT                  = README.md benchmark.cpp src
+INPUT                  = README.md benchmark.cpp src CMakeLists.txt build.ps1 build_scripts.dox
 INPUT_ENCODING         = UTF-8
 RECURSIVE              = YES
-FILE_PATTERNS          = *.md *.cpp *.hpp *.cu *.cuh
+FILE_PATTERNS          = *.md *.cpp *.hpp *.cu *.cuh *.dox
 EXTENSION_MAPPING      = cu=C++ cuh=C++
+EXAMPLE_PATH           = .
 USE_MDFILE_AS_MAINPAGE  = README.md
 
 EXTRACT_ALL            = YES

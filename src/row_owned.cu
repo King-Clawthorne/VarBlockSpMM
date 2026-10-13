@@ -5,12 +5,8 @@
 
 namespace vbsr {
 	namespace {
-		// Give each warp a small block row. Narrow inputs use direct loads, while
-		// wider inputs can use a private shared tile without CTA barriers.
-		template <int RHS, int RowHeight, int MaxColumnWidth = 0>
-		__device__ void compute_small_row(DeviceMatrix matrix, int block_row,
-			const float* __restrict__ input, float* __restrict__ output,
-			float* shared_input = nullptr) {
+		template <int RHS, int RowHeight, int MaxColumnWidth = 0> __device__ void compute_small_row(DeviceMatrix matrix,
+			int block_row, const float* __restrict__ input, float* __restrict__ output, float* shared_input = nullptr) {
 			constexpr int rhs_groups = 32 / RowHeight;
 			constexpr int vector_width = RHS / rhs_groups;
 			const int lane = threadIdx.x % 32;
@@ -19,7 +15,7 @@ namespace vbsr {
 			float accumulators[vector_width] = { };
 			const int block_end = matrix.row_ptr[block_row + 1];
 
-#pragma unroll 1
+			#pragma unroll 1
 			for (int block_index = matrix.row_ptr[block_row]; block_index < block_end; ++block_index) {
 				const int block_column = matrix.block_col[block_index];
 				const int column_width = matrix.col_size[block_column];
@@ -27,145 +23,106 @@ namespace vbsr {
 					for (int element = lane; element < RHS * MaxColumnWidth; element += 32) {
 						const int rhs_column = element / MaxColumnWidth;
 						const int column = element % MaxColumnWidth;
-						if (column < column_width)
-							shared_input[rhs_column * (MaxColumnWidth + 1) + column] = input[matrix.col_scalar_off[block_column] + column + int64_t(rhs_column) * matrix.scalar_cols];
+						if (column < column_width) shared_input[rhs_column * (MaxColumnWidth + 1) + column] = input[matrix.col_scalar_off[block_column] + column + int64_t(rhs_column) * matrix.scalar_cols];
 					}
 					__syncwarp();
 				}
+
 				const float* block_values = matrix.values + matrix.value_off[block_index] + local_row;
 				const float* input_column = input + matrix.col_scalar_off[block_column] + int64_t(first_rhs_column) * matrix.scalar_cols;
-#pragma unroll 4
+				#pragma unroll 4
 				for (int column = 0; column < column_width; ++column) {
 					const float matrix_value = block_values[column * RowHeight];
-#pragma unroll
+					#pragma unroll
 					for (int vector_index = 0; vector_index < vector_width; ++vector_index) {
 						float input_value;
-						if constexpr (MaxColumnWidth != 0)
-							input_value = shared_input[(first_rhs_column + vector_index) * (MaxColumnWidth + 1) + column];
-						else
-							input_value = input_column[column + int64_t(vector_index) * matrix.scalar_cols];
+						if constexpr (MaxColumnWidth != 0) input_value = shared_input[(first_rhs_column + vector_index) * (MaxColumnWidth + 1) + column];
+						else input_value = input_column[column + int64_t(vector_index) * matrix.scalar_cols];
 						accumulators[vector_index] = fmaf(matrix_value, input_value, accumulators[vector_index]);
 					}
 				}
+
 				if constexpr (MaxColumnWidth != 0)
-					if (block_index + 1 < block_end)
-						__syncwarp();
+					if (block_index + 1 < block_end) __syncwarp();
 			}
 
-#pragma unroll
-			for (int vector_index = 0; vector_index < vector_width; ++vector_index) {
-				output[matrix.row_scalar_off[block_row] + local_row + int64_t(first_rhs_column + vector_index) * matrix.scalar_rows] = accumulators[vector_index];
-			}
+			#pragma unroll
+			for (int vector_index = 0; vector_index < vector_width; ++vector_index) output[matrix.row_scalar_off[block_row] + local_row + int64_t(first_rhs_column + vector_index) * matrix.scalar_rows] = accumulators[vector_index];
 		}
 
-		template <int RHS>
-		__global__ void row_owned_small(DeviceMatrix matrix, const float* __restrict__ input,
+		template <int RHS> __global__ void row_owned_small(DeviceMatrix matrix, const float* __restrict__ input,
 			float* __restrict__ output) {
 			constexpr int warps_per_block = 4;
 			const int block_row = blockIdx.x * warps_per_block + threadIdx.x / 32;
-			if (block_row >= matrix.block_rows)
-				return;
-			if (matrix.row_size[block_row] == 8)
-				compute_small_row<RHS, 8>(matrix, block_row, input, output);
-			else
-				compute_small_row<RHS, 16>(matrix, block_row, input, output);
+			if (block_row >= matrix.block_rows) return;
+			if (matrix.row_size[block_row] == 8) compute_small_row<RHS, 8>(matrix, block_row, input, output);
+			else compute_small_row<RHS, 16>(matrix, block_row, input, output);
 		}
 
-		template <int RHS>
-		void launch_small(DeviceMatrix matrix, const float* input, float* output, cudaStream_t stream) {
+		template <int RHS> void launch_small(DeviceMatrix matrix, const float* input, float* output, cudaStream_t stream) {
 			row_owned_small<RHS><<<(matrix.block_rows + 3) / 4, 128, 0, stream>>>(matrix, input, output);
 		}
 
-		// Each warp owns its input tile and row, so independent rows do not need
-		// CTA barriers. The padded tiles preserve broadcast-friendly shared loads.
-		template <int RHS, int MaxColumnWidth>
-		__global__ void row_owned_small_shared(DeviceMatrix matrix, const float* __restrict__ input,
+		template <int RHS, int MaxColumnWidth> __global__ void row_owned_small_shared(DeviceMatrix matrix, const float* __restrict__ input,
 			float* __restrict__ output) {
 			__shared__ float shared_input[4][RHS * (MaxColumnWidth + 1)];
 			const int warp = threadIdx.x / 32;
 			const int block_row = blockIdx.x * 4 + warp;
-			if (block_row >= matrix.block_rows)
-				return;
-			if (matrix.row_size[block_row] == 8)
-				compute_small_row<RHS, 8, MaxColumnWidth>(matrix, block_row, input, output, shared_input[warp]);
-			else
-				compute_small_row<RHS, 16, MaxColumnWidth>(matrix, block_row, input, output,
-					shared_input[warp]);
+			if (block_row >= matrix.block_rows) return;
+			if (matrix.row_size[block_row] == 8) compute_small_row<RHS, 8, MaxColumnWidth>(matrix, block_row, input, output, shared_input[warp]);
+			else compute_small_row<RHS, 16, MaxColumnWidth>(matrix, block_row, input, output, shared_input[warp]);
 		}
 
-		template <int RHS, int MaxColumnWidth>
-		void launch_small_shared(DeviceMatrix matrix, const float* input, float* output,
-			cudaStream_t stream) {
-			row_owned_small_shared<RHS, MaxColumnWidth>
-				<<<(matrix.block_rows + 3) / 4, 128, 0, stream>>>(matrix, input, output);
+		template <int RHS, int MaxColumnWidth> void launch_small_shared(DeviceMatrix matrix, const float* input, float* output, cudaStream_t stream) {
+			row_owned_small_shared<RHS, MaxColumnWidth><<<(matrix.block_rows + 3) / 4, 128, 0, stream>>>(matrix, input, output);
 		}
 
-		// Simple fallback kernel: each thread computes one (scalar row, RHS column)
-		// output, traversing that block row's nonzero dense blocks.
-		template <int RHS>
-
-		__global__ void row_owned_scalar(DeviceMatrix matrix, const float* __restrict__ input,
+		template <int RHS> __global__ void row_owned_scalar(DeviceMatrix matrix, const float* __restrict__ input,
 			float* __restrict__ output) {
 			const int block_row = blockIdx.x;
 			const int row_height = matrix.row_size[block_row];
 			const int grid_stride = blockDim.x * gridDim.y;
 
-			for (int work_index = blockIdx.y * blockDim.x + threadIdx.x; work_index < row_height * RHS;
-				work_index += grid_stride) {
+			for (int work_index = blockIdx.y * blockDim.x + threadIdx.x; work_index < row_height * RHS; work_index += grid_stride) {
 				const int local_row = work_index % row_height;
 				const int rhs_column = work_index / row_height;
 				float accumulator = 0.0f;
 
-#pragma unroll 1
-				for (int block_index = matrix.row_ptr[block_row]; block_index < matrix.row_ptr[block_row + 1];
-					++block_index) {
+				#pragma unroll 1
+				for (int block_index = matrix.row_ptr[block_row]; block_index < matrix.row_ptr[block_row + 1]; ++block_index) {
 					const int block_column = matrix.block_col[block_index];
 					const int column_width = matrix.col_size[block_column];
 					const float* block_values = matrix.values + matrix.value_off[block_index] + local_row;
 					const float* input_column = input + matrix.col_scalar_off[block_column] + int64_t(rhs_column) * matrix.scalar_cols;
 
-#pragma unroll 4
-					for (int local_column = 0; local_column < column_width; ++local_column) {
-						accumulator = fmaf(block_values[local_column * row_height], input_column[local_column], accumulator);
-					}
+					#pragma unroll 4
+					for (int local_column = 0; local_column < column_width; ++local_column) accumulator = fmaf(block_values[local_column * row_height], input_column[local_column], accumulator);
 				}
 
 				output[matrix.row_scalar_off[block_row] + local_row + int64_t(rhs_column) * matrix.scalar_rows] = accumulator;
 			}
 		}
 
-		// Stage one dense block's input slice for all RHS columns in shared memory.
-		// The padded shared stride avoids bank conflicts for the supported widths.
-		template <int RHS, int MaxColumnWidth>
-		__device__ void stage_input_async(DeviceMatrix matrix, const float* __restrict__ input,
-			int block_index, float* shared_input) {
+		template <int RHS, int MaxColumnWidth> __device__ void stage_input_async(DeviceMatrix matrix, const float* __restrict__ input, int block_index, float* shared_input) {
 			constexpr int shared_stride = MaxColumnWidth + 1;
 			const int block_column = matrix.block_col[block_index];
 			const int column_width = matrix.col_size[block_column];
 			const int element_count = RHS * column_width;
-
 			for (int element = threadIdx.x; element < element_count; element += blockDim.x) {
 				const int rhs_column = element / column_width;
 				const int local_column = element - rhs_column * column_width;
 				const float* source = input + matrix.col_scalar_off[block_column] + local_column + int64_t(rhs_column) * matrix.scalar_cols;
-				__pipeline_memcpy_async(shared_input + rhs_column * shared_stride + local_column, source,
-					sizeof(float));
+				__pipeline_memcpy_async(shared_input + rhs_column * shared_stride + local_column, source, sizeof(float));
 			}
 
 			__pipeline_commit();
 		}
 
-		// Compute a block row using one shared-memory input buffer. A thread owns
-		// one scalar row and a small vector of RHS columns; IndirectRows enables
-		// launch over a precomputed shape-grouped row order.
-		template <int RHS, int VectorWidth, int Threads, bool IndirectRows, int MaxColumnWidth>
-		__global__ void
-		row_owned_single_buffered(DeviceMatrix matrix, const int32_t* __restrict__ row_order,
+		template <int RHS, int VectorWidth, int Threads, bool IndirectRows, int MaxColumnWidth> __global__ void row_owned_single_buffered(DeviceMatrix matrix, const int32_t* __restrict__ row_order,
 			const float* __restrict__ input, float* __restrict__ output) {
 			static_assert(Threads % MaxColumnWidth == 0);
 			constexpr int shared_stride = MaxColumnWidth + 1;
 			__shared__ float shared_input[RHS * shared_stride];
-
 			const int block_row = IndirectRows ? row_order[blockIdx.x] : int(blockIdx.x);
 			const int row_height = matrix.row_size[block_row];
 			const int rhs_groups = RHS / VectorWidth;
@@ -176,7 +133,7 @@ namespace vbsr {
 			const int block_end = matrix.row_ptr[block_row + 1];
 			float accumulators[VectorWidth] = { };
 
-#pragma unroll 1
+			#pragma unroll 1
 			for (int block_index = matrix.row_ptr[block_row]; block_index < block_end; ++block_index) {
 				const int block_column = matrix.block_col[block_index];
 				const int column_width = matrix.col_size[block_column];
@@ -184,49 +141,37 @@ namespace vbsr {
 
 				for (int rhs_column = threadIdx.x / MaxColumnWidth; rhs_column < RHS;
 					rhs_column += Threads / MaxColumnWidth) {
-					if (local_column < column_width) {
-						shared_input[rhs_column * shared_stride + local_column] = input[matrix.col_scalar_off[block_column] + local_column + int64_t(rhs_column) * matrix.scalar_cols];
-					}
+					if (local_column < column_width) shared_input[rhs_column * shared_stride + local_column] = input[matrix.col_scalar_off[block_column] + local_column + int64_t(rhs_column) * matrix.scalar_cols];
 				}
 
 				__syncthreads();
 
 				if (active) {
 					const float* block_values = matrix.values + matrix.value_off[block_index] + local_row;
-#pragma unroll 4
+					#pragma unroll 4
 					for (int column = 0; column < column_width; ++column) {
 						const float matrix_value = block_values[column * row_height];
-#pragma unroll
-						for (int vector_index = 0; vector_index < VectorWidth; ++vector_index) {
-							accumulators[vector_index] = fmaf(matrix_value,
-								shared_input[(first_rhs_column + vector_index) * shared_stride + column],
-								accumulators[vector_index]);
-						}
+						#pragma unroll
+						for (int vector_index = 0; vector_index < VectorWidth; ++vector_index)
+							accumulators[vector_index] = fmaf(matrix_value, shared_input[(first_rhs_column + vector_index) * shared_stride + column], accumulators[vector_index]);
 					}
 				}
 
-				if (block_index + 1 < block_end)
-					__syncthreads();
+				if (block_index + 1 < block_end) __syncthreads();
 			}
 
 			if (active) {
-#pragma unroll
-				for (int vector_index = 0; vector_index < VectorWidth; ++vector_index) {
+				#pragma unroll
+				for (int vector_index = 0; vector_index < VectorWidth; ++vector_index)
 					output[matrix.row_scalar_off[block_row] + local_row + int64_t(first_rhs_column + vector_index) * matrix.scalar_rows] = accumulators[vector_index];
-				}
 			}
 		}
 
-		// Double-buffer input staging so loading the next sparse block can overlap
-		// with arithmetic on the current block.
-		template <int RHS, int VectorWidth, int Threads, int MaxColumnWidth>
-		__global__ __launch_bounds__(Threads) void row_owned_double_buffered(
-			DeviceMatrix matrix, const int32_t* __restrict__ row_order, const float* __restrict__ input,
-			float* __restrict__ output) {
+		template <int RHS, int VectorWidth, int Threads, int MaxColumnWidth> __global__ __launch_bounds__(Threads) void row_owned_double_buffered(
+			DeviceMatrix matrix, const int32_t* __restrict__ row_order, const float* __restrict__ input, float* __restrict__ output) {
 
 			constexpr int shared_stride = MaxColumnWidth + 1;
 			__shared__ float shared_input[2][RHS * shared_stride];
-
 			const int block_row = row_order[blockIdx.x];
 			const int row_height = matrix.row_size[block_row];
 			const int rhs_groups = RHS / VectorWidth;
@@ -238,66 +183,48 @@ namespace vbsr {
 			const int block_end = matrix.row_ptr[block_row + 1];
 			float accumulators[VectorWidth] = { };
 
-			if (block_begin < block_end)
-				stage_input_async<RHS, MaxColumnWidth>(matrix, input, block_begin, shared_input[0]);
+			if (block_begin < block_end) stage_input_async<RHS, MaxColumnWidth>(matrix, input, block_begin, shared_input[0]);
 
-#pragma unroll 1
+			#pragma unroll 1
 			for (int block_index = block_begin; block_index < block_end; ++block_index) {
 				const int current_buffer = (block_index - block_begin) & 1;
 				const int next_block = block_index + 1;
 
 				__pipeline_wait_prior(0);
 				__syncthreads();
-				if (next_block < block_end)
-					stage_input_async<RHS, MaxColumnWidth>(matrix, input, next_block,
-						shared_input[current_buffer ^ 1]);
+				if (next_block < block_end) stage_input_async<RHS, MaxColumnWidth>(matrix, input, next_block, shared_input[current_buffer ^ 1]);
 
 				const int block_column = matrix.block_col[block_index];
 				const int column_width = matrix.col_size[block_column];
 
 				if (active) {
 					const float* block_values = matrix.values + matrix.value_off[block_index] + local_row;
-#pragma unroll 4
+					#pragma unroll 4
 					for (int column = 0; column < column_width; ++column) {
 						const float matrix_value = block_values[column * row_height];
-#pragma unroll
+						#pragma unroll
 						for (int vector_index = 0; vector_index < VectorWidth; ++vector_index) {
-							accumulators[vector_index] = fmaf(matrix_value,
-								shared_input[current_buffer]
-											[(first_rhs_column + vector_index) * shared_stride + column],
-								accumulators[vector_index]);
+							accumulators[vector_index] = fmaf(matrix_value, shared_input[current_buffer][(first_rhs_column + vector_index) * shared_stride + column], accumulators[vector_index]);
 						}
 					}
 				}
 			}
 
 			if (active) {
-#pragma unroll
-				for (int vector_index = 0; vector_index < VectorWidth; ++vector_index) {
-					output[matrix.row_scalar_off[block_row] + local_row + int64_t(first_rhs_column + vector_index) * matrix.scalar_rows] = accumulators[vector_index];
-				}
+				#pragma unroll
+				for (int vector_index = 0; vector_index < VectorWidth; ++vector_index) output[matrix.row_scalar_off[block_row] + local_row + int64_t(first_rhs_column + vector_index) * matrix.scalar_rows] = accumulators[vector_index];
 			}
 		}
 
-		// Split large RHS work into a two-dimensional grid when the scalar fallback
-		// would otherwise assign too many outputs to each block.
-		template <int RHS>
-		void launch_scalar(DeviceMatrix matrix, const float* input, float* output, cudaStream_t stream) {
+		template <int RHS> void launch_scalar(DeviceMatrix matrix, const float* input, float* output, cudaStream_t stream) {
 			constexpr int threads = 256;
 			constexpr int blocks_per_row = (64 * RHS + threads - 1) / threads;
-			row_owned_scalar<RHS>
-				<<<dim3(matrix.block_rows, blocks_per_row), threads, 0, stream>>>(matrix, input, output);
+			row_owned_scalar<RHS><<<dim3(matrix.block_rows, blocks_per_row), threads, 0, stream>>>(matrix, input, output);
 		}
 
-		// Declare the generic launch helper before the shape-dispatch routine.
-		template <int RHS, int VectorWidth, int MaxColumnWidth>
-		void launch_single_buffered(DeviceMatrix matrix, const float* input, float* output,
-			cudaStream_t stream);
+		template <int RHS, int VectorWidth, int MaxColumnWidth> void launch_single_buffered(DeviceMatrix matrix, const float* input, float* output, cudaStream_t stream);
 
-		// Select row-shape-specific kernels for RHS=32. For low average degree,
-		// avoid the extra split-launch overhead and use one uniform kernel.
-		template <int RHS, int VectorWidth, int MaxColumnWidth>
-		void launch_shape_dispatched(DeviceMatrix matrix, const int32_t* row_shape_order,
+		template <int RHS, int VectorWidth, int MaxColumnWidth> void launch_shape_dispatched(DeviceMatrix matrix, const int32_t* row_shape_order,
 			int small_row_count, int large_row_count, const float* input,
 			float* output, cudaStream_t stream) {
 			static_assert(RHS % VectorWidth == 0);
@@ -308,129 +235,88 @@ namespace vbsr {
 				return;
 			}
 
-			if (small_row_count != 0) {
-				row_owned_single_buffered<RHS, VectorWidth, 128, true, MaxColumnWidth>
-					<<<small_row_count, 128, 0, stream>>>(matrix, row_shape_order, input, output);
-			}
-
-			if (large_row_count != 0) {
-				row_owned_double_buffered<RHS, VectorWidth, 256, MaxColumnWidth>
-					<<<large_row_count, 256, 0, stream>>>(matrix, row_shape_order + small_row_count, input,
-						output);
-			}
+			if (small_row_count != 0) row_owned_single_buffered<RHS, VectorWidth, 128, true, MaxColumnWidth><<<small_row_count, 128, 0, stream>>>(matrix, row_shape_order, input, output);
+			if (large_row_count != 0) row_owned_double_buffered<RHS, VectorWidth, 256, MaxColumnWidth><<<large_row_count, 256, 0, stream>>>(matrix, row_shape_order + small_row_count, input, output);
 		}
 
-		// Launch the single-buffer implementation over all block rows directly.
-		template <int RHS, int VectorWidth, int MaxColumnWidth>
-		void launch_single_buffered(DeviceMatrix matrix, const float* input, float* output,
-			cudaStream_t stream) {
-			row_owned_single_buffered<RHS, VectorWidth, 256, false, MaxColumnWidth>
-				<<<matrix.block_rows, 256, 0, stream>>>(matrix, nullptr, input, output);
+		template <int RHS, int VectorWidth, int MaxColumnWidth> void launch_single_buffered(DeviceMatrix matrix, const float* input, float* output, cudaStream_t stream) {
+			row_owned_single_buffered<RHS, VectorWidth, 256, false, MaxColumnWidth><<<matrix.block_rows, 256, 0, stream>>>(matrix, nullptr, input, output);
 		}
 
-		// Size shared input tiles for the widest validated block column. Narrow
-		// tiles also distribute cooperative loads across more useful threads.
-		template <int MaxColumnWidth>
-		void launch_shared(DeviceMatrix matrix, const int32_t* row_shape_order, int small_row_count,
+		template <int MaxColumnWidth> void launch_shared(DeviceMatrix matrix, const int32_t* row_shape_order, int small_row_count,
 			int large_row_count, const float* input, float* output, int rhs_width,
 			cudaStream_t stream) {
 			switch (rhs_width) {
-			case 8:
-				if (large_row_count == 0 && MaxColumnWidth > 16) {
-					launch_small_shared<8, MaxColumnWidth>(matrix, input, output, stream);
+				case 8:
+					if (large_row_count == 0 && MaxColumnWidth > 16) {
+						launch_small_shared<8, MaxColumnWidth>(matrix, input, output, stream);
+						break;
+					}
+
+					row_owned_single_buffered<8, 8, 64, false, MaxColumnWidth><<<matrix.block_rows, 64, 0, stream>>>(matrix, nullptr, input, output);
 					break;
-				}
-				row_owned_single_buffered<8, 8, 64, false, MaxColumnWidth>
-					<<<matrix.block_rows, 64, 0, stream>>>(matrix, nullptr, input, output);
-				break;
-			case 16:
-				if (large_row_count == 0 && MaxColumnWidth > 16) {
-					launch_small_shared<16, MaxColumnWidth>(matrix, input, output, stream);
+				case 16:
+					if (large_row_count == 0 && MaxColumnWidth > 16) {
+						launch_small_shared<16, MaxColumnWidth>(matrix, input, output, stream);
+						break;
+					}
+
+					row_owned_single_buffered<16, 16, 64, false, MaxColumnWidth><<<matrix.block_rows, 64, 0, stream>>>(matrix, nullptr, input, output);
 					break;
-				}
-				row_owned_single_buffered<16, 16, 64, false, MaxColumnWidth>
-					<<<matrix.block_rows, 64, 0, stream>>>(matrix, nullptr, input, output);
-				break;
-			case 32:
-				launch_shape_dispatched<32, 8, MaxColumnWidth>(matrix, row_shape_order, small_row_count,
-					large_row_count, input, output, stream);
-				break;
-			case 64:
-				launch_single_buffered<64, 16, MaxColumnWidth>(matrix, input, output, stream);
-				break;
-			default:
-				throw std::invalid_argument("unsupported rhs width");
+				case 32:
+					launch_shape_dispatched<32, 8, MaxColumnWidth>(matrix, row_shape_order, small_row_count, large_row_count, input, output, stream);
+					break;
+				case 64:
+					launch_single_buffered<64, 16, MaxColumnWidth>(matrix, input, output, stream);
+					break;
+				default:
+					throw std::invalid_argument("unsupported rhs width");
 			}
 		}
 
-		// Check launch configuration errors without synchronizing execution.
 		void check_kernel_launch() {
 			const cudaError_t status = cudaGetLastError();
-			if (status != cudaSuccess)
-				throw std::runtime_error(cudaGetErrorString(status));
+			if (status != cudaSuccess) throw std::runtime_error(cudaGetErrorString(status));
 		}
 	}
 
-	// Dispatch a supported dense width to its compile-time-specialized kernel.
-	// The caller owns input/output buffers and must keep the matrix alive until
-	// work submitted to `stream` has completed.
 	void launch_row_owned(const DeviceMatrix& matrix, const int32_t* row_shape_order,
 		int small_row_count, int large_row_count, const float* input, float* output,
 		int rhs_width, cudaStream_t stream) {
-		detail::launch_row_owned(matrix, row_shape_order, small_row_count, large_row_count, input, output,
-			rhs_width, stream, 64);
+		detail::launch_row_owned(matrix, row_shape_order, small_row_count, large_row_count, input, output, rhs_width, stream, 64);
 	}
 
-	void detail::launch_row_owned(const DeviceMatrix& matrix, const int32_t* row_shape_order,
-		int small_row_count, int large_row_count, const float* input,
-		float* output, int rhs_width, cudaStream_t stream,
-		int max_column_width) {
-		if (max_column_width < 8 || max_column_width > 64 || max_column_width % 8 != 0)
-			throw std::invalid_argument("invalid maximum block-column width");
-
-		// Direct loads pay off for narrow blocks. Wide input slices benefit from
-		// the shared path even when their block rows are small.
+	void detail::launch_row_owned(const DeviceMatrix& matrix, const int32_t* row_shape_order, int small_row_count, int large_row_count, const float* input, float* output, int rhs_width, cudaStream_t stream, int max_column_width) {
+		if (max_column_width < 8 || max_column_width > 64 || max_column_width % 8 != 0) throw std::invalid_argument("invalid maximum block-column width");
 		const bool enough_small_work = rhs_width != 8 || matrix.nnzb >= int64_t(4) * matrix.block_rows;
 		if (large_row_count == 0 && max_column_width <= 16 && enough_small_work) {
 			switch (rhs_width) {
-			case 8:
-				launch_small<8>(matrix, input, output, stream);
-				break;
-			case 16:
-				launch_small<16>(matrix, input, output, stream);
-				break;
-			case 32:
-				launch_small<32>(matrix, input, output, stream);
-				break;
-			case 64:
-				launch_small<64>(matrix, input, output, stream);
-				break;
-			default:
-				throw std::invalid_argument("unsupported rhs width");
+				case 8:
+					launch_small<8>(matrix, input, output, stream);
+					break;
+				case 16:
+					launch_small<16>(matrix, input, output, stream);
+					break;
+				case 32:
+					launch_small<32>(matrix, input, output, stream);
+					break;
+				case 64:
+					launch_small<64>(matrix, input, output, stream);
+					break;
+				default:
+					throw std::invalid_argument("unsupported rhs width");
 			}
+
 			check_kernel_launch();
 			return;
 		}
 
-		// These narrow tiles increase register pressure enough to lose residency
-		// on tall rows. Keep the existing tile for the measured regimes.
 		const bool retain_wide_tile = max_column_width <= 16 && (rhs_width == 16 || (rhs_width == 64 && max_column_width > 8));
-		if (retain_wide_tile) {
-			launch_shared<64>(matrix, row_shape_order, small_row_count, large_row_count, input, output,
-				rhs_width, stream);
-		} else if (max_column_width <= 8) {
-			launch_shared<8>(matrix, row_shape_order, small_row_count, large_row_count, input, output,
-				rhs_width, stream);
-		} else if (max_column_width <= 16) {
-			launch_shared<16>(matrix, row_shape_order, small_row_count, large_row_count, input, output,
-				rhs_width, stream);
-		} else if (max_column_width <= 32) {
-			launch_shared<32>(matrix, row_shape_order, small_row_count, large_row_count, input, output,
-				rhs_width, stream);
-		} else {
-			launch_shared<64>(matrix, row_shape_order, small_row_count, large_row_count, input, output,
-				rhs_width, stream);
-		}
+		if (retain_wide_tile) launch_shared<64>(matrix, row_shape_order, small_row_count, large_row_count, input, output, rhs_width, stream);
+		else if (max_column_width <= 8) launch_shared<8>(matrix, row_shape_order, small_row_count, large_row_count, input, output, rhs_width, stream);
+		else if (max_column_width <= 16) launch_shared<16>(matrix, row_shape_order, small_row_count, large_row_count, input, output, rhs_width, stream);
+		else if (max_column_width <= 32) launch_shared<32>(matrix, row_shape_order, small_row_count, large_row_count, input, output, rhs_width, stream);
+		else launch_shared<64>(matrix, row_shape_order, small_row_count, large_row_count, input, output, rhs_width, stream);
 
 		check_kernel_launch();
 	}

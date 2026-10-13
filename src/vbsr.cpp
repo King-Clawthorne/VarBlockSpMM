@@ -7,22 +7,16 @@
 
 namespace vbsr {
 	namespace {
-		// Convert CUDA runtime failures into exceptions at the public API boundary.
 		void check_cuda(cudaError_t status) {
-			if (status != cudaSuccess)
-				throw std::runtime_error(cudaGetErrorString(status));
+			if (status != cudaSuccess) throw std::runtime_error(cudaGetErrorString(status));
 		}
 
-		// Allocate a device array and copy a host vector into it. On copy failure,
-		// release the allocation before propagating the CUDA error.
-		template <class T>
-		T* copy_to_device(const std::vector<T>& source) {
+		template <class T> T* copy_to_device(const std::vector<T>& source) {
 			T* destination = nullptr;
 			check_cuda(cudaMalloc(&destination, source.size() * sizeof(T)));
 
 			try {
-				check_cuda(
-					cudaMemcpy(destination, source.data(), source.size() * sizeof(T), cudaMemcpyHostToDevice));
+				check_cuda(cudaMemcpy(destination, source.data(), source.size() * sizeof(T), cudaMemcpyHostToDevice));
 			} catch (...) {
 				cudaFree(destination);
 				throw;
@@ -33,80 +27,44 @@ namespace vbsr {
 
 	}
 
-	// Validate the complete host representation, including its value payload.
 	void HostMatrix::validate() const { validate_structure(values.size()); }
 
-	// Check the CSR block structure, scalar offsets, block shapes, and packed
-	// payload offsets. This routine is also used to validate device metadata
-	// after the metadata arrays have been copied to temporary host vectors.
 	void HostMatrix::validate_structure(size_t value_count) const {
+		if (block_rows <= 0 || block_cols <= 0) throw std::invalid_argument("positive block dimensions required");
+		if (row_ptr.size() != size_t(block_rows) + 1 || row_size.size() != size_t(block_rows) || col_size.size() != size_t(block_cols)) std::invalid_argument("metadata size mismatch");
+		if (row_scalar_off.size() != size_t(block_rows) + 1 || col_scalar_off.size() != size_t(block_cols) + 1) throw std::invalid_argument("scalar offsets size mismatch");
+		if (row_scalar_off.front() != 0 || col_scalar_off.front() != 0) throw std::invalid_argument("scalar offsets must start at zero");
+		if (row_ptr.front() != 0 || row_ptr.back() < 0 || size_t(row_ptr.back()) != block_col.size()) throw std::invalid_argument("row_ptr does not match block columns");
+		if (value_off.size() != block_col.size() + 1 || value_off.front() != 0 || value_off.back() < 0 || size_t(value_off.back()) != value_count) throw std::invalid_argument("value_off does not match packed values");
 
-		if (block_rows <= 0 || block_cols <= 0)
-			throw std::invalid_argument("positive block dimensions required");
-		if (row_ptr.size() != size_t(block_rows) + 1 || row_size.size() != size_t(block_rows) || col_size.size() != size_t(block_cols)) {
-			throw std::invalid_argument("metadata size mismatch");
-		}
-
-		if (row_scalar_off.size() != size_t(block_rows) + 1 || col_scalar_off.size() != size_t(block_cols) + 1) {
-			throw std::invalid_argument("scalar offsets size mismatch");
-		}
-
-		if (row_scalar_off.front() != 0 || col_scalar_off.front() != 0) {
-			throw std::invalid_argument("scalar offsets must start at zero");
-		}
-
-		if (row_ptr.front() != 0 || row_ptr.back() < 0 || size_t(row_ptr.back()) != block_col.size()) {
-			throw std::invalid_argument("row_ptr does not match block columns");
-		}
-
-		if (value_off.size() != block_col.size() + 1 || value_off.front() != 0 || value_off.back() < 0 || size_t(value_off.back()) != value_count) {
-			throw std::invalid_argument("value_off does not match packed values");
-		}
-
-		// Concatenate both block-size arrays and enumerate them in one pass. Reset
-		// the prefix sum when the traversal moves from row dimensions to columns.
 		int64_t expected_offset = 0;
 		const auto dimensions = std::views::concat(row_size, col_size);
 		for (const auto& [dimension, block_size] : std::views::enumerate(dimensions)) {
 			const bool is_row_dimension = dimension < block_rows;
 			const auto block_index = is_row_dimension ? dimension : dimension - block_rows;
 			const auto& scalar_offsets = is_row_dimension ? row_scalar_off : col_scalar_off;
-
-			if (block_index == 0)
-				expected_offset = 0;
+			if (block_index == 0) expected_offset = 0;
 			expected_offset += block_size;
 
 			const bool invalid_row_structure = is_row_dimension && row_ptr[block_index] > row_ptr[block_index + 1];
 			if (invalid_row_structure || block_size < 8 || block_size > 64 || block_size % 8 != 0 || scalar_offsets[block_index + 1] != expected_offset) {
-				throw std::invalid_argument(is_row_dimension ? "invalid block-row metadata"
-															 : "invalid block-column metadata");
+				throw std::invalid_argument(is_row_dimension ? "invalid block-row metadata" : "invalid block-column metadata");
 			}
 		}
 
 		int64_t expected_value_offset = 0;
 		for (int block_row = 0; block_row < block_rows; ++block_row) {
-			for (int block_index = row_ptr[block_row]; block_index < row_ptr[block_row + 1];
-				++block_index) {
+			for (int block_index = row_ptr[block_row]; block_index < row_ptr[block_row + 1]; ++block_index) {
 				const int block_column = block_col[block_index];
-				if (block_column < 0 || block_column >= block_cols) {
-					throw std::invalid_argument("block column out of range");
-				}
-
-				if (block_index > row_ptr[block_row] && block_col[block_index - 1] >= block_column) {
-					throw std::invalid_argument("block columns must be sorted and unique in each row");
-				}
-
+				if (block_column < 0 || block_column >= block_cols) throw std::invalid_argument("block column out of range");
+				if (block_index > row_ptr[block_row] && block_col[block_index - 1] >= block_column) throw std::invalid_argument("block columns must be sorted and unique in each row");
 				const int64_t expected_block_values = int64_t(row_size[block_row]) * col_size[block_column];
 				expected_value_offset += expected_block_values;
-				if (value_off[block_index + 1] != expected_value_offset) {
-					throw std::invalid_argument("value_off does not match block payload sizes");
-				}
+				if (value_off[block_index + 1] != expected_value_offset) throw std::invalid_argument("value_off does not match block payload sizes");
 			}
 		}
 	}
 
-	// Own device copies of the matrix arrays and prepare a stable ordering that
-	// groups rows by shape for the specialized RHS=32 launch path.
 	Matrix::Matrix(const HostMatrix& host) {
 		host.validate();
 		block_rows_ = host.block_rows;
@@ -116,10 +74,8 @@ namespace vbsr {
 		scalar_cols_ = host.scalar_cols();
 		value_count_ = host.values.size();
 		max_column_width_ = std::ranges::max(host.col_size);
-
 		auto row_shape_order = std::views::iota(0, host.block_rows) | std::ranges::to<std::vector<int32_t>>();
-		const auto large_begin = std::ranges::stable_partition(
-			row_shape_order, [&](int block_row) { return host.row_size[block_row] <= 16; });
+		const auto large_begin = std::ranges::stable_partition(row_shape_order, [&](int block_row) { return host.row_size[block_row] <= 16; });
 		small_row_count_ = int(large_begin.begin() - row_shape_order.begin());
 		large_row_count_ = host.block_rows - small_row_count_;
 
@@ -140,8 +96,6 @@ namespace vbsr {
 		}
 	}
 
-	// Free every allocation owned by this object. cudaFree accepts null pointers,
-	// which keeps this safe for partially constructed and moved-from objects.
 	void Matrix::release() {
 		cudaFree(row_ptr_);
 		cudaFree(block_col_);
@@ -164,10 +118,7 @@ namespace vbsr {
 		row_shape_order_ = nullptr;
 	}
 
-	// Destruction releases the device-side matrix storage.
 	Matrix::~Matrix() { release(); }
-
-	// Transfer device ownership and leave `other` in a destructible empty state.
 	Matrix::Matrix(Matrix&& other) noexcept { *this = std::move(other); }
 
 	Matrix& Matrix::operator=(Matrix&& other) noexcept {
@@ -209,38 +160,23 @@ namespace vbsr {
 		return *this;
 	}
 
-	// Expose the owned arrays without transferring ownership.
 	DeviceMatrix Matrix::device_view() const {
-		return { block_rows_, block_cols_, nnzb_, scalar_rows_, scalar_cols_,
-			row_ptr_, block_col_, row_size_, col_size_, row_scalar_off_,
-			col_scalar_off_, value_off_, values_ };
+		return { block_rows_, block_cols_, nnzb_, scalar_rows_, scalar_cols_, row_ptr_, block_col_, row_size_, col_size_, row_scalar_off_, col_scalar_off_, value_off_, values_ };
 	}
 
-	// Replace only the numeric payload, preserving the matrix's sparsity pattern.
 	void Matrix::update_values(const float* source, size_t count, cudaStream_t stream) {
-		if (count != value_count_ || (count && (!source || !values_)))
-			throw std::invalid_argument("value update size or pointer mismatch");
-		if (count && source != values_)
-			check_cuda(
-				cudaMemcpyAsync(values_, source, count * sizeof(float), cudaMemcpyDeviceToDevice, stream));
+		if (count != value_count_ || (count && (!source || !values_))) throw std::invalid_argument("value update size or pointer mismatch");
+		if (count && source != values_) check_cuda(cudaMemcpyAsync(values_, source, count * sizeof(float), cudaMemcpyDeviceToDevice, stream));
 	}
 
-	// Sum the owned payload and metadata sizes without a device transfer or
-	// stream synchronization. Moving a matrix transfers all its allocations.
 	size_t Matrix::storage_bytes() const {
-		if (!value_off_)
-			return 0;
+		if (!value_off_) return 0;
 		return value_count_ * sizeof(float) + (size_t(block_rows_) * 3 + 1 + block_cols_ + nnzb_) * sizeof(int32_t) + (size_t(block_rows_) + block_cols_ + nnzb_ + 3) * sizeof(int64_t);
 	}
 
-	// Reference implementation of Y = A * X using double-precision accumulation.
-	// The input and output are column-major with `rhs_width` dense columns.
 	std::vector<float> cpu_reference(const HostMatrix& matrix, std::span<const float> input,
 		int rhs_width) {
-		if (input.size() != size_t(matrix.scalar_cols() * rhs_width)) {
-			throw std::invalid_argument("input matrix has incorrect size");
-		}
-
+		if (input.size() != size_t(matrix.scalar_cols() * rhs_width)) throw std::invalid_argument("input matrix has incorrect size");
 		std::vector<float> output(matrix.scalar_rows() * rhs_width, 0.0f);
 		for (int block_row = 0; block_row < matrix.block_rows; ++block_row) {
 			const int row_height = matrix.row_size[block_row];
@@ -267,9 +203,7 @@ namespace vbsr {
 		return output;
 	}
 
-	// Preserve the original vector overload while sharing the span implementation.
-	std::vector<float> cpu_reference(const HostMatrix& matrix, const std::vector<float>& input,
-		int rhs_width) {
+	std::vector<float> cpu_reference(const HostMatrix& matrix, const std::vector<float>& input, int rhs_width) {
 		return cpu_reference(matrix, std::span<const float> { input }, rhs_width);
 	}
 }
